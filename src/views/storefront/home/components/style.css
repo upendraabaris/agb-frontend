@@ -1,0 +1,84 @@
+/* style.css */
+
+/* Style for the main menu container */
+ul.main-menu {
+  list-style: none;
+  padding: 0;
+}
+
+/* Style for each category list item */
+ul.main-menu li {
+  margin-bottom: 10px;
+}
+/* ul.main-menu li button {
+  margin-left: auto;
+} */
+
+/* Style for the category link */
+.category-link {
+  display: flex;
+  align-items: center;
+}
+
+.category-link a {
+  text-decoration: none;
+  color: #333;
+  font-weight: bold;
+  padding: 5px;
+  transition: color 0.2s;
+}
+
+.category-link a:hover {
+  color: #1fabeb;
+}
+
+/* Style for the active category (category without parent) */
+ul.main-menu li.active-category a {
+  background-color: #1fabeb;
+  color: #fff;
+}
+
+/* Style for the toggle button */
+.category-link button {
+  margin-left: 5px;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* .category-link button svg {
+  float: right;
+  fill: #007bff;
+} */
+
+/* Style for the sub-menu container */
+ul.sub-menu {
+  list-style: none;
+  padding: 0;
+  margin-left: 15px;
+}
+
+/* Style for the nested category list item */
+ul.sub-menu li {
+  margin-bottom: 5px;
+}
+.link {
+  color: black;
+  margin-bottom: 1rem;
+}
+.icon-right1 {
+  float: right !important;
+}
+.custom-icon-color {
+  color: black;
+}
+
+.active-category {
+  color: #01ff62;
+}
+
+.nested-active-category {
+  color: #ff5733; /* Change this to the color you want for nested opened categories */
+  /* Add any other styles you want for nested opened categories */
+}

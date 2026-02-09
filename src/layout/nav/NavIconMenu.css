@@ -1,0 +1,9 @@
+@media (max-width: 989px){
+    .SearchBar{
+        display: block;
+        width: 20px;
+    }
+    }
+  .SearchBar {
+    display: none;
+   }
