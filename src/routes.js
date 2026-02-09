@@ -31,6 +31,7 @@ const ad = {
   cat: lazy(() => import('views/admin/Advertisement/Cat/ListCat')),
   pro: lazy(() => import('views/admin/Advertisement/Pro/ProductAd')),
   adsCategory: lazy(() => import('views/admin/Advertisement/Cat/AdCategoryManager')),
+  adsCategoryMaster: lazy(() => import('views/admin/Advertisement/CategoryMaster/AdCategoryMasterManager')),
   adsSlot: lazy(() => import('views/admin/Advertisement/Slot/SlotManager')),
 };
 const b2b = {
@@ -1092,6 +1093,7 @@ const routesAndMenuItems = {
         { path: '/down_banner', label: 'Down Banner', component: ad.list },
         { path: '/category_advertisment', label: 'Category Ads', component: ad.cat },
         { path: '/productDetailPageSlider', label: 'Product Detail Ads', component: ad.pro },
+        { path: '/ads_category_master', label: 'Category Master', component: ad.adsCategoryMaster },
         { path: '/ads_category', label: 'Ads Category', component: ad.adsCategory },
         { path: '/ads_alot', label: 'Ads Slot', component: ad.adsSlot },
       ],

@@ -12,7 +12,12 @@ const GET_AD_CATEGORIES = gql`
   query AdCategories {
     adCategories {
       id
-      name
+      categoryMasterId {
+        id
+        name
+        description
+      }
+      ad_type
       price
       priority
       duration_days
@@ -23,11 +28,27 @@ const GET_AD_CATEGORIES = gql`
   }
 `;
 
+const GET_AD_CATEGORY_MASTERS = gql`
+  query AdCategoryMasters {
+    adCategoryMasters {
+      id
+      name
+      description
+      is_active
+    }
+  }
+`;
+
 const CREATE_AD_CATEGORY = gql`
   mutation CreateAdCategory($input: AdCategoryInput!) {
     createAdCategory(input: $input) {
       id
-      name
+      categoryMasterId {
+        id
+        name
+        description
+      }
+      ad_type
       price
       priority
       duration_days
@@ -40,7 +61,12 @@ const UPDATE_AD_CATEGORY = gql`
   mutation UpdateAdCategory($id: ID!, $input: AdCategoryInput!) {
     updateAdCategory(id: $id, input: $input) {
       id
-      name
+      categoryMasterId {
+        id
+        name
+        description
+      }
+      ad_type
       price
       priority
       duration_days
@@ -78,12 +104,13 @@ const AdCategoryManager = () => {
   }, []);
 
   const { loading, error, data, refetch } = useQuery(GET_AD_CATEGORIES);
+  const { data: masterData } = useQuery(GET_AD_CATEGORY_MASTERS);
 
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editing, setEditing] = useState(null);
 
-  const [form, setForm] = useState({ name: '', price: '', priority: 0, duration_days: 30, is_active: true });
+  const [form, setForm] = useState({ categoryMasterId: '', ad_type: 'banner', price: '', priority: 0, duration_days: 30, is_active: true });
 
   const [createAdCategory] = useMutation(CREATE_AD_CATEGORY, {
     onCompleted: () => {
@@ -133,18 +160,15 @@ const AdCategoryManager = () => {
 
   useEffect(() => {
     if (!showCreate) {
-      setForm({ name: '', ad_slot: '', ad_type: 'banner', position: '', slot_number: 0, price: '', priority: 0, duration_days: 30, is_active: true });
+      setForm({ categoryMasterId: '', ad_type: 'banner', price: '', priority: 0, duration_days: 30, is_active: true });
     }
   }, [showCreate]);
 
   useEffect(() => {
     if (editing) {
       setForm({
-        name: editing.name,
-        ad_slot: editing.ad_slot,
+        categoryMasterId: editing.categoryMasterId?.id || editing.categoryMasterId,
         ad_type: editing.ad_type,
-        position: editing.position,
-        slot_number: editing.slot_number,
         price: editing.price,
         priority: editing.priority,
         duration_days: editing.duration_days,
@@ -160,7 +184,7 @@ const AdCategoryManager = () => {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.price || !form.priority || !form.duration_days) {
+    if (!form.categoryMasterId || !form.ad_type || !form.price || !form.priority || !form.duration_days) {
       toast.error('All fields required');
       return;
     }
@@ -169,7 +193,7 @@ const AdCategoryManager = () => {
 
   const handleEdit = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.price || !form.priority || !form.duration_days) {
+    if (!form.categoryMasterId || !form.ad_type || !form.price || !form.priority || !form.duration_days) {
       toast.error('All fields required');
       return;
     }
@@ -206,7 +230,8 @@ const AdCategoryManager = () => {
             <Table hover responsive>
               <thead>
                 <tr>
-                  <th>Name</th>
+                  <th>Category</th>
+                  <th>Ad Type</th>
                   <th>Price</th>
                   <th>Priority</th>
                   <th>Duration (days)</th>
@@ -218,7 +243,8 @@ const AdCategoryManager = () => {
                 {data &&
                   data.adCategories.map((cat) => (
                     <tr key={cat.id}>
-                      <td>{cat.name}</td>
+                      <td>{cat.categoryMasterId?.name || 'N/A'}</td>
+                      <td>{cat.ad_type}</td>
                       <td>{cat.price}</td>
                       <td>{cat.priority}</td>
                       <td>{cat.duration_days}</td>
@@ -250,8 +276,22 @@ const AdCategoryManager = () => {
         <Modal.Body>
           <Form onSubmit={handleCreate}>
             <Form.Group className="mb-3">
-              <Form.Label>Category Name</Form.Label>
-              <Form.Control type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Enter category name" />
+              <Form.Label>Category Master</Form.Label>
+              <Form.Select value={form.categoryMasterId} onChange={(e) => setForm({ ...form, categoryMasterId: e.target.value })}>
+                <option value="">Select Category Master</option>
+                {masterData?.adCategoryMasters.map((master) => (
+                  <option key={master.id} value={master.id}>
+                    {master.name}
+                  </option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Ad Type</Form.Label>
+              <Form.Select value={form.ad_type} onChange={(e) => setForm({ ...form, ad_type: e.target.value })}>
+                <option value="banner">Banner</option>
+                <option value="stamp">Stamp</option>
+              </Form.Select>
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Label>Price</Form.Label>
@@ -281,28 +321,22 @@ const AdCategoryManager = () => {
         <Modal.Body>
           <Form onSubmit={handleEdit}>
             <Form.Group className="mb-3">
-              <Form.Label>Category Name</Form.Label>
-              <Form.Control type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Enter category name" />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Ad Slot</Form.Label>
-              <Form.Control type="text" value={form.ad_slot} onChange={(e) => setForm({ ...form, ad_slot: e.target.value })} placeholder="Enter ad slot" />
+              <Form.Label>Category Master</Form.Label>
+              <Form.Select value={form.categoryMasterId} onChange={(e) => setForm({ ...form, categoryMasterId: e.target.value })}>
+                <option value="">Select Category Master</option>
+                {masterData?.adCategoryMasters.map((master) => (
+                  <option key={master.id} value={master.id}>
+                    {master.name}
+                  </option>
+                ))}
+              </Form.Select>
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Label>Ad Type</Form.Label>
               <Form.Select value={form.ad_type} onChange={(e) => setForm({ ...form, ad_type: e.target.value })}>
-                <option value="">Select Ad Type</option>
                 <option value="banner">Banner</option>
                 <option value="stamp">Stamp</option>
               </Form.Select>
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Position</Form.Label>
-              <Form.Control type="text" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} placeholder="Enter position" />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Slot Number</Form.Label>
-              <Form.Control type="number" value={form.slot_number} onChange={(e) => setForm({ ...form, slot_number: e.target.value })} />
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Label>Price</Form.Label>
