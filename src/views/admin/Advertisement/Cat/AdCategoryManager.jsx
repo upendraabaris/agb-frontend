@@ -19,7 +19,6 @@ const GET_AD_CATEGORIES = gql`
       }
       ad_type
       price
-      priority
       duration_days
       is_active
       createdAt
@@ -28,9 +27,9 @@ const GET_AD_CATEGORIES = gql`
   }
 `;
 
-const GET_AD_CATEGORY_MASTERS = gql`
-  query AdCategoryMasters {
-    adCategoryMasters {
+const GET_AD_TIER_MASTERS = gql`
+  query AdTierMasters {
+    adTierMasters {
       id
       name
       description
@@ -50,7 +49,6 @@ const CREATE_AD_CATEGORY = gql`
       }
       ad_type
       price
-      priority
       duration_days
       is_active
     }
@@ -68,7 +66,6 @@ const UPDATE_AD_CATEGORY = gql`
       }
       ad_type
       price
-      priority
       duration_days
       is_active
     }
@@ -94,8 +91,8 @@ const TOGGLE_AD_CATEGORY = gql`
 `;
 
 const AdCategoryManager = () => {
-  const title = 'Ads Categories';
-  const description = 'Manage Ads Categories';
+  const title = 'Ads Pricing';
+  const description = 'Manage Ads Pricing';
   const dispatch = useDispatch();
 
   useEffect(() => {
@@ -104,13 +101,13 @@ const AdCategoryManager = () => {
   }, []);
 
   const { loading, error, data, refetch } = useQuery(GET_AD_CATEGORIES);
-  const { data: masterData } = useQuery(GET_AD_CATEGORY_MASTERS);
+  const { data: masterData } = useQuery(GET_AD_TIER_MASTERS);
 
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editing, setEditing] = useState(null);
 
-  const [form, setForm] = useState({ categoryMasterId: '', ad_type: 'banner', price: '', priority: 0, duration_days: 30, is_active: true });
+  const [form, setForm] = useState({ categoryMasterId: '', ad_type: 'banner', price: '', duration_days: 30, is_active: true });
 
   const [createAdCategory] = useMutation(CREATE_AD_CATEGORY, {
     onCompleted: () => {
@@ -160,7 +157,7 @@ const AdCategoryManager = () => {
 
   useEffect(() => {
     if (!showCreate) {
-      setForm({ categoryMasterId: '', ad_type: 'banner', price: '', priority: 0, duration_days: 30, is_active: true });
+      setForm({ categoryMasterId: '', ad_type: 'banner', price: '', duration_days: 30, is_active: true });
     }
   }, [showCreate]);
 
@@ -170,7 +167,6 @@ const AdCategoryManager = () => {
         categoryMasterId: editing.categoryMasterId?.id || editing.categoryMasterId,
         ad_type: editing.ad_type,
         price: editing.price,
-        priority: editing.priority,
         duration_days: editing.duration_days,
         is_active: editing.is_active,
       });
@@ -184,20 +180,20 @@ const AdCategoryManager = () => {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    if (!form.categoryMasterId || !form.ad_type || !form.price || !form.priority || !form.duration_days) {
+    if (!form.categoryMasterId || !form.ad_type || !form.price || !form.duration_days) {
       toast.error('All fields required');
       return;
     }
-    await createAdCategory({ variables: { input: { ...form, price: parseFloat(form.price), priority: parseInt(form.priority, 10), duration_days: parseInt(form.duration_days, 10) } } });
+    await createAdCategory({ variables: { input: { ...form, price: parseFloat(form.price), duration_days: parseInt(form.duration_days, 10) } } });
   };
 
   const handleEdit = async (e) => {
     e.preventDefault();
-    if (!form.categoryMasterId || !form.ad_type || !form.price || !form.priority || !form.duration_days) {
+    if (!form.categoryMasterId || !form.ad_type || !form.price || !form.duration_days) {
       toast.error('All fields required');
       return;
     }
-    await updateAdCategory({ variables: { id: editing.id, input: { ...form, price: parseFloat(form.price), priority: parseInt(form.priority, 10), duration_days: parseInt(form.duration_days, 10) } } });
+    await updateAdCategory({ variables: { id: editing.id, input: { ...form, price: parseFloat(form.price), duration_days: parseInt(form.duration_days, 10) } } });
   };
 
   return (
@@ -233,7 +229,6 @@ const AdCategoryManager = () => {
                   <th>Category</th>
                   <th>Ad Type</th>
                   <th>Price</th>
-                  <th>Priority</th>
                   <th>Duration (days)</th>
                   <th>Active</th>
                   <th>Actions</th>
@@ -246,7 +241,6 @@ const AdCategoryManager = () => {
                       <td>{cat.categoryMasterId?.name || 'N/A'}</td>
                       <td>{cat.ad_type}</td>
                       <td>{cat.price}</td>
-                      <td>{cat.priority}</td>
                       <td>{cat.duration_days}</td>
                       <td>{cat.is_active ? 'Yes' : 'No'}</td>
                       <td>
@@ -279,7 +273,7 @@ const AdCategoryManager = () => {
               <Form.Label>Category Master</Form.Label>
               <Form.Select value={form.categoryMasterId} onChange={(e) => setForm({ ...form, categoryMasterId: e.target.value })}>
                 <option value="">Select Category Master</option>
-                {masterData?.adCategoryMasters.map((master) => (
+                {masterData?.adTierMasters.map((master) => (
                   <option key={master.id} value={master.id}>
                     {master.name}
                   </option>
@@ -296,10 +290,6 @@ const AdCategoryManager = () => {
             <Form.Group className="mb-3">
               <Form.Label>Price</Form.Label>
               <Form.Control type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Priority</Form.Label>
-              <Form.Control type="number" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} />
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Label>Duration (days)</Form.Label>
@@ -324,7 +314,7 @@ const AdCategoryManager = () => {
               <Form.Label>Category Master</Form.Label>
               <Form.Select value={form.categoryMasterId} onChange={(e) => setForm({ ...form, categoryMasterId: e.target.value })}>
                 <option value="">Select Category Master</option>
-                {masterData?.adCategoryMasters.map((master) => (
+                {masterData?.adTierMasters.map((master) => (
                   <option key={master.id} value={master.id}>
                     {master.name}
                   </option>
@@ -341,10 +331,6 @@ const AdCategoryManager = () => {
             <Form.Group className="mb-3">
               <Form.Label>Price</Form.Label>
               <Form.Control type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Priority</Form.Label>
-              <Form.Control type="number" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} />
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Label>Duration (days)</Form.Label>

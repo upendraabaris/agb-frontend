@@ -249,6 +249,12 @@ const authLink = setContext(async (operation, { headers }) => {
 // ======================================================================
 const uploadLink = createUploadLink({
   uri: process.env.REACT_APP_SERVER_URL,
+  isExtractableFile: (value) => {
+    return (
+      (typeof File !== 'undefined' && value instanceof File) ||
+      (typeof Blob !== 'undefined' && value instanceof Blob)
+    );
+  },
 });
 
 // ======================================================================

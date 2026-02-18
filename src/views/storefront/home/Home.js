@@ -61,6 +61,8 @@ const GET_PARENT_CATEGORY = gql`
   }
 `;
 
+/* Banner/stamp queries removed — ads will display on category pages only */
+
 const GET_AD_CONTENT = gql`
   query GetAds($key: String!) {
     getAds(key: $key) {
@@ -213,6 +215,8 @@ const Home = () => {
     // Execute the getUsers function when the component mounts
   }, []);
 
+  // Ads are shown only on category pages; home page left unchanged
+
   useEffect(() => {
     getCategrories({
       variables: {
@@ -321,6 +325,7 @@ const Home = () => {
         )}
 
         <Col xl="9" className="mb-0">
+          {/* Home page unchanged - banner ads removed */}
           <Row className="g-2 mb-2">
             <Col sm="6" md="6">
               <div id="carouselExampleAutoplaying" className="carousel slide sh-48 " data-bs-ride="carousel">
@@ -467,6 +472,8 @@ const Home = () => {
           {!isXlScreen && <HomeTrending position={5} section="disply" />}
         </Row>
       </Card>
+
+      {/* Stamp ads removed from home page; stamps show only on category pages */}
 
       {/* ADVERTISEMENT SLOT  START 1 */}
       {dataAd1PC?.getAds?.active && (
