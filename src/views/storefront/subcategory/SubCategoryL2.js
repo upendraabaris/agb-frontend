@@ -5,6 +5,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useWindowSize } from 'hooks/useWindowSize';
 import { toast } from 'react-toastify';
 import { Row, Col, Button, Dropdown, Card, Modal, Tooltip, OverlayTrigger } from 'react-bootstrap';
+import 'bootstrap/js/dist/carousel';
 import HtmlHead from 'components/html-head/HtmlHead';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
 import { menuChangeUseSidebar } from 'layout/nav/main-menu/menuSlice';
@@ -22,24 +23,28 @@ import FilterMenuContent from './components/FilterMenuContent';
 const GET_SUBCATEGORIESBYNAME = gql`
   query GetCategoryByName($name: String!) {
     getCategoryByName(name: $name) {
+      id
       name
       description
       sliderImage
       image
       order
       parent {
+        id
         name
         description
         sliderImage
         image
         order
         parent {
+          id
           name
           description
           sliderImage
           image
           order
           parent {
+            id
             name
             description
             sliderImage
@@ -49,12 +54,14 @@ const GET_SUBCATEGORIESBYNAME = gql`
         }
       }
       children {
+        id
         name
         description
         sliderImage
         image
         order
         children {
+          id
           name
           description
           sliderImage
@@ -201,6 +208,36 @@ export const GETSUPERSELLERBYCATEGORYNAME = gql`
           price
         }
       }
+    }
+  }
+`;
+
+export const GET_APPROVED_ADS_BY_CATEGORY = gql`
+  query GetApprovedAdsByCategory($categoryName: String) {
+    getApprovedAdsByCategory(categoryName: $categoryName) {
+      id
+      sellerName
+      sellerEmail
+      categoryId
+      categoryName
+      medias {
+        id
+        slot
+        media_type
+        mobile_image_url
+        desktop_image_url
+        mobile_redirect_url
+        desktop_redirect_url
+      }
+      durations {
+        id
+        slot
+        duration_days
+        start_date
+        end_date
+        status
+      }
+      createdAt
     }
   }
 `;
@@ -360,6 +397,78 @@ const SubcategoryL2 = () => {
     // eslint-disable-next-line
   }, [params]);
 
+  // APPROVED ADS BY CATEGORY
+  const [approvedAds, setApprovedAds] = useState([]);
+  const [getApprovedAds, { data: dataApprovedAds, loading: loadingAds }] = useLazyQuery(GET_APPROVED_ADS_BY_CATEGORY, {
+    onCompleted(res) {
+      console.log('[GET_APPROVED_ADS_BY_CATEGORY] response:', res);
+      setApprovedAds(res?.getApprovedAdsByCategory || []);
+    },
+    onError(error) {
+      toast.error(error.message || 'Something went wrong!');
+      console.error('GET_APPROVED_ADS_BY_CATEGORY', error);
+    },
+  });
+
+  // Prepare stamp ads (medias with slot containing 'stamp')
+  const stampAds = useMemo(() => {
+    if (!approvedAds || approvedAds.length === 0) return [];
+    return approvedAds.filter((ad) => ad.medias && ad.medias.some((m) => m.slot && m.slot.toLowerCase().includes('stamp')));
+  }, [approvedAds]);
+
+  // Prepare banner ads (medias with slot containing 'banner')
+  const bannerAds = useMemo(() => {
+    if (!approvedAds || approvedAds.length === 0) return [];
+    return approvedAds.filter((ad) => ad.medias && ad.medias.some((m) => m.slot && m.slot.toLowerCase().includes('banner')));
+  }, [approvedAds]);
+
+    // Ensure Bootstrap carousel instances are initialized after ads render
+    useEffect(() => {
+      if (typeof window === 'undefined') return;
+      const bs = window.bootstrap;
+      if (!bs) return;
+
+      const initCarousel = (id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        // make sure first item is active
+        const items = el.querySelectorAll('.carousel-item');
+        items.forEach((it, idx) => it.classList.toggle('active', idx === 0));
+        try {
+          // create or get existing instance
+          const existing = bs.Carousel.getInstance(el);
+          if (!existing) {
+            // initialize a new carousel instance
+            bs.Carousel(el, { interval: 5000, ride: 'carousel' });
+          }
+        } catch (e) {
+          // ignore initialization errors
+        }
+      };
+
+      if (bannerAds && bannerAds.length > 0) {
+        initCarousel('approvedAdsCarousel');
+        initCarousel('categoryTopAdsCarousel');
+      }
+    }, [approvedAds, bannerAds]);
+
+  // When category data is available, fetch approved ads by categoryId
+  useEffect(() => {
+    const catName = params.categoryname.replace(/_/g, ' ');
+    // Query backend by categoryName (server expects name-based matching)
+    if (data && data.getCategoryByName) {
+      const name = data.getCategoryByName.name || catName;
+      getApprovedAds({ variables: { categoryName: name } });
+      return;
+    }
+
+    // Fallback to params-based categoryName when category data isn't loaded yet
+    if (catName) {
+      getApprovedAds({ variables: { categoryName: catName } });
+    }
+    // eslint-disable-next-line
+  }, [params, data, getApprovedAds]);
+
   const { themeValues } = useSelector((state) => state.settings);
   const lgBreakpoint = parseInt(themeValues.lg.replace('px', ''), 10);
   const { width } = useWindowSize();
@@ -456,9 +565,69 @@ const SubcategoryL2 = () => {
       </style>
 
       <aside>
-        {categorySliderImageData && categorySliderImageData.getCategoryByName && categorySliderImageData.getCategoryByName.sliderImage && (
-          <div className="container-fluid px-0 rounded border">
-            <img src={categorySliderImageData.getCategoryByName.sliderImage} className="d-block w-100 rounded" alt="Slider Image" />
+        {/* APPROVED ADS CAROUSEL - TOP OF CATEGORY PAGE */}
+        {!loadingAds && bannerAds && bannerAds.length > 0 && (
+          <div id="categoryTopAdsCarousel" className="carousel slide mb-3 rounded border" data-bs-ride="carousel">
+            <div className="carousel-inner rounded">
+              {bannerAds.map((ad, index) => {
+                const media = ad.medias.find((m) => m.slot && m.slot.toLowerCase().includes('banner')) || ad.medias?.[0];
+                const adImage = width < 768 ? media?.mobile_image_url : media?.desktop_image_url;
+                const adUrl = width < 768 ? media?.mobile_redirect_url : media?.desktop_redirect_url;
+                return (
+                  <div 
+                    key={ad.id} 
+                    className={`carousel-item ${index === 0 ? 'active' : ''}`}
+                  >
+                    <a 
+                      href={adUrl || '#'} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{ textDecoration: 'none', display: 'block' }}
+                    >
+                      <img
+                        src={adImage}
+                        alt={`Ad from ${ad.sellerName}`}
+                        className="d-block w-100 rounded"
+                        style={{ objectFit: 'cover', height: '280px' }}
+                      />
+                      <div className="carousel-caption d-none d-md-block">
+                        <h4 className="text-white fw-bold">{ad.sellerName}</h4>
+                      </div>
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
+            {bannerAds.length > 1 && (
+              <>
+                <button 
+                  className="carousel-control-prev" 
+                  type="button" 
+                  data-bs-target="#categoryTopAdsCarousel" 
+                  data-bs-slide="prev"
+                >
+                  <span className="carousel-control-prev-icon" aria-hidden="true" />
+                  <span className="visually-hidden">Previous</span>
+                </button>
+                <button 
+                  className="carousel-control-next" 
+                  type="button" 
+                  data-bs-target="#categoryTopAdsCarousel" 
+                  data-bs-slide="next"
+                >
+                  <span className="carousel-control-next-icon" aria-hidden="true" />
+                  <span className="visually-hidden">Next</span>
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* CATEGORY SLIDER IMAGE - FALLBACK WHEN NO BANNER ADS */}
+        {!loadingAds && (!bannerAds || bannerAds.length === 0) && categorySliderImageData?.getCategoryByName?.sliderImage && (
+          <div className="container-fluid px-0 rounded border mb-3">
+            {/* <img src={categorySliderImageData.getCategoryByName.sliderImage} className="d-block w-100 rounded" alt="Slider Image" /> */}
+            <img src={categorySliderImageData.getCategoryByName.sliderImage} className="d-block w-100 rounded" alt="" />
           </div>
         )}
       </aside>
@@ -531,6 +700,60 @@ const SubcategoryL2 = () => {
               </Dropdown.Menu>
             </Dropdown>
           </div>
+          
+          
+          
+          {/* Old card-based ads code (commented out) */}
+          {false && approvedAds && approvedAds.length > 0 && (
+            <Row className="my-3 g-2 mx-0">
+              <div className="w-100 mb-2">
+                <h6 className="font_black fw-bold ps-2">Featured Offers</h6>
+              </div>
+              {approvedAds.map((ad) => (
+                <Col key={ad.id} xs="12" sm="6" md="4" lg="3" className="mb-3">
+                  <Card className="h-100 hover-border-color border overflow-hidden">
+                    {ad.medias && ad.medias.length > 0 && (
+                      <a 
+                        href={ad.medias[0]?.mobile_redirect_url || ad.medias[0]?.desktop_redirect_url || '#'} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{ textDecoration: 'none', display: 'block' }}
+                      >
+                        <img
+                          src={ad.medias[0]?.mobile_image_url || ad.medias[0]?.desktop_image_url}
+                          alt={`Ad from ${ad.sellerName}`}
+                          className="card-img-top w-100"
+                          style={{ objectFit: 'cover', height: isLgScreen ? '200px' : '140px' }}
+                        />
+                      </a>
+                    )}
+                    <Card.Body className="p-2">
+                      <div className="small text-muted mb-1">
+                        <OverlayTrigger
+                          delay={{ show: 500, hide: 0 }}
+                          placement="top"
+                          overlay={<Tooltip id="tooltip-seller">{ad.sellerName}</Tooltip>}
+                        >
+                          <span className="text-truncate d-block">{ad.sellerName}</span>
+                        </OverlayTrigger>
+                      </div>
+                      <div className="text-center mt-2">
+                        <a 
+                          href={ad.medias[0]?.mobile_redirect_url || ad.medias[0]?.desktop_redirect_url || '#'} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="btn btn-sm btn_color"
+                        >
+                          View Offer
+                        </a>
+                      </div>
+                    </Card.Body>
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+          )}
+
           {/* eslint-disable-next-line no-nested-ternary */}
           {loading || loadingseries || loadingtmt ? (
             <Card className=" px-4 py-5 mb-3">
@@ -826,69 +1049,56 @@ const SubcategoryL2 = () => {
         </Col>
       </Row>
 
-      {/* ADVERTISEMENT SLOT  START */}
+      {/* STAMP ADS SLOT (replaces old advertisement cards) */}
       <aside>
         <Row className="g-4 mt-2 mark pb-4">
-          <Col sm="6" lg="3">
-            <Card className="w-100  hover-img-scale-up">
-              <a href="https://www.apnagharmart.com/">
-                <img src="/img/advertisement/c1.jpeg" className="img-fluid img_1 h-100 scale" alt="card image" />
-                <div className="card-img-overlay d-flex flex-column justify-content-between bg-transparent">
-                  <div className="d-flex flex-column h-100 justify-content-between align-items-start">
-                    {/* <div className="cta-2 text-black w-80">Seasoned Breads</div> */}
-                    {/* <Button variant="primary" className="btn-icon btn-icon-start mt-3 stretched-link">
-                  <CsLineIcons icon="chevron-right" /> <span>View</span>
-                </Button> */}
-                  </div>
-                </div>
-              </a>
-            </Card>
-          </Col>
-          <Col sm="6" lg="3">
-            <Card className="w-100 hover-img-scale-up">
-              <a href="https://apnagharbanao.in/category/sanitary_items">
-                <img src="/img/advertisement/c2.jpg" className="img-fluid  img_1 h-100 scale" alt="card image" />
-                <div className="card-img-overlay d-flex flex-column justify-content-between bg-transparent">
-                  <div className="d-flex flex-column h-100 justify-content-between align-items-start">
-                    {/* <div className="cta-2 text-black w-80">Herbal and Vegan</div> */}
-                    {/* <Button variant="primary" className="btn-icon btn-icon-start mt-3 stretched-link">
-                  <CsLineIcons icon="chevron-right" /> <span>View</span>
-                </Button> */}
-                  </div>
-                </div>
-              </a>
-            </Card>
-          </Col>
-          <Col sm="6" lg="3">
-            <Card className="w-100 hover-img-scale-up">
-              <a href="https://www.apnagharmart.com">
-                <img src="/img/advertisement/c3.jpg" className="img-fluid img_1 h-100 scale" alt="card image" />
-                <div className="card-img-overlay d-flex flex-column justify-content-between bg-transparent">
-                  <div className="d-flex flex-column h-100 justify-content-between align-items-start">
-                    {/* <div className="cta-2 text-black w-80">Fruit Mixed Dough</div> */}
-                    {/* <Button variant="primary" className="btn-icon btn-icon-start mt-3 stretched-link">
-                  <CsLineIcons icon="chevron-right" /> <span>View</span>
-                </Button> */}
-                  </div>
-                </div>
-              </a>
-            </Card>
-          </Col>
-          <Col sm="6" lg="3">
-            <Card className="w-100  hover-img-scale-up">
-              <a href="/contact_us">
-                <img src="/img/advertisement/c4.jpg" className="img-fluid  img_1 h-100 scale" alt="card image" />
-                <div className="card-img-overlay d-flex flex-column justify-content-between bg-transparent">
-                  <div className="d-flex flex-column h-100 justify-content-between align-items-start">
-                    {/* <div className="cta-2 text-black w-80">Berries, Nuts and Sugar</div> */}
-                    {/* <Button variant="primary" className="btn-icon btn-icon-start mt-3 stretched-link">
-                  <CsLineIcons icon="chevron-right" /> <span>View</span>
-                </Button> */}
-                  </div>
-                </div>
-              </a>
-            </Card>
-          </Col>
+          {stampAds && stampAds.length > 0 ? (
+            stampAds.slice(0, 4).map((ad) => {
+              const media = ad.medias.find((m) => m.slot && m.slot.toLowerCase().includes('stamp')) || ad.medias[0];
+              const img = width < 768 ? media.mobile_image_url || media.desktop_image_url : media.desktop_image_url || media.mobile_image_url;
+              const url = width < 768 ? media.mobile_redirect_url || media.desktop_redirect_url : media.desktop_redirect_url || media.mobile_redirect_url;
+              return (
+                <Col sm="6" lg="3" key={ad.id}>
+                  <Card className="w-100 hover-img-scale-up">
+                    <a href={url || '#'} target="_blank" rel="noopener noreferrer">
+                      <img src={img || '/img/advertisement/c1.jpeg'} className="img-fluid img_1 scale" alt="stamp ad"/>
+                    </a>
+                  </Card>
+                </Col>
+              );
+            })
+          ) : (
+            <>
+              <Col sm="6" lg="3">
+                <Card className="w-100  hover-img-scale-up">
+                  <a href="https://www.apnagharmart.com/">
+                    <img src="/img/advertisement/c1.jpeg" className="img-fluid img_1 h-100 scale" alt="card image" />
+                  </a>
+                </Card>
+              </Col>
+              <Col sm="6" lg="3">
+                <Card className="w-100 hover-img-scale-up">
+                  <a href="https://apnagharbanao.in/category/sanitary_items">
+                    <img src="/img/advertisement/c2.jpg" className="img-fluid  img_1 h-100 scale" alt="card image" />
+                  </a>
+                </Card>
+              </Col>
+              <Col sm="6" lg="3">
+                <Card className="w-100 hover-img-scale-up">
+                  <a href="https://www.apnagharmart.com">
+                    <img src="/img/advertisement/c3.jpg" className="img-fluid img_1 h-100 scale" alt="card image" />
+                  </a>
+                </Card>
+              </Col>
+              <Col sm="6" lg="3">
+                <Card className="w-100  hover-img-scale-up">
+                  <a href="/contact_us">
+                    <img src="/img/advertisement/c4.jpg" className="img-fluid  img_1 h-100 scale" alt="card image" />
+                  </a>
+                </Card>
+              </Col>
+            </>
+          )}
         </Row>
       </aside>
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useLazyQuery, gql, useMutation } from '@apollo/client';
+import { useLazyQuery, useQuery, gql, useMutation } from '@apollo/client';
 import { toast } from 'react-toastify';
 import { useDispatch } from 'react-redux';
 import { NavLink } from 'react-router-dom';
@@ -14,6 +14,10 @@ const GET_ALL_CATEGORIES = gql`
     getAllCategories(sortOrder: $sortOrder, sortBy: $sortBy, offset: $offset, limit: $limit, search: $search) {
       id
       name
+      adTierId {
+        id
+        name
+      }
       order
       image
       description
@@ -24,24 +28,40 @@ const GET_ALL_CATEGORIES = gql`
       }
       children {
         id
+        adTierId {
+          id
+          name
+        }
         image
         description
         name
         order
         children {
           id
+          adTierId {
+            id
+            name
+          }
           image
           name
           order
           description
           children {
             id
+            adTierId {
+              id
+              name
+            }
             name
             order
             image
             description
             children {
               id
+              adTierId {
+                id
+                name
+              }
               name
               order
               image
@@ -54,20 +74,31 @@ const GET_ALL_CATEGORIES = gql`
   }
 `;
 
-const ADD_SUBCATEGORY = gql`
-  mutation CreateCategory($name: String!, $file: Upload!, $description: String!, $parent: ID, $order: Int) {
-    createCategory(name: $name, file: $file, description: $description, parent: $parent, order: $order) {
+const GET_AD_TIER_MASTERS = gql`
+  query AdTierMasters {
+    adTierMasters {
       id
       name
     }
   }
 `;
 
-const MASTER_CATEGORY = gql`
-  mutation CreateCategory($name: String!, $file: Upload!, $description: String!, $order: Int) {
-    createCategory(name: $name, file: $file, description: $description, order: $order) {
+const ADD_SUBCATEGORY = gql`
+  mutation CreateCategory($name: String!, $file: Upload!, $description: String!, $parent: ID, $order: Int, $adTierId: ID) {
+    createCategory(name: $name, file: $file, description: $description, parent: $parent, order: $order, adTierId: $adTierId) {
       id
       name
+      adTierId { id name }
+    }
+  }
+`;
+
+const MASTER_CATEGORY = gql`
+  mutation CreateCategory($name: String!, $file: Upload!, $description: String!, $order: Int, $adTierId: ID) {
+    createCategory(name: $name, file: $file, description: $description, order: $order, adTierId: $adTierId) {
+      id
+      name
+      adTierId { id name }
     }
   }
 `;
@@ -82,12 +113,13 @@ const DELETE_CATEGORY = gql`
 `;
 
 const UPDATE_CATEGORY = gql`
-  mutation UpdateCategory($updateCategoryId: ID!, $image: String, $description: String, $file: Upload, $name: String, $order: Int) {
-    updateCategory(id: $updateCategoryId, image: $image, description: $description, file: $file, name: $name, order: $order) {
+  mutation UpdateCategory($updateCategoryId: ID!, $image: String, $description: String, $file: Upload, $name: String, $order: Int, $adTierId: ID) {
+    updateCategory(id: $updateCategoryId, image: $image, description: $description, file: $file, name: $name, order: $order, adTierId: $adTierId) {
       id
       name
       image
       description
+      adTierId { id name }
     }
   }
 `;
@@ -180,6 +212,7 @@ const ListViewCategory = () => {
   const [selectedCategory, setSelectedCategory] = useState(''); // to add subcategory to the category
   const [modalCategory, setModalCategory] = useState(''); // in the side modal
   const [newSubCat, setNewSubCat] = useState('');
+  const [subAdTierId, setSubAdTierId] = useState('');
   const [subImg, setSubImg] = useState(null);
   const [subDesc, setSubDesc] = useState('');
   const [subOrder, setSubOrder] = useState('');
@@ -201,6 +234,7 @@ const ListViewCategory = () => {
       setSubImg(null);
       setSubDesc('');
       setSubOrder('');
+      setSubAdTierId('');
     },
     onError: (createsubcaterror) => {
       toast.error(createsubcaterror.message || 'Something went wrong!');
@@ -217,6 +251,7 @@ const ListViewCategory = () => {
           file: subImg,
           description: subDesc,
           order: parseInt(subOrder, 10),
+          adTierId: subAdTierId || undefined,
         },
       });
     } else {
@@ -230,6 +265,7 @@ const ListViewCategory = () => {
   const [masterDesc, setMasterDesc] = useState('');
   const [masterImg, setMasterImg] = useState(null);
   const [masterOrder, setMasterOrder] = useState(0);
+  const [masterAdTierId, setMasterAdTierId] = useState('');
   const [createMaster, result] = useMutation(MASTER_CATEGORY, {
     onCompleted: () => {
       refetch();
@@ -238,6 +274,7 @@ const ListViewCategory = () => {
       setMasterDesc('');
       setMasterImg(null);
       setMasterOrder(0);
+      setMasterAdTierId('');
     },
     onError: (createError) => {
       toast.error(createError.message || 'Something went wrong!'); 
@@ -254,6 +291,7 @@ const ListViewCategory = () => {
           file: masterImg,
           description: masterDesc,
           order: parseInt(masterOrder, 10),
+          adTierId: masterAdTierId || undefined,
         },
       });
       e.target.reset();
@@ -315,6 +353,9 @@ const ListViewCategory = () => {
   const [editOrder, setEditOrder] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [newcatImage, setNewCatImage] = useState(null);
+  const [editAdTierId, setEditAdTierId] = useState('');
+
+  const { data: adTierData } = useQuery(GET_AD_TIER_MASTERS);
 
   // mutation for update the category
   const [UpdateCategory, updateResponse] = useMutation(UPDATE_CATEGORY, {
@@ -327,6 +368,7 @@ const ListViewCategory = () => {
       setEditOrder('');
       setNewCatImage(null);
       setEditDesc('');
+      setEditAdTierId('');
     },
     onError: (errorinupdate) => {
       console.error('UPDATE_CATEGORY', errorinupdate);
@@ -334,7 +376,7 @@ const ListViewCategory = () => {
     },
   });
 
-  const handleCategoryUpdate = (id, catname, catDesc, catImg, orderNo) => {
+  const handleCategoryUpdate = (id, catname, catDesc, catImg, orderNo, adTierId) => {
     setUpdateCatModalView(true);
     setOriginalCategory(catname);
     setSelectedCategoryForUpdate(id);
@@ -342,6 +384,7 @@ const ListViewCategory = () => {
     setEditDesc(catDesc);
     setEditImg(catImg);
     setEditOrder(orderNo);
+    setEditAdTierId(adTierId || '');
   };
   const updateCategory = async (e) => {
     e.preventDefault();
@@ -355,7 +398,8 @@ const ListViewCategory = () => {
             image: editImg,
             order: parseInt(editOrder, 10),
             file: newcatImage,
-            description: editDesc,
+              description: editDesc,
+              adTierId: editAdTierId || undefined,
           },
         });
       } else {
@@ -365,7 +409,8 @@ const ListViewCategory = () => {
             updateCategoryId: selectedCategoryForUpdate,
             image: editImg,
             order: parseInt(editOrder, 10),
-            description: editDesc,
+              description: editDesc,
+              adTierId: editAdTierId || undefined,
           },
         });
       }
@@ -420,7 +465,11 @@ const ListViewCategory = () => {
                 <div className="text-muted text-small d-lg-none">Order</div>
                 <div className="text-alternate d-block text-center">{category.order}</div>
               </Col>
-              <Col xs="6" lg="2" className="d-flex flex-column justify-content-center align-items-end mb-2 mb-lg-0 order-5 order-lg-5">
+              <Col xs="6" lg="1" className="d-flex flex-column justify-content-center align-items-end mb-2 mb-lg-0 order-5 order-lg-5">
+                <Col xs="12" lg="2" className="d-flex flex-column justify-content-center mb-2 mb-lg-0">
+                <div className="text-muted text-small d-lg-none">Ad Tier</div>
+                <div className="text-alternate d-block text-center">{category.adTierId?.name || '-'}</div>
+              </Col>
                 <div className="text-muted text-small d-lg-none mb-1">Action</div>
                 <div>
                   <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip-top">Add SubCategory</Tooltip>}>
@@ -439,7 +488,7 @@ const ListViewCategory = () => {
                       <Button
                         variant="foreground-alternate"
                         className="btn-icon btn-icon-only shadow"
-                        onClick={() => handleCategoryUpdate(category.id, category.name, category.description, category.image, category.order)}
+                        onClick={() => handleCategoryUpdate(category.id, category.name, category.description, category.image, category.order, category?.adTierId?.id)}
                       >
                         <CsLineIcons icon="edit-square" className="text-primary" size="17" />
                       </Button>
@@ -522,6 +571,19 @@ const ListViewCategory = () => {
                 <Form.Control type="file" accept="image/*" onChange={(e) => setMasterImg(e.target.files[0])} />
               </div>
             </Row>
+            <Row className="mb-2">
+              <div className="col-6">
+                <Form.Label className="text-dark required">Ad Tier</Form.Label>
+                <Form.Select value={masterAdTierId} onChange={(e) => setMasterAdTierId(e.target.value)}>
+                  <option value="" className='required'>Select Ad Tier</option>
+                  {adTierData?.adTierMasters?.map((tier) => (
+                    <option key={tier.id} value={tier.id}>
+                      {tier.name}
+                    </option>
+                  ))}
+                </Form.Select>
+              </div>
+            </Row>
             <Row>
               <div className="col-12 d-inline-block">
                 <Form.Control as="textarea" rows={3} placeholder="Description" onChange={(e) => setMasterDesc(e.target.value)} />
@@ -545,7 +607,6 @@ const ListViewCategory = () => {
         <Col lg="1" className="d-flex flex-column mb-lg-0 pe-3">
           <div className="text-md cursor-pointer">Level</div>
         </Col>
-
         <Col lg="3" className="d-flex flex-column mb-lg-0 pe-3">
           <div className="text-md cursor-pointer sort" onClick={() => handleSort()}>
             Category Name
@@ -560,7 +621,10 @@ const ListViewCategory = () => {
         <Col lg="2" className="d-flex flex-column mb-lg-0 pe-3 align-items-center">
           <div className="text-md cursor-pointer ">Order</div>
         </Col>
-        <Col lg="2" className="d-flex flex-column pe-1 align-items-center">
+        <Col lg="1" className="d-flex flex-column mb-lg-0 pe-3 align-items-center">
+          <div className="text-md cursor-pointer ">Ad Tier</div>
+        </Col>
+        <Col lg="1" className="d-flex flex-column pe-1 align-items-center">
           <div className="text-md cursor-pointer">Action</div>
         </Col>
       </Row>
@@ -623,6 +687,17 @@ const ListViewCategory = () => {
                   {Array.from({ length: 25 }, (_, i) => i + 1).map((num) => (
                     <option key={num} value={num}>
                       {num}
+                    </option>
+                  ))}
+                </Form.Select>
+              </div>
+              <div className="mb-3">
+                <Form.Label className="text-dark required">Ad Tier</Form.Label>
+                <Form.Select value={subAdTierId} onChange={(e) => setSubAdTierId(e.target.value)}>
+                  <option value="">Select Ad Tier</option>
+                  {adTierData?.adTierMasters?.map((tier) => (
+                    <option key={tier.id} value={tier.id}>
+                      {tier.name}
                     </option>
                   ))}
                 </Form.Select>
@@ -696,6 +771,17 @@ const ListViewCategory = () => {
                   {Array.from({ length: 25 }, (_, i) => i + 1).map((num) => (
                     <option key={num} value={num}>
                       {num}
+                    </option>
+                  ))}
+                </Form.Select>
+              </div>
+              <div className="mb-3">
+                <Form.Label className="text-dark">Ad Tier</Form.Label>
+                <Form.Select value={editAdTierId} onChange={(e) => setEditAdTierId(e.target.value)}>
+                  <option value="">Select Ad Tier</option>
+                  {adTierData?.adTierMasters?.map((tier) => (
+                    <option key={tier.id} value={tier.id}>
+                      {tier.name}
                     </option>
                   ))}
                 </Form.Select>
