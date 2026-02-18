@@ -1,0 +1,8 @@
+/* CustomTooltip.css */
+.custom-tooltip.bs-tooltip-top .tooltip-inner {
+  background-color: #000000;  /* Dark background */
+  color: #ffffff;             /* White text */
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 4px;
+}

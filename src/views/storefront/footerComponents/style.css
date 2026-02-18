@@ -1,0 +1,88 @@
+/* style.css */
+
+.Header {
+    text-align: center;
+    font-weight: bold;
+}
+
+.text-black {
+    color: black;
+}
+
+/* Add any other existing styles here */
+.bg_color {
+    background: var(--bgColor); /* You may set this dynamically in your React component */
+    color: var(--fontColor);
+}
+
+.font_color {
+    color: var(--bgColor);
+}
+
+.btn_color {
+    background: var(--bgColor);
+    color: var(--fontColor);
+    transition: background 0.3s ease;
+    padding: 10px 30px;
+    border: none;
+    cursor: pointer;            
+}
+
+.btn_color:hover {
+    background: var(--bgColor);
+    filter: brightness(80%);
+}
+
+@media (max-width: 768px) {
+    .tab-container {
+        display: none;
+    }
+    .accordion-container {
+        display: block;
+    }
+}
+
+@media (min-width: 769px) {
+    .tab-container {
+        display: block;
+    }
+    .accordion-container {
+        display: none;
+    }
+}
+
+.nav-tabs {
+    width: 100%; /* Set UL to 100% width */
+}
+
+.nav-item {
+    width: auto; 
+}
+
+.nav-link {
+    font-weight: bold; /* Make tab headings bold */
+}
+
+
+.tab-container-width {
+    width: 80%; /* By default, full width */
+  }
+  
+  @media (min-width: 992px) { /* For large screens (PC) */
+    .tab-container-width {
+      width: 80%; /* Set width to 70% for PC screens */
+      margin: 0 auto; /* Center the container horizontally */
+    }
+  }
+
+  .tab-container-responsive {
+    width: 100%; /* Full width by default for mobile screens */
+  }
+  
+  @media (min-width: 992px) { /* For large screens (PC) */
+    .tab-container-responsive {
+      width: 80%; /* Set width to 70% for PC screens */
+      margin: 0 auto; /* Center the container horizontally */
+    }
+  }
+  

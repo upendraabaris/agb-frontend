@@ -1,0 +1,138 @@
+/* CSS */
+
+.loader-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+  backdrop-filter: blur(5px); /* Apply blur effect */
+  z-index: 9999;
+}
+.loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bar {
+  display: inline-block;
+  width: 3px;
+  height: 20px;
+  background-color: rgba(0, 0, 0, 0.5);
+  border-radius: 10px;
+  animation: scale-up4 1s linear infinite;
+}
+
+.bar:nth-child(2) {
+  height: 35px;
+  margin: 0 5px;
+  animation-delay: 0.25s;
+}
+
+.bar:nth-child(3) {
+  animation-delay: 0.5s;
+}
+
+@keyframes scale-up4 {
+  20% {
+    background-color: #ffff;
+    transform: scaleY(1.5);
+  }
+
+  40% {
+    transform: scaleY(1);
+  }
+}
+
+
+/* @media (max-width: 989px){
+  .cartImage{
+      display: block;
+      width: 680px;
+  }
+}
+
+@media (max-width: 990px){
+  .cartImage{
+      display: block;
+      width: 600px;
+  }
+} */
+
+/* @media (max-width: 800px){
+  .cartImage{
+      display: block;
+      width: 500px;
+  }
+} */
+
+@media (max-width: 700px){
+  .cartImage{
+      width: 150px;
+      text-align: center;
+      align-items: center;
+      align-content: center;
+  }
+}
+/* 
+@media (max-width: 601px){
+  .cartImage{
+    display: block;
+    width: 145px;
+    text-align: center;
+  }
+}
+
+@media (max-width: 500px){
+  .cartImage{
+    display: block;
+    width: 135px;
+    text-align: center;
+  }
+}
+
+@media (max-width: 440px){
+  .cartImage{
+    display: block;
+    width: 130px;
+    text-align: center;
+  }
+}
+        
+@media (max-width: 425px){
+  .cartImage{
+      display: block;
+      width: 125px;
+      text-align: center;
+  }
+}
+
+@media (max-width: 390px){
+  .cartImage{
+    display: block;
+    width: 115px;
+    text-align: center;
+  }
+}
+
+@media (max-width: 375px){
+  .cartImage{
+    display: block;
+    width: 1110px;
+    text-align: center;
+  }
+}
+
+@media (max-width: 320px){
+  .cartImage{
+    display: block;
+    width: 70px;
+    text-align: center;
+  }
+} */
+

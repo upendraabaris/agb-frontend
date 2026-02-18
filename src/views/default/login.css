@@ -1,0 +1,65 @@
+.containerlogin {
+  position: relative;
+  width: 250px;
+  margin-top: 15px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.font-color {
+  color: #000000;
+}
+
+.containerlogin button {
+  width: 50px;
+  height: 50px;
+  border: none;
+  border-radius: 50%;
+  background-color: #313638;
+  transition: 0.3s;
+  cursor: pointer;
+}
+
+.containerlogin button:nth-child(1) {
+  background-color: #0075ff;
+}
+
+.containerlogin button:nth-child(2) {
+  background-color: green;
+}
+
+.containerlogin button:nth-child(3) {
+  background-color: red;
+}
+
+.loginicon1 {
+  background-color: #0075ff !important ;
+  color: white !important;
+  font-size: 20px !important;
+}
+.loginicon {
+  width: 26px;
+  height: 26px;
+  fill: #fff;
+}
+
+.containerlogin button:nth-child(1):hover {
+  background-color: #2753a7;
+}
+
+.containerlogin button:nth-child(2):hover {
+  background-color: #cd242b;
+}
+
+.containerlogin button:nth-child(3):hover {
+  background-color: #55acee;
+}
+
+.loginicon1:hover {
+  background-color: #2753a7 !important ;
+}
+
+.show-password {
+  top: 12px;
+}

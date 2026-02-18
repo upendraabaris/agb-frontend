@@ -1,0 +1,14 @@
+.cart-pc {
+  width: 16px;
+  height: 16px;
+  padding-left: 6px;
+  margin-top: -20px;
+  font-size: 10px;
+}
+.cart-mobile {
+  width: 16px;
+  height: 16px;
+  padding-left: 6px;
+  margin-top: -10px;
+  font-size: 10px;
+}

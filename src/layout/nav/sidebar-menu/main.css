@@ -1,0 +1,88 @@
+.side-menu {
+  list-style: none;
+  padding: 0;
+  width: auto; /* Adjust width as necessary */
+  
+}
+
+.side-menu .dropdown-menu {
+  background-color: white; /* Match background color */
+  border-radius: 8px; /* Rounded corners */
+  overflow: hidden; /* Ensure rounded corners are visible */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+  margin-top: 1px; /* Spacing between dropdown items */
+}
+
+.side-menu .dropdown-menu ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.side-menu .dropdown-menu li {
+  margin: 0;
+}
+
+.side-menu .dropdown-menu a {
+  text-decoration: none;
+  color: white; /* Text color to match the image */
+  display: block; /* Ensures the entire area is clickable */
+  padding: 10px 15px; /* Adds padding for better spacing */
+  font-size: 14px; /* Adjust font size */
+  border-radius: 8px; /* Rounded corners for each item */
+}
+
+.side-menu .dropdown-menu a:hover {
+  background-color: #ffffff; /* Slightly darker shade for hover effect */
+}
+
+.side-menu .dropdown-menu > a {
+  background-color: #0041a3; /* Slightly different shade for main item */
+  padding: 15px; /* More padding for the main item */
+  border-radius: 8px; /* Rounded corners for main item */
+  display: flex;
+  align-items: center;
+}
+
+.side-menu .dropdown-menu > a .cs-icon {
+  margin-right: 8px; /* Space between icon and text */
+}
+
+.side-menu .dropdown-menu .dropdown-menu {
+  background-color: #0041a3; /* Background color for sub-menu */
+  border-radius: 0 0 8px 8px; /* Rounded corners for sub-menu */
+  margin-top: 4px; /* Spacing between dropdown items */
+}
+
+/* Responsive Styles */
+@media (max-width: 768px) {
+  .side-menu .dropdown-menu {
+    width: 100%; /* Full width for smaller screens */
+  }
+
+  .side-menu .dropdown-menu a {
+    padding: 10px; /* Adjust padding for smaller screens */
+    font-size: 14px; /* Smaller font size for better readability */
+  }
+
+  .side-menu .dropdown-menu > a {
+    padding: 10px; /* Adjust padding for the main item */
+    font-size: 14px; /* Adjust font size */
+  }
+}
+
+@media (max-width: 480px) {
+  .side-menu .dropdown-menu {
+    width: 100%; /* Full width for mobile screens */
+  }
+
+  .side-menu .dropdown-menu a {
+    padding: 8px; /* Further adjust padding for mobile screens */
+    font-size: 12px; /* Smaller font size for mobile screens */
+  }
+
+  .side-menu .dropdown-menu > a {
+    padding: 8px; /* Adjust padding for the main item */
+    font-size: 12px; /* Adjust font size for mobile screens */
+  }
+}

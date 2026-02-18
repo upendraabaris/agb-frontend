@@ -1,0 +1,220 @@
+/* #app {
+  height: 100%;
+}
+html,
+body {
+  position: relative;
+  height: 100%;
+} */
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+.swiper {
+  width: 100%;
+  height: auto;
+}
+
+.swiper-slide {
+  text-align: center;
+  font-size: 18px;
+  background: #fff;
+
+  /* Center slide text vertically */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.swiper-slide img {
+  display: block;
+  width: 100%;
+  height: auto;
+
+}
+
+.mySwiper {
+  display: none;
+}
+
+/* @media (min-width: 600px) {
+    .mySwiper{
+        display: none;
+    } 
+    
+}
+@media (min-width: 559px) {
+    .mySwiper{
+        display: block;
+        width: 480px;
+    } 
+    
+} */
+
+@media (max-width: 989px) {
+  .mySwiper {
+    display: block;
+    width: 680px;
+  }
+}
+
+@media (max-width: 990px) {
+  .mySwiper {
+    display: block;
+    width: 600px;
+  }
+}
+
+@media (max-width: 800px) {
+  .mySwiper {
+    display: block;
+    width: 500px;
+  }
+}
+
+@media (max-width: 700px) {
+  .mySwiper {
+    display: block;
+    width: 450px;
+  }
+}
+
+
+@media (max-width: 601px) {
+  .mySwiper {
+    display: block;
+    width: 400px;
+  }
+}
+
+@media (max-width: 500px) {
+  .mySwiper {
+    display: block;
+    width: 350px;
+  }
+}
+
+@media (max-width: 440px) {
+  .mySwiper {
+    display: block;
+    width: 320px;
+  }
+}
+
+@media (max-width: 425px) {
+  .mySwiper {
+    display: block;
+    width: 300px;
+  }
+}
+
+@media (max-width: 390px) {
+  .mySwiper {
+    display: block;
+    width: 280px;
+  }
+}
+
+@media (max-width: 375px) {
+  .mySwiper {
+    display: block;
+    width: 260px;
+  }
+}
+
+@media (max-width: 320px) {
+  .mySwiper {
+    display: block;
+    width: 210px;
+  }
+}
+
+@media (max-width: 500px) {
+  .table-head {
+    font-size: small;
+  }
+}
+
+@media (max-width: 450px) {
+  .table-head {
+    font-size: x-small;
+  }
+}
+
+/* @media (max-width: 374px) {
+        .gutterRow{
+          margin: 0;
+          padding: 0;
+        }
+      }  */
+@media (max-width: 990px) {
+  .thumbnail {
+    display: none;
+  }
+
+  .main-Image {
+    display: none;
+  }
+}
+
+.hover-container {
+  position: relative;
+}
+
+.hover-section {
+  display: none;
+  position: absolute;
+  /* Define the appearance of the hidden section */
+}
+
+.hover-section.show {
+  display: block;
+  /* Define the appearance of the visible section */
+  height: 150px;
+  width: 250px;
+  z-index: 2;
+
+}
+
+.box {
+  box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px;
+  border-radius: 5px;
+}
+
+.inner {
+  box-shadow: rgba(0, 0, 0, 0.24) 0px 3px 8px;
+}
+
+.zoom_me {
+  animation: zoomInOut 2s ease forwards;
+  animation-delay: 5s;
+}
+
+@keyframes zoomInOut {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.2);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.blink-text {
+  animation: blink 1s 1 forwards;
+  animation-delay: 2s;
+}
+
+
+
