@@ -3,6 +3,7 @@ import { USER_ROLE } from 'constants.js';
 import { lazy, React } from 'react';
 import Advertisement from 'views/seller/Advertisement/Advertisement';
 import MyAds from 'views/seller/Advertisement/MyAds';
+import SellerReports from 'views/seller/Advertisement/SellerReports';
 
 /* ------------------------------------------------------------------ */
 /* -------------------------  Master Panel   ------------------------ */
@@ -33,6 +34,7 @@ const ad = {
   cat: lazy(() => import('views/admin/Advertisement/Cat/ListCat')),
   pro: lazy(() => import('views/admin/Advertisement/Pro/ProductAd')),
   adsCategory: lazy(() => import('views/admin/Advertisement/Cat/AdCategoryManager')),
+  reporting: lazy(() => import('views/admin/Advertisement/AdminReports')),
   adTier: lazy(() => import('views/admin/Advertisement/CategoryMaster/AdTierMasterManager')),
   approval: lazy(() => import('views/admin/Advertisement/Approval/AdApproval')),
 };
@@ -311,6 +313,9 @@ const sellerProducts = {
 };
 const sellerreview = {
   reviewList: lazy(() => import('views/seller/Review/ReviewListView')),
+};
+const sellerAd = {
+  dashboard: lazy(() => import('views/seller/Advertisement/SellerReports')),
 };
 const superSellerProducts = {
   list: lazy(() => import('views/superSeller/Product/List/ListViewProduct')),
@@ -1098,6 +1103,7 @@ const routesAndMenuItems = {
         { path: '/ads_category_master', label: 'Ad Tier', component: ad.adTier },
         { path: '/ads_category', label: 'Ads Pricing', component: ad.adsCategory },
         { path: '/approval', label: 'Ad Approvals', component: ad.approval },
+        { path: '/reporting', label: 'Reporting', component: ad.reporting },
       ],
     },
     {
@@ -1605,8 +1611,9 @@ const routesAndMenuItems = {
       subs: [
         { path: '/list', label: 'Advertisement List', component: MyAds },
         { path: '/add', label: 'Add Advertisement', component: Advertisement },
+        { path: '/reporting', label: 'Reporting', component: SellerReports },
       ],
-  },
+    },
 
     /* ------------------------------------------------------------------ */
     /* --------------------------    BA Dashboard   --------------------- */
@@ -1792,7 +1799,7 @@ const routesAndMenuItems = {
         { path: '/detail/:id', label: 'Detail', component: accountsPaymentTransfer.detail, hideInMenu: true },
       ],
     },
-    
+
   ],
 };
 
