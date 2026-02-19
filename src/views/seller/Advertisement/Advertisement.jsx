@@ -21,6 +21,11 @@ const GET_CATEGORIES_WITH_SLOTS = gql`
       bookedSlots
       bookedBanner
       bookedStamp
+      slotStatuses {
+        slot
+        available
+        freeDate
+      }
       tierId {
         id
         name
@@ -66,7 +71,9 @@ const Advertisement = () => {
   const description = 'Submit your advertisement to available slots';
 
   const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedDuration, setSelectedDuration] = useState(30);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDuration, setSelectedDuration] = useState(90);
+  const [startPreference, setStartPreference] = useState('today');
   const [selectedSlots, setSelectedSlots] = useState([]);
   const [bannerMobileImage, setBannerMobileImage] = useState(null);
   const [bannerDesktopImage, setBannerDesktopImage] = useState(null);
@@ -189,6 +196,111 @@ const Advertisement = () => {
     setShowPreview(true);
   };
 
+  // FRONTEND helper functions for pricing preview (mirrors backend logic)
+  const getNextQuarterStart = (date) => {
+    const m = date.getMonth();
+    const year = date.getFullYear();
+    if (m <= 2) return new Date(Date.UTC(year, 3, 1));
+    if (m <= 5) return new Date(Date.UTC(year, 6, 1));
+    if (m <= 8) return new Date(Date.UTC(year, 9, 1));
+    return new Date(Date.UTC(year + 1, 0, 1));
+  };
+
+  const addDays = (date, days) => {
+    const d = new Date(date);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d;
+  };
+
+  const getQuarterLabel = (date) => {
+    const m = date.getUTCMonth() + 1;
+    if (m >= 1 && m <= 3) return 'Q1';
+    if (m >= 4 && m <= 6) return 'Q2';
+    if (m >= 7 && m <= 9) return 'Q3';
+    return 'Q4';
+  };
+
+  const getQuarterEnd = (date) => {
+    const q = getQuarterLabel(date);
+    const year = date.getUTCFullYear();
+    if (q === 'Q1') return new Date(Date.UTC(year, 2, 31, 23,59,59,999));
+    if (q === 'Q2') return new Date(Date.UTC(year, 5, 30, 23,59,59,999));
+    if (q === 'Q3') return new Date(Date.UTC(year, 8, 30, 23,59,59,999));
+    return new Date(Date.UTC(year, 11, 31, 23,59,59,999));
+  };
+
+  const splitIntervalByQuarter = (startDate, totalDays) => {
+    const segments = [];
+    let remaining = totalDays;
+    let cursor = new Date(startDate);
+    while (remaining > 0) {
+      const qEnd = getQuarterEnd(cursor);
+      const msPerDay = 24 * 60 * 60 * 1000;
+      const diff = Math.floor((Date.UTC(qEnd.getUTCFullYear(), qEnd.getUTCMonth(), qEnd.getUTCDate()) - Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), cursor.getUTCDate())) / msPerDay) + 1;
+      const take = Math.min(remaining, diff);
+      segments.push({ quarter: getQuarterLabel(cursor), start: new Date(cursor), days: take });
+      cursor = addDays(cursor, take);
+      remaining -= take;
+    }
+    return segments;
+  };
+
+  // compute pricing preview for a specific ad type (banner/stamp)
+  const computePricingPreview = (adType = 'banner') => {
+    const pricing = pricingData?.getCategoryPricing;
+    if (!pricing) return null;
+    const segmentsStart = startPreference === 'next_quarter' ? getNextQuarterStart(new Date()) : new Date();
+    const segments = splitIntervalByQuarter(segmentsStart, selectedDuration);
+
+    // find adCategory: first try exact duration match, then match by type with closest duration, fallback to first
+    let adCat = null;
+    if (pricing.adCategories && pricing.adCategories.length > 0) {
+      // Try exact match: same ad_type AND same duration_days
+      adCat = pricing.adCategories.find(ac => ac.ad_type === adType && ac.duration_days === selectedDuration);
+      // If no exact match, try same ad_type with any duration
+      if (!adCat) {
+        adCat = pricing.adCategories.find(ac => ac.ad_type === adType);
+      }
+      // Final fallback: first entry
+      if (!adCat) {
+        const [firstEntry] = pricing.adCategories;
+        adCat = firstEntry;
+      }
+    }
+    if (!adCat) return null;
+    
+    const { duration_days: durationDays = 30, price = 0 } = adCat;
+    const baseDuration = durationDays;
+    const basePrice = price;
+    const ratePerDay = Math.round((basePrice / baseDuration) * 100) / 100;
+    const breakdown = segments.map(s => ({ quarter: s.quarter, days: s.days, rate_per_day: ratePerDay, subtotal: Math.round(ratePerDay * s.days) }));
+    const total = breakdown.reduce((sum, b) => sum + b.subtotal, 0);
+    const startDate = segmentsStart;
+    const endDate = addDays(segmentsStart, selectedDuration - 1);
+    return { startDate, endDate, breakdown, total };
+  };
+
+  // compute total price for selected slots (sums per-slot pricing using adType)
+  const computeTotalForSelectedSlots = () => {
+    if (!selectedSlots || selectedSlots.length === 0) return 0;
+    let sum = 0;
+    // count slots per ad type
+    const counts = { banner: 0, stamp: 0 };
+    selectedSlots.forEach(s => {
+      const type = s.split('_')[0];
+      if (type === 'banner' || type === 'stamp') counts[type] += 1;
+    });
+    if (counts.banner > 0) {
+      const p = computePricingPreview('banner');
+      if (p) sum += p.total * counts.banner;
+    }
+    if (counts.stamp > 0) {
+      const p = computePricingPreview('stamp');
+      if (p) sum += p.total * counts.stamp;
+    }
+    return sum;
+  };
+
   const handleSubmit = async () => {
     try {
       const needsBanner = selectedSlots.some(s => s.startsWith('banner'));
@@ -246,6 +358,7 @@ const Advertisement = () => {
             category_id: selectedCategory,
             medias,
             duration_days: selectedDuration,
+            start_preference: startPreference,
           },
         },
       });
@@ -286,7 +399,13 @@ const Advertisement = () => {
       );
     }
     
-    const categories = categoriesData?.getCategoriesWithAvailableSlots || [];
+    let categories = categoriesData?.getCategoriesWithAvailableSlots || [];
+    if (searchTerm) {
+      const lower = searchTerm.toLowerCase();
+      categories = categories.filter(cat =>
+        cat.name && cat.name.toLowerCase().includes(lower)
+      );
+    }
     
     if (categories.length === 0) {
       return (
@@ -298,30 +417,100 @@ const Advertisement = () => {
 
     return (
       <div>
-        <Row className='g-3'>
+        <div className='mb-3'>
+          <input
+            type='text'
+            className='form-control'
+            placeholder='Search categories...'
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <Row className='g-2'>
           {categories && categories.filter(cat => cat && cat.id).map((category) => (
             <Col key={category?.id} md={6} lg={4}>
               <Card
-                className={`cursor-pointer ${selectedCategory === category?.id ? 'border-primary' : ''}`}
+                className={`cursor-pointer transition-all ${selectedCategory === category?.id ? 'border-primary shadow-sm' : 'border-light shadow-xs'}`}
                 onClick={() => handleCategoryChange(category?.id)}
-                style={{ cursor: 'pointer' }}
+                style={{
+                  cursor: 'pointer',
+                  borderRadius: '10px',
+                  border: selectedCategory === category?.id ? '2px solid #0d6efd' : '1px solid #e0e0e0',
+                  transition: 'all 0.3s ease',
+                  minHeight: 'auto',
+                }}
+                onMouseEnter={(e) => {
+                  if (selectedCategory !== category?.id) {
+                    e.currentTarget.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.08)';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (selectedCategory !== category?.id) {
+                    e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.04)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }
+                }}
               >
-                {/* {category?.image && (
-                  <Card.Img
-                    variant='top'
-                    src={category.image}
-                    style={{ height: '200px', objectFit: 'cover' }}
-                  />
-                )} */}
-                <Card.Body>
-                  <Card.Title>{category?.name || 'Unnamed'}</Card.Title>
-                  {/* <small className='text-muted d-block mb-2'>{category?.description || 'No description'}</small> */}
-                  <div className='d-flex justify-content-between'>
-                    <span className='badge bg-success'>
-                      Available: {category?.availableSlots || 0}/8
+                <Card.Body style={{ padding: '0.75rem' }}>
+                  <div className='d-flex gap-1 mb-2' style={{ flexWrap: 'wrap' }}>
+                  <Card.Title className='fw-bold mb-2' style={{ fontSize: '0.95rem', color: '#333', marginBottom: '0.5rem !important' }}>
+                    {category?.name || 'Unnamed'}
+                  </Card.Title>
+                    <div className='d-flex ml-auto gap-1' style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+                    <span
+                      className='badge'
+                      style={{
+                        backgroundColor: '#28a745',
+                        fontSize: '0.75rem',
+                        padding: '0.25rem 0.5rem',
+                        borderRadius: '4px',
+                      }}
+                    >
+                      ✓ {category?.availableSlots || 0}/8
                     </span>
-                    <span className='badge bg-info'>{category?.tierId?.name || 'No Tier'}</span>
+                    <span
+                      className='badge'
+                      style={{
+                        backgroundColor: '#17a2b8',
+                        fontSize: '0.75rem',
+                        padding: '0.25rem 0.5rem',
+                        borderRadius: '4px',
+                      }}
+                    >
+                      {category?.tierId?.name || 'Tier'}
+                    </span>
+                    </div>
                   </div>
+                  {/* slot statuses - 2 column layout (banners left, stamps right) */}
+                  {category.slotStatuses && category.slotStatuses.length > 0 && (
+                    <div style={{ borderTop: '1px solid #e0e0e0', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
+                      <div className='row g-0'>
+                        <div className='col-6' style={{ paddingRight: '0.25rem' }}>
+                          <strong style={{ fontSize: '0.7rem', color: '#555' }}>Banners</strong>
+                          <ul className='list-unstyled mb-0' style={{ margin: 0, fontSize: '0.7rem' }}>
+                            {category.slotStatuses.filter(s => s.slot.startsWith('banner')).map((s) => (
+                              <li key={s.slot} style={{ color: s.available ? '#28a745' : '#dc3545', fontWeight: '500', lineHeight: '1.2', paddingBottom: '1px' }}>
+                                <span style={{ marginRight: '2px' }}>{s.available ? '✓' : '✕'}</span>
+                                {s.slot}: {s.available ? 'free' : `Aft ${new Date(s.freeDate).toLocaleDateString()}`}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className='col-6' style={{ paddingLeft: '0.25rem' }}>
+                          <strong style={{ fontSize: '0.7rem', color: '#555' }}>Stamps</strong>
+                          <ul className='list-unstyled mb-0' style={{ margin: 0, fontSize: '0.7rem' }}>
+                            {category.slotStatuses.filter(s => s.slot.startsWith('stamp')).map((s) => (
+                              <li key={s.slot} style={{ color: s.available ? '#28a745' : '#dc3545', fontWeight: '500', lineHeight: '1.2', paddingBottom: '1px' }}>
+                                <span style={{ marginRight: '2px' }}>{s.available ? '✓' : '✕'}</span>
+                                {s.slot}: {s.available ? 'free' : `Aft ${new Date(s.freeDate).toLocaleDateString()}`}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </Card.Body>
               </Card>
             </Col>
@@ -353,25 +542,34 @@ const Advertisement = () => {
       return <Alert variant='warning'>No pricing available for this category</Alert>;
     }
 
+    // Get the first selected ad type (banner or stamp) for the breakdown preview
+    const selectedAdType = selectedSlots.length > 0 ? selectedSlots[0].split('_')[0] : 'banner';
+    const preview = computePricingPreview(selectedAdType);
     return (
       <div>
-        <div className='mb-4'>
-          <h6 className='mb-3'>Select Duration:</h6>
-          <div className='d-flex gap-2'>
+        <div className='mb-3'>
+          <h6 className='mb-2'>Select Duration:</h6>
+          <div className='d-flex gap-2 mb-2'>
             {[
-              { value: 30, label: '30 Days' },
               { value: 90, label: '90 Days' },
               { value: 180, label: '180 Days' },
               { value: 365, label: '365 Days' },
             ].map((option) => (
               <Button
                 key={option.value}
+                size='sm'
                 variant={selectedDuration === option.value ? 'primary' : 'outline-primary'}
                 onClick={() => handleDurationChange(option.value)}
               >
                 {option.label}
               </Button>
             ))}
+          </div>
+
+          <div className='d-flex align-items-center gap-2'>
+            <small className='text-muted'>Start From:</small>
+            <Button size='sm' variant={startPreference === 'today' ? 'primary' : 'outline-secondary'} onClick={() => setStartPreference('today')}>Today</Button>
+            <Button size='sm' variant={startPreference === 'next_quarter' ? 'primary' : 'outline-secondary'} onClick={() => setStartPreference('next_quarter')}>Next Quarter</Button>
           </div>
         </div>
 
@@ -380,26 +578,84 @@ const Advertisement = () => {
           {pricing?.adCategories && pricing.adCategories.length > 0 ? (
             <table className='table table-sm'>
               <thead>
-                <tr>
-                  <th>Ad Type</th>
-                  <th>Price</th>
-                  <th>Priority</th>
-                  <th>Duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pricing.adCategories.map((category) => (
-                  <tr key={category?.id || Date.now()}>
-                    <td>{category?.ad_type ? category.ad_type.charAt(0).toUpperCase() + category.ad_type.slice(1) : 'Unknown'}</td>
-                    <td>₹{category?.price || 0}</td>
-                    <td>{category?.priority || 0}</td>
-                    <td>{category?.duration_days || 0} days</td>
+                  <tr>
+                    <th>Ad Type</th>
+                    <th>Base Duration</th>
+                    <th>Base Price</th>
+                    <th>/Day</th>
+                    <th>Price ({selectedDuration}d)</th>
                   </tr>
-                ))}
-              </tbody>
+                </thead>
+                <tbody>
+                  {pricing.adCategories.map((category) => {
+                    const { ad_type: adType = 'unknown', duration_days: durationDays = 30, price: basePrice = 0 } = category || {};
+                    const baseDuration = durationDays;
+                    const ratePerDay = Math.round((basePrice / baseDuration) * 100) / 100;
+                    const computedPrice = Math.round(ratePerDay * selectedDuration);
+                    const isSelectedType = selectedSlots.some(s => s.startsWith(adType));
+                    return (
+                    <tr key={category?.id || `${adType}-${Math.random()}`} className={isSelectedType ? 'table-active' : ''}>
+                      <td><strong>{adType.charAt(0).toUpperCase() + adType.slice(1)}</strong></td>
+                      <td>{baseDuration} days</td>
+                      <td>₹{basePrice}</td>
+                      <td>₹{ratePerDay}</td>
+                      <td><strong>₹{computedPrice}</strong></td>
+                    </tr>
+                  )})}
+                </tbody>
             </table>
           ) : (
             <Alert variant='info'>No pricing tiers configured for this category</Alert>
+          )}
+
+          {preview && (
+            <Card className='mt-3'>
+              <Card.Body>
+                {/* Show the pricing data being used */}
+                <div className='mb-3 p-2' style={{ backgroundColor: '#f0f0f0', borderRadius: '4px', fontSize: '0.85rem' }}>
+                  <div style={{ marginBottom: '8px' }}>
+                    <strong>Pricing Used:</strong> {selectedAdType.charAt(0).toUpperCase() + selectedAdType.slice(1)}
+                  </div>
+                  {(() => {
+                    let adCat = null;
+                    if (pricing?.adCategories && pricing.adCategories.length > 0) {
+                      adCat = pricing.adCategories.find(ac => ac.ad_type === selectedAdType && ac.duration_days === selectedDuration);
+                      if (!adCat) {
+                        adCat = pricing.adCategories.find(ac => ac.ad_type === selectedAdType);
+                      }
+                      if (!adCat) {
+                        const [firstCategory] = pricing.adCategories;
+                        adCat = firstCategory;
+                      }
+                    }
+                    if (adCat) {
+                      const { duration_days: baseDays = 30, price: basePrice = 0 } = adCat;
+                      const ratePerDay = Math.round((basePrice / baseDays) * 100) / 100;
+                      return (
+                        <div>
+                          <span>₹{basePrice} ÷ {baseDays} days = <strong>₹{ratePerDay} per day</strong></span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
+
+                <div className='d-flex justify-content-between align-items-center mb-2'>
+                  <div>
+                    <strong>Start:</strong> {preview.startDate.toLocaleDateString()} &nbsp; <strong>End:</strong> {preview.endDate.toLocaleDateString()}
+                  </div>
+                  <div><strong>Total:</strong> ₹{preview.total}</div>
+                </div>
+                <ul className='mb-0' style={{ fontSize: '0.9rem' }}>
+                  {preview.breakdown.map((b, i) => (
+                    <li key={i} className='py-1'>
+                      <strong>{b.quarter}:</strong> {b.days} days × ₹{b.rate_per_day} = ₹{b.subtotal}
+                    </li>
+                  ))}
+                </ul>
+              </Card.Body>
+            </Card>
           )}
         </div>
       </div>
@@ -423,13 +679,16 @@ const Advertisement = () => {
       );
     }
 
+    // map slots to their status for easy lookup
+    const slotMap = {};
+    (selectedCategoryData.slotStatuses || []).forEach((s) => {
+      slotMap[s.slot] = s;
+    });
+
     const bannerSlots = ['banner_1', 'banner_2', 'banner_3', 'banner_4'];
     const stampSlots = ['stamp_1', 'stamp_2', 'stamp_3', 'stamp_4'];
-    // per-type booked counts (from API)
-    const bookedBanner = selectedCategoryData?.bookedBanner || 0;
-    const bookedStamp = selectedCategoryData?.bookedStamp || 0;
-    const availableBanner = Math.max(0, 4 - bookedBanner);
-    const availableStamp = Math.max(0, 4 - bookedStamp);
+    const availableBanner = bannerSlots.filter((s) => slotMap[s]?.available).length;
+    const availableStamp = stampSlots.filter((s) => slotMap[s]?.available).length;
 
     return (
       <div>
@@ -437,20 +696,59 @@ const Advertisement = () => {
           Available Slots: {selectedCategoryData.availableSlots || 0}/{(selectedCategoryData.bookedSlots || 0) + (selectedCategoryData.availableSlots || 0)}
         </Alert>
 
+        {/* legend */}
+        <div className='mb-2'>
+          <small>
+            <span className='badge bg-success me-1'>free</span>
+            <span className='badge bg-danger'>booked</span>
+          </small>
+        </div>
+        {/* visual summary grid */}
+        <div className='d-flex flex-wrap mb-3'>
+          {[...bannerSlots, ...stampSlots].map((slot) => {
+            const s = slotMap[slot] || { available: true };
+            return (
+              <span
+                key={slot}
+                className={`badge me-1 mb-1 ${s.available ? 'bg-success' : 'bg-danger'}`}
+                style={{ fontSize: '0.75rem' }}
+              >
+                {getSlotDisplayName(slot)}
+              </span>
+            );
+          })}
+        </div>
+
         <div className='mb-4'>
           <h6 className='mb-3'>Banner Slots (Available: {availableBanner})</h6>
           <Row className='g-2'>
-            {bannerSlots.map((slot, idx) => {
-              const disabled = idx >= availableBanner;
+            {bannerSlots.map((slot) => {
+              const status = slotMap[slot] || { available: true, freeDate: null };
+              const disabled = !status.available;
+              let variant;
+              if (!status.available) {
+                variant = 'outline-danger';
+              } else if (selectedSlots.includes(slot)) {
+                variant = 'primary';
+              } else {
+                variant = 'outline-success';
+              }
+
+              let label = getSlotDisplayName(slot);
+              if (!status.available) {
+                const until = status.freeDate ? new Date(status.freeDate).toLocaleDateString() : 'unknown';
+                label += ` (booked until ${until})`;
+              }
+
               return (
                 <Col key={slot} xs={6} sm={4} md={3}>
                   <Button
-                    variant={selectedSlots.includes(slot) ? 'primary' : 'outline-secondary'}
+                    variant={variant}
                     className='w-100'
                     onClick={() => handleSlotToggle(slot)}
                     disabled={disabled}
                   >
-                    {getSlotDisplayName(slot)}
+                    {label}
                   </Button>
                 </Col>
               );
@@ -461,17 +759,33 @@ const Advertisement = () => {
         <div>
           <h6 className='mb-3'>Stamp Slots (Available: {availableStamp})</h6>
           <Row className='g-2'>
-            {stampSlots.map((slot, idx) => {
-              const disabled = idx >= availableStamp;
+            {stampSlots.map((slot) => {
+              const status = slotMap[slot] || { available: true, freeDate: null };
+              const disabled = !status.available;
+              let variant;
+              if (!status.available) {
+                variant = 'outline-danger';
+              } else if (selectedSlots.includes(slot)) {
+                variant = 'primary';
+              } else {
+                variant = 'outline-success';
+              }
+
+              let label = getSlotDisplayName(slot);
+              if (!status.available) {
+                const until = status.freeDate ? new Date(status.freeDate).toLocaleDateString() : 'unknown';
+                label += ` (booked until ${until})`;
+              }
+
               return (
                 <Col key={slot} xs={6} sm={4} md={3}>
                   <Button
-                    variant={selectedSlots.includes(slot) ? 'primary' : 'outline-secondary'}
+                    variant={variant}
                     className='w-100'
                     onClick={() => handleSlotToggle(slot)}
                     disabled={disabled}
                   >
-                    {getSlotDisplayName(slot)}
+                    {label}
                   </Button>
                 </Col>
               );
@@ -581,6 +895,68 @@ const Advertisement = () => {
                     onMobileRedirectUrlChange={setMobileRedirectUrl}
                     onDesktopRedirectUrlChange={setDesktopRedirectUrl}
                   />
+                </Card.Body>
+              </Card>
+            )}
+
+            {/* Selected Slots Summary */}
+            {selectedSlots.length > 0 && (
+              <Card className='mb-4 border-success'>
+                <Card.Header>
+                  <Card.Title className='mb-0'>
+                    <span className='badge badge-success me-2'>✓</span>
+                    Selected Slots Summary ({selectedDuration} Days)
+                  </Card.Title>
+                </Card.Header>
+                <Card.Body>
+                  <div className='row'>
+                    {(() => {
+                      const counts = { banner: 0, stamp: 0 };
+                      selectedSlots.forEach(s => {
+                        const type = s.split('_')[0];
+                        if (type === 'banner' || type === 'stamp') counts[type] += 1;
+                      });
+
+                      const bannerPrice = counts.banner > 0 ? computePricingPreview('banner')?.total : 0;
+                      const stampPrice = counts.stamp > 0 ? computePricingPreview('stamp')?.total : 0;
+                      const totalPrice = (bannerPrice * counts.banner) + (stampPrice * counts.stamp);
+
+                      return (
+                        <>
+                          {counts.banner > 0 && (
+                            <div className='col-md-4'>
+                              <div className='card' style={{ backgroundColor: '#f8f9fa', borderColor: '#dee2e6' }}>
+                                <div className='card-body'>
+                                  <div className='text-muted small'>Banners Selected</div>
+                                  <div className='h6 mt-2'>{counts.banner} × ₹{bannerPrice}</div>
+                                  <div className='h5 mt-2' style={{ color: '#17a2b8' }}>₹{Math.round(bannerPrice * counts.banner)}</div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {counts.stamp > 0 && (
+                            <div className='col-md-4'>
+                              <div className='card' style={{ backgroundColor: '#f8f9fa', borderColor: '#dee2e6' }}>
+                                <div className='card-body'>
+                                  <div className='text-muted small'>Stamps Selected</div>
+                                  <div className='h6 mt-2'>{counts.stamp} × ₹{stampPrice}</div>
+                                  <div className='h5 mt-2' style={{ color: '#28a745' }}>₹{Math.round(stampPrice * counts.stamp)}</div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          <div className='col-md-4'>
+                            <div className='card' style={{ backgroundColor: '#e7f3ff', borderColor: '#0d6efd', borderWidth: '2px' }}>
+                              <div className='card-body'>
+                                <div className='text-muted small'>Total Cost</div>
+                                <div className='h4 mt-2 fw-bold' style={{ color: '#0d6efd' }}>₹{Math.round(totalPrice)}</div>
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
                 </Card.Body>
               </Card>
             )}
