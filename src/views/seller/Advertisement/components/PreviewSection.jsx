@@ -7,14 +7,19 @@ const PreviewSection = ({
   slots,
   duration,
   pricing,
-  mobileImage,
-  desktopImage,
-  mobileRedirectUrl,
-  desktopRedirectUrl,
+  slotMedia = {},
+  totalPrice = 0,
   onEdit,
   onSubmit,
   submitting,
 }) => {
+  const formatSlotName = (slot) => {
+    if (!slot) return slot;
+    const parts = slot.split('_');
+    const type = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+    const num = parts[1];
+    return `${type} #${num}`;
+  };
   const getPricingForDuration = () => {
     if (!pricing || !pricing.adCategories || pricing.adCategories.length === 0) return 0;
     const priceField = `pricing${duration}Days`;
@@ -78,12 +83,12 @@ const PreviewSection = ({
                 <div className='fw-bold fs-5'>{duration || 30} days</div>
               </div>
             </Col>
-            <Col md={6} className='mb-3'>
+            {/* <Col md={6} className='mb-3'>
               <div className='mb-3'>
                 <label className='text-muted small fw-bold mb-1 d-block'>Price per Ad Type</label>
                 <div className='fw-bold fs-5 text-success'>₹{getPricingForDuration()}</div>
               </div>
-            </Col>
+            </Col> */}
             <Col md={6} className='mb-3'>
               <div className='mb-3'>
                 <label className='text-muted small fw-bold mb-1 d-block'>Available Slots</label>
@@ -92,90 +97,60 @@ const PreviewSection = ({
                 </div>
               </div>
             </Col>
+            <Col md={6} className='mb-3'>
+              <div className='mb-3'>
+                <label className='text-muted small fw-bold mb-1 d-block'>Total Cost</label>
+                <div className='fw-bold fs-5 text-danger'>₹{Math.round(totalPrice)}</div>
+              </div>
+            </Col>
           </Row>
         </Card.Body>
       </Card>
 
-      {/* Mobile Preview */}
-      <Card className='mb-4'>
-        <Card.Header className='bg-light'>
-          <Card.Title className='mb-0'>
-            <CsLineIcons icon='mobile' className='me-2' />
-            Mobile Preview
-          </Card.Title>
-        </Card.Header>
-        <Card.Body>
-          <div className='text-center'>
-            <div
-              className='d-inline-block'
-              style={{
-                border: '2px solid #ccc',
-                borderRadius: '12px',
-                padding: '4px',
-                backgroundColor: '#000',
-              }}
-            >
-              <img
-                src={mobileImage}
-                alt='Mobile preview'
-                className='img-fluid'
-                style={{
-                  maxWidth: '320px',
-                  borderRadius: '10px',
-                  display: 'block',
-                }}
-              />
-            </div>
-            <div className='mt-3 text-muted small'>
-              {mobileRedirectUrl && (
-                <>
-                  <span className='fw-bold'>Redirect URL:</span>
-                  <br />
-                  <a href={mobileRedirectUrl} target='_blank' rel='noopener noreferrer'>
-                    {mobileRedirectUrl}
-                  </a>
-                </>
-              )}
-            </div>
-          </div>
-        </Card.Body>
-      </Card>
-
-      {/* Desktop Preview */}
-      <Card className='mb-4'>
-        <Card.Header className='bg-light'>
-          <Card.Title className='mb-0'>
-            <CsLineIcons icon='monitor' className='me-2' />
-            Desktop Preview
-          </Card.Title>
-        </Card.Header>
-        <Card.Body>
-          <div className='text-center'>
-            <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-              <img
-                src={desktopImage}
-                alt='Desktop preview'
-                className='img-fluid'
-                style={{
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                }}
-              />
-            </div>
-            <div className='mt-3 text-muted small'>
-              {desktopRedirectUrl && (
-                <>
-                  <span className='fw-bold'>Redirect URL:</span>
-                  <br />
-                  <a href={desktopRedirectUrl} target='_blank' rel='noopener noreferrer'>
-                    {desktopRedirectUrl}
-                  </a>
-                </>
-              )}
-            </div>
-          </div>
-        </Card.Body>
-      </Card>
+      {/* show media details for each slot */}
+      {slotMedia && Object.keys(slotMedia).length > 0 && (
+        <Card className='mb-4'>
+          <Card.Header className='bg-light'>
+            <Card.Title className='mb-0'>
+              <CsLineIcons icon='image' className='me-2' />
+              Slot Media
+            </Card.Title>
+          </Card.Header>
+          <Card.Body>
+            <Row>
+              {Object.entries(slotMedia).map(([slot, media]) => (
+                <Col md={6} key={slot} className='mb-4'>
+                  <h6 className='mb-2'>{formatSlotName(slot)}</h6>
+                  {media.mobileImage && (
+                    <div className='mb-2'>
+                      <strong>Mobile Image:</strong>
+                      <br />
+                      <img src={media.mobileImage} alt='mobile' className='img-fluid' style={{ maxHeight: '120px' }} />
+                    </div>
+                  )}
+                  {media.mobileRedirectUrl && (
+                    <div className='mb-2'>
+                      <strong>Mobile URL:</strong> <a href={media.mobileRedirectUrl} target='_blank' rel='noopener noreferrer'>{media.mobileRedirectUrl}</a>
+                    </div>
+                  )}
+                  {media.desktopImage && (
+                    <div className='mb-2'>
+                      <strong>Desktop Image:</strong>
+                      <br />
+                      <img src={media.desktopImage} alt='desktop' className='img-fluid' style={{ maxHeight: '120px' }} />
+                    </div>
+                  )}
+                  {media.desktopRedirectUrl && (
+                    <div className='mb-2'>
+                      <strong>Desktop URL:</strong> <a href={media.desktopRedirectUrl} target='_blank' rel='noopener noreferrer'>{media.desktopRedirectUrl}</a>
+                    </div>
+                  )}
+                </Col>
+              ))}
+            </Row>
+          </Card.Body>
+        </Card>
+      )}
       {/* Terms Notice */}
       <Card className='mb-4 border-warning'>
         <Card.Body>

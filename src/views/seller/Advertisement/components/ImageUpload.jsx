@@ -1,290 +1,145 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Form, Row, Col, Card } from 'react-bootstrap';
-import { toast } from 'react-toastify';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
 
-const ImageUpload = ({
-  selectedSlots = [],
-  onBannerMobileImageChange,
-  onBannerDesktopImageChange,
-  onStampMobileImageChange,
-  onStampDesktopImageChange,
-  mobileRedirectUrl,
-  desktopRedirectUrl,
-  onMobileRedirectUrlChange,
-  onDesktopRedirectUrlChange,
-}) => {
-  const [bannerMobilePreview, setBannerMobilePreview] = useState(null);
-  const [bannerDesktopPreview, setBannerDesktopPreview] = useState(null);
-  const [stampMobilePreview, setStampMobilePreview] = useState(null);
-  const [stampDesktopPreview, setStampDesktopPreview] = useState(null);
+const ImageUpload = ({ selectedSlots = [], slotMedia = {}, onSlotMediaChange = () => {} }) => {
+  const formatSlotName = (slot) => {
+    if (!slot) return slot;
+    const parts = slot.split('_');
+    const type = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+    const num = parts[1];
+    return `${type} #${num}`;
+  };
 
-  // Simplified: no client-side size/dimension validations here
-
-  // Helper to apply image to previews and parent handlers
-  function applyImage(dataUrl, type, device) {
-    if (type === 'banner' && device === 'mobile') {
-      if (onBannerMobileImageChange) onBannerMobileImageChange(dataUrl);
-      setBannerMobilePreview(dataUrl);
-      return;
-    }
-    if (type === 'banner' && device === 'desktop') {
-      if (onBannerDesktopImageChange) onBannerDesktopImageChange(dataUrl);
-      setBannerDesktopPreview(dataUrl);
-      return;
-    }
-    if (type === 'stamp' && device === 'mobile') {
-      if (onStampMobileImageChange) onStampMobileImageChange(dataUrl);
-      setStampMobilePreview(dataUrl);
-      return;
-    }
-    if (type === 'stamp' && device === 'desktop') {
-      if (onStampDesktopImageChange) onStampDesktopImageChange(dataUrl);
-      setStampDesktopPreview(dataUrl);
-    }
-  }
-
-  // type: 'banner' | 'stamp', device: 'mobile' | 'desktop'
-  const handleImageChange = (e, type, device) => {
+  const handleImageChange = (e, slot, device) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onloadend = () => {
       const dataUrl = reader.result;
-      applyImage(dataUrl, type, device);
+      const field = device === 'mobile' ? 'mobileImage' : 'desktopImage';
+      onSlotMediaChange(slot, field, dataUrl);
     };
     reader.readAsDataURL(file);
   };
 
-  const hasBanner = selectedSlots.some(s => s && s.startsWith('banner'));
-  const hasStamp = selectedSlots.some(s => s && s.startsWith('stamp'));
+  const handleUrlChange = (e, slot, field) => {
+    onSlotMediaChange(slot, field, e.target.value);
+  };
 
   return (
     <div>
       <p className='text-muted mb-4'>
-        Upload advertisement images per selected slot type.
+        Upload advertisement images and redirect URLs for each selected slot.
       </p>
 
-      <Row>
-        {hasBanner && (
-          <>
-            <Col md={6} className='mb-4'>
-              <Card className='h-100'>
-                <Card.Header className='bg-light'>
-                  <Card.Title className='mb-0'>
-                    <CsLineIcons icon='mobile' className='me-2' />
-                    Banner - Mobile Image
-                  </Card.Title>
-                </Card.Header>
-                <Card.Body>
-                  <Form.Group className='mb-3'>
-                    <Form.Label className='fw-bold'>Mobile Banner Image *</Form.Label>
-                    <div className='border-2 border-dashed rounded p-4 text-center' style={{ position: 'relative' }}>
-                      {bannerMobilePreview ? (
-                        <div>
-                          <img src={bannerMobilePreview} alt='Banner mobile' className='img-fluid' style={{ maxHeight: '150px' }} />
-                          <div className='mt-2'><small className='text-success fw-bold'>✓ Image uploaded</small></div>
-                        </div>
+      {selectedSlots.map((slot) => {
+        const media = slotMedia[slot] || {};
+        return (
+          <Card key={slot} className='mb-4'>
+            <Card.Header className='bg-light'>
+              <Card.Title className='mb-0'>{formatSlotName(slot)}</Card.Title>
+            </Card.Header>
+            <Card.Body>
+              <Row>
+                <Col md={6} className='mb-3'>
+                  <Form.Group>
+                    <Form.Label className='fw-bold'>Mobile Image</Form.Label>
+                    <div
+                      className='border-2 border-dashed rounded p-4 text-center'
+                      style={{ position: 'relative' }}
+                    >
+                      {media.mobileImage ? (
+                        <img
+                          src={media.mobileImage}
+                          alt='mobile'
+                          className='img-fluid'
+                          style={{ maxHeight: '120px' }}
+                        />
                       ) : (
                         <div>
                           <CsLineIcons icon='image' className='mb-2 display-4' />
                           <p className='text-muted mb-2'>Drag or click to upload</p>
-                          <small className='text-muted'>Recommended: 300x250px, Max: 2MB</small>
                         </div>
                       )}
                       <Form.Control
                         type='file'
                         accept='image/*'
-                        onChange={(e) => handleImageChange(e, 'banner', 'mobile')}
-                        id='banner-mobile-input'
-                        style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+                        onChange={(e) => handleImageChange(e, slot, 'mobile')}
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: 0,
+                          width: '100%',
+                          height: '100%',
+                          opacity: 0,
+                          cursor: 'pointer',
+                        }}
                       />
-                      <div className='mt-3'>
-                        <label htmlFor='banner-mobile-input' className='btn btn-sm btn-outline-primary cursor-pointer'>
-                          <CsLineIcons icon='upload' className='me-2' />Choose Image
-                        </label>
-                      </div>
                     </div>
                   </Form.Group>
-                </Card.Body>
-              </Card>
-            </Col>
-
-            <Col md={6} className='mb-4'>
-              <Card className='h-100'>
-                <Card.Header className='bg-light'>
-                  <Card.Title className='mb-0'>
-                    <CsLineIcons icon='monitor' className='me-2' />
-                    Banner - Desktop Image
-                  </Card.Title>
-                </Card.Header>
-                <Card.Body>
-                  <Form.Group className='mb-3'>
-                    <Form.Label className='fw-bold'>Desktop Banner Image *</Form.Label>
-                      <div className='border-2 border-dashed rounded p-4 text-center' style={{ position: 'relative' }}>
-                      {bannerDesktopPreview ? (
-                        <div>
-                          <img src={bannerDesktopPreview} alt='Banner desktop' className='img-fluid' style={{ maxHeight: '150px' }} />
-                          <div className='mt-2'><small className='text-success fw-bold'>✓ Image uploaded</small></div>
-                        </div>
+                  <Form.Group className='mt-2'>
+                    <Form.Label className='fw-bold'>Mobile Redirect URL</Form.Label>
+                    <Form.Control
+                      type='text'
+                      value={media.mobileRedirectUrl || ''}
+                      onChange={(e) => handleUrlChange(e, slot, 'mobileRedirectUrl')}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6} className='mb-3'>
+                  <Form.Group>
+                    <Form.Label className='fw-bold'>Desktop Image</Form.Label>
+                    <div
+                      className='border-2 border-dashed rounded p-4 text-center'
+                      style={{ position: 'relative' }}
+                    >
+                      {media.desktopImage ? (
+                        <img
+                          src={media.desktopImage}
+                          alt='desktop'
+                          className='img-fluid'
+                          style={{ maxHeight: '120px' }}
+                        />
                       ) : (
                         <div>
                           <CsLineIcons icon='image' className='mb-2 display-4' />
                           <p className='text-muted mb-2'>Drag or click to upload</p>
-                          <small className='text-muted'>Recommended: 728x90px, Max: 2MB</small>
                         </div>
                       )}
                       <Form.Control
                         type='file'
                         accept='image/*'
-                        onChange={(e) => handleImageChange(e, 'banner', 'desktop')}
-                        id='banner-desktop-input'
-                        style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+                        onChange={(e) => handleImageChange(e, slot, 'desktop')}
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: 0,
+                          width: '100%',
+                          height: '100%',
+                          opacity: 0,
+                          cursor: 'pointer',
+                        }}
                       />
-                      <div className='mt-3'>
-                        <label htmlFor='banner-desktop-input' className='btn btn-sm btn-outline-primary cursor-pointer'>
-                          <CsLineIcons icon='upload' className='me-2' />Choose Image
-                        </label>
-                      </div>
                     </div>
                   </Form.Group>
-                </Card.Body>
-              </Card>
-            </Col>
-          </>
-        )}
-
-        {hasStamp && (
-          <>
-            <Col md={6} className='mb-4'>
-              <Card className='h-100'>
-                <Card.Header className='bg-light'>
-                  <Card.Title className='mb-0'>
-                    <CsLineIcons icon='mobile' className='me-2' />
-                    Stamp - Mobile Image
-                  </Card.Title>
-                </Card.Header>
-                <Card.Body>
-                  <Form.Group className='mb-3'>
-                    <Form.Label className='fw-bold'>Mobile Stamp Image *</Form.Label>
-                      <div className='border-2 border-dashed rounded p-4 text-center' style={{ position: 'relative' }}>
-                      {stampMobilePreview ? (
-                        <div>
-                          <img src={stampMobilePreview} alt='Stamp mobile' className='img-fluid' style={{ maxHeight: '150px' }} />
-                          <div className='mt-2'><small className='text-success fw-bold'>✓ Image uploaded</small></div>
-                        </div>
-                      ) : (
-                        <div>
-                          <CsLineIcons icon='image' className='mb-2 display-4' />
-                          <p className='text-muted mb-2'>Drag or click to upload</p>
-                          <small className='text-muted'>Recommended: 150x150px, Max: 2MB</small>
-                        </div>
-                      )}
-                      <Form.Control
-                        type='file'
-                        accept='image/*'
-                        onChange={(e) => handleImageChange(e, 'stamp', 'mobile')}
-                        id='stamp-mobile-input'
-                        style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
-                      />
-                      <div className='mt-3'>
-                        <label htmlFor='stamp-mobile-input' className='btn btn-sm btn-outline-primary cursor-pointer'>
-                          <CsLineIcons icon='upload' className='me-2' />Choose Image
-                        </label>
-                      </div>
-                    </div>
+                  <Form.Group className='mt-2'>
+                    <Form.Label className='fw-bold'>Desktop Redirect URL</Form.Label>
+                    <Form.Control
+                      type='text'
+                      value={media.desktopRedirectUrl || ''}
+                      onChange={(e) => handleUrlChange(e, slot, 'desktopRedirectUrl')}
+                    />
                   </Form.Group>
-                </Card.Body>
-              </Card>
-            </Col>
+                </Col>
+              </Row>
+            </Card.Body>
+          </Card>
+        );
+      })}
 
-            <Col md={6} className='mb-4'>
-              <Card className='h-100'>
-                <Card.Header className='bg-light'>
-                  <Card.Title className='mb-0'>
-                    <CsLineIcons icon='monitor' className='me-2' />
-                    Stamp - Desktop Image
-                  </Card.Title>
-                </Card.Header>
-                <Card.Body>
-                  <Form.Group className='mb-3'>
-                    <Form.Label className='fw-bold'>Desktop Stamp Image *</Form.Label>
-                      <div className='border-2 border-dashed rounded p-4 text-center' style={{ position: 'relative' }}>
-                      {stampDesktopPreview ? (
-                        <div>
-                          <img src={stampDesktopPreview} alt='Stamp desktop' className='img-fluid' style={{ maxHeight: '150px' }} />
-                          <div className='mt-2'><small className='text-success fw-bold'>✓ Image uploaded</small></div>
-                        </div>
-                      ) : (
-                        <div>
-                          <CsLineIcons icon='image' className='mb-2 display-4' />
-                          <p className='text-muted mb-2'>Drag or click to upload</p>
-                          <small className='text-muted'>Recommended: 150x150px, Max: 2MB</small>
-                        </div>
-                      )}
-                      <Form.Control
-                        type='file'
-                        accept='image/*'
-                        onChange={(e) => handleImageChange(e, 'stamp', 'desktop')}
-                        id='stamp-desktop-input'
-                        style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
-                      />
-                      <div className='mt-3'>
-                        <label htmlFor='stamp-desktop-input' className='btn btn-sm btn-outline-primary cursor-pointer'>
-                          <CsLineIcons icon='upload' className='me-2' />Choose Image
-                        </label>
-                      </div>
-                    </div>
-                  </Form.Group>
-                </Card.Body>
-              </Card>
-            </Col>
-          </>
-        )}
-      </Row>
-
-      {/* Redirect URL inputs (global for mobile/desktop) */}
-      {(onMobileRedirectUrlChange || onDesktopRedirectUrlChange) && (
-        <Card className='mb-4'>
-          <Card.Body>
-            <h6 className='mb-3'>Redirect URLs (optional)</h6>
-            <Row>
-              <Col md={6} className='mb-2'>
-                <Form.Group>
-                  <Form.Label className='fw-bold'>Mobile Redirect URL</Form.Label>
-                  <Form.Control
-                    type='text'
-                    placeholder='https://example.com/mobile'
-                    value={mobileRedirectUrl || ''}
-                    onChange={(e) => onMobileRedirectUrlChange && onMobileRedirectUrlChange(e.target.value)}
-                  />
-                  <small className='text-muted'>Where the mobile image should redirect (optional)</small>
-                </Form.Group>
-              </Col>
-
-              <Col md={6} className='mb-2'>
-                <Form.Group>
-                  <Form.Label className='fw-bold'>Desktop Redirect URL</Form.Label>
-                  <Form.Control
-                    type='text'
-                    placeholder='https://example.com/desktop'
-                    value={desktopRedirectUrl || ''}
-                    onChange={(e) => onDesktopRedirectUrlChange && onDesktopRedirectUrlChange(e.target.value)}
-                  />
-                  <small className='text-muted'>Where the desktop image should redirect (optional)</small>
-                </Form.Group>
-              </Col>
-            </Row>
-          </Card.Body>
-        </Card>
-      )}
-
-      {/* Info Alert */}
-      {(hasBanner || hasStamp) && (
-        <div className='alert alert-info mt-2'>
-          <CsLineIcons icon='info' className='me-2' /> Upload completed for selected types will show a check.
-        </div>
+      {selectedSlots.length === 0 && (
+        <div className='alert alert-warning'>Please select slots first.</div>
       )}
     </div>
   );

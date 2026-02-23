@@ -106,6 +106,8 @@ const AdCategoryManager = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [sortColumn, setSortColumn] = useState('categoryMasterId');
+  const [sortOrder, setSortOrder] = useState('asc');
 
   const [form, setForm] = useState({ categoryMasterId: '', ad_type: 'banner', price: '', duration_days: 30, is_active: true });
 
@@ -196,6 +198,58 @@ const AdCategoryManager = () => {
     await updateAdCategory({ variables: { id: editing.id, input: { ...form, price: parseFloat(form.price), duration_days: parseInt(form.duration_days, 10) } } });
   };
 
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortOrder('asc');
+    }
+  };
+
+  const getSortedData = () => {
+    if (!data || !data.adCategories) return [];
+    const sorted = [...data.adCategories].sort((a, b) => {
+      let aValue;
+      let bValue;
+
+      switch (sortColumn) {
+        case 'categoryMasterId':
+          aValue = (a.categoryMasterId?.name || 'N/A').toLowerCase();
+          bValue = (b.categoryMasterId?.name || 'N/A').toLowerCase();
+          break;
+        case 'ad_type':
+          aValue = a.ad_type.toLowerCase();
+          bValue = b.ad_type.toLowerCase();
+          break;
+        case 'price':
+          aValue = parseFloat(a.price);
+          bValue = parseFloat(b.price);
+          break;
+        case 'duration_days':
+          aValue = parseInt(a.duration_days, 10);
+          bValue = parseInt(b.duration_days, 10);
+          break;
+        case 'is_active':
+          aValue = a.is_active ? 1 : 0;
+          bValue = b.is_active ? 1 : 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return sorted;
+  };
+
+  const renderSortIcon = (column) => {
+    if (sortColumn !== column) return ' ↕';
+    return sortOrder === 'asc' ? ' ↑' : ' ↓';
+  };
+
   return (
     <>
       <HtmlHead title={title} description={description} />
@@ -226,17 +280,27 @@ const AdCategoryManager = () => {
             <Table hover responsive>
               <thead>
                 <tr>
-                  <th>Category</th>
-                  <th>Ad Type</th>
-                  <th>Price</th>
-                  <th>Duration (days)</th>
-                  <th>Active</th>
+                  <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('categoryMasterId')}>
+                    Category{renderSortIcon('categoryMasterId')}
+                  </th>
+                  <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('ad_type')}>
+                    Ad Type{renderSortIcon('ad_type')}
+                  </th>
+                  <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('price')}>
+                    Price{renderSortIcon('price')}
+                  </th>
+                  <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('duration_days')}>
+                    Duration (days){renderSortIcon('duration_days')}
+                  </th>
+                  <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('is_active')}>
+                    Active{renderSortIcon('is_active')}
+                  </th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {data &&
-                  data.adCategories.map((cat) => (
+                  getSortedData().map((cat) => (
                     <tr key={cat.id}>
                       <td>{cat.categoryMasterId?.name || 'N/A'}</td>
                       <td>{cat.ad_type}</td>

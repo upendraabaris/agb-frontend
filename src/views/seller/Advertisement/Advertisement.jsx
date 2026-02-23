@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, gql } from '@apollo/client';
-import { Card, Button, Row, Col, Alert, Spinner } from 'react-bootstrap';
+import { Card, Button, Row, Col, Alert, Spinner, Modal, ProgressBar } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import HtmlHead from 'components/html-head/HtmlHead';
 import ImageUpload from './components/ImageUpload';
@@ -29,6 +29,10 @@ const GET_CATEGORIES_WITH_SLOTS = gql`
       tierId {
         id
         name
+      }
+      pricing90 {
+        ad_type
+        price
       }
     }
   }
@@ -75,15 +79,13 @@ const Advertisement = () => {
   const [selectedDuration, setSelectedDuration] = useState(90);
   const [startPreference, setStartPreference] = useState('today');
   const [selectedSlots, setSelectedSlots] = useState([]);
-  const [bannerMobileImage, setBannerMobileImage] = useState(null);
-  const [bannerDesktopImage, setBannerDesktopImage] = useState(null);
-  const [stampMobileImage, setStampMobileImage] = useState(null);
-  const [stampDesktopImage, setStampDesktopImage] = useState(null);
-  const [mobileRedirectUrl, setMobileRedirectUrl] = useState('');
-  const [desktopRedirectUrl, setDesktopRedirectUrl] = useState('');
+  // media & url details per-slot (keyed by slot name)
+  const [slotMedia, setSlotMedia] = useState({});
   const [showPreview, setShowPreview] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [submittedCategoryName, setSubmittedCategoryName] = useState('');
+  const [showWizardModal, setShowWizardModal] = useState(false);
+  const [currentWizardStep, setCurrentWizardStep] = useState(1);
 
   // Queries
   const { data: categoriesData, loading: categoriesLoading, error: categoriesError } = useQuery(GET_CATEGORIES_WITH_SLOTS);
@@ -112,12 +114,7 @@ const Advertisement = () => {
       setSelectedCategory('');
       setSelectedDuration(30);
       setSelectedSlots([]);
-      setBannerMobileImage(null);
-      setBannerDesktopImage(null);
-      setStampMobileImage(null);
-      setStampDesktopImage(null);
-      setMobileRedirectUrl('');
-      setDesktopRedirectUrl('');
+      setSlotMedia({});
     },
     onError: (error) => {
       console.error('[Advertisement] Mutation error:', error);
@@ -149,6 +146,31 @@ const Advertisement = () => {
   const handleCategoryChange = (categoryId) => {
     setSelectedCategory(categoryId);
     setSelectedSlots([]);
+    setSlotMedia({});
+    setShowWizardModal(true);
+    setCurrentWizardStep(1);
+  };
+
+  const handleWizardNext = () => {
+    if (currentWizardStep < 4) {
+      setCurrentWizardStep(currentWizardStep + 1);
+    }
+  };
+
+  const handleWizardPrevious = () => {
+    if (currentWizardStep > 1) {
+      setCurrentWizardStep(currentWizardStep - 1);
+    }
+  };
+
+  const handleWizardClose = () => {
+    setShowWizardModal(false);
+    setCurrentWizardStep(1);
+    setSelectedCategory('');
+    setSelectedDuration(90);
+    setStartPreference('today');
+    setSelectedSlots([]);
+    setSlotMedia({});
   };
 
   const handleDurationChange = (duration) => {
@@ -172,25 +194,35 @@ const Advertisement = () => {
 
     setSelectedSlots((prevSlots) => {
       if (prevSlots.includes(slotName)) {
-        return prevSlots.filter((slot) => slot !== slotName);
+        const updated = prevSlots.filter((slot) => slot !== slotName);
+        setSlotMedia((m) => {
+          const copy = { ...m };
+          delete copy[slotName];
+          return copy;
+        });
+        return updated;
       }
+      // new slot, initialize media entry
+      setSlotMedia((m) => ({
+        ...m,
+        [slotName]: { mobileImage: '', desktopImage: '', mobileRedirectUrl: '', desktopRedirectUrl: '' },
+      }));
       return [...prevSlots, slotName];
     });
   };
 
   const handlePreview = () => {
-    const needsBanner = selectedSlots.some(s => s.startsWith('banner'));
-    const needsStamp = selectedSlots.some(s => s.startsWith('stamp'));
     if (!selectedCategory || selectedSlots.length === 0) {
       toast.error('Please fill in all required fields');
       return;
     }
-    if (needsBanner && (!bannerMobileImage && !bannerDesktopImage)) {
-      toast.error('Please upload at least one image for Banner slots');
-      return;
-    }
-    if (needsStamp && (!stampMobileImage && !stampDesktopImage)) {
-      toast.error('Please upload at least one image for Stamp slots');
+    // ensure each selected slot has at least one image uploaded
+    const missing = selectedSlots.some(slot => {
+      const media = slotMedia[slot] || {};
+      return !media.mobileImage && !media.desktopImage;
+    });
+    if (missing) {
+      toast.error('Please upload at least one image for each selected slot');
       return;
     }
     setShowPreview(true);
@@ -303,18 +335,16 @@ const Advertisement = () => {
 
   const handleSubmit = async () => {
     try {
-      const needsBanner = selectedSlots.some(s => s.startsWith('banner'));
-      const needsStamp = selectedSlots.some(s => s.startsWith('stamp'));
       if (!selectedCategory || selectedSlots.length === 0) {
         toast.error('Please fill in all required fields');
         return;
       }
-      if (needsBanner && (!bannerMobileImage && !bannerDesktopImage)) {
-        toast.error('Please upload images for Banner slots');
-        return;
-      }
-      if (needsStamp && (!stampMobileImage && !stampDesktopImage)) {
-        toast.error('Please upload images for Stamp slots');
+      const missing = selectedSlots.some(slot => {
+        const media = slotMedia[slot] || {};
+        return !media.mobileImage && !media.desktopImage;
+      });
+      if (missing) {
+        toast.error('Please upload at least one image for each selected slot');
         return;
       }
 
@@ -339,16 +369,14 @@ const Advertisement = () => {
 
       // Create media objects for each selected slot (pick per-type images)
       const medias = selectedSlots.map((slot) => {
-        const type = slot.split('_')[0];
-        const mobileImageUrl = type === 'banner' ? bannerMobileImage : stampMobileImage;
-        const desktopImageUrl = type === 'banner' ? bannerDesktopImage : stampDesktopImage;
+        const media = slotMedia[slot] || {};
         return {
           slot,
           media_type: 'both',
-          'mobile_image_url': mobileImageUrl,
-          'mobile_redirect_url': mobileRedirectUrl || '',
-          'desktop_image_url': desktopImageUrl,
-          'desktop_redirect_url': desktopRedirectUrl || '',
+          mobile_image_url: media.mobileImage || '',
+          mobile_redirect_url: media.mobileRedirectUrl || '',
+          desktop_image_url: media.desktopImage || '',
+          desktop_redirect_url: media.desktopRedirectUrl || '',
         };
       });
 
@@ -381,6 +409,128 @@ const Advertisement = () => {
     return `${slotType} #${slotNumber}`;
   };
 
+  const getSlotCompactName = (slot) => {
+    // Format: banner_1 → B1, stamp_2 → S2
+    const parts = slot.split('_');
+    const prefix = parts[0].charAt(0).toUpperCase(); // B or S
+    const number = parts[1];
+    return `${prefix}${number}`;
+  };
+
+  const renderCategoryContent = (categories, allCategoriesCount) => {
+    if (allCategoriesCount === 0) {
+      return (
+        <Alert variant='warning'>
+          No categories with tiers assigned. Please contact admin to set up ad tiers for categories.
+        </Alert>
+      );
+    }
+    if (categories.length === 0) {
+      return (
+        <Alert variant='info'>
+          No categories found matching "{searchTerm}". Try a different search term.
+        </Alert>
+      );
+    }
+    return (
+      <Row className='g-2'>
+        {categories && categories.filter(cat => cat && cat.id).map((category) => (
+          <Col key={category?.id} md={6} lg={4}>
+            <Card
+              className={`cursor-pointer transition-all ${selectedCategory === category?.id ? 'border-primary shadow-sm' : 'border-light shadow-xs'}`}
+              onClick={() => handleCategoryChange(category?.id)}
+              style={{
+                cursor: 'pointer',
+                borderRadius: '10px',
+                border: selectedCategory === category?.id ? '2px solid #0d6efd' : '1px solid #e0e0e0',
+                transition: 'all 0.3s ease',
+                minHeight: 'auto',
+              }}
+              onMouseEnter={(e) => {
+                if (selectedCategory !== category?.id) {
+                  e.currentTarget.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.08)';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (selectedCategory !== category?.id) {
+                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.04)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }
+              }}
+            >
+              <Card.Body style={{ padding: '0.75rem' }}>
+                <div className='d-flex gap-1 mb-2' style={{ flexWrap: 'wrap' }}>
+                <Card.Title className='fw-bold mb-2' style={{ fontSize: '0.95rem', color: '#333', marginBottom: '0.5rem !important' }}>
+                  {category?.name || 'Unnamed'}
+                </Card.Title>
+                  <div className='d-flex ml-auto gap-1' style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+                  <span
+                    className='badge'
+                    style={{
+                      backgroundColor: '#28a745',
+                      fontSize: '0.75rem',
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '4px',
+                    }}
+                  >
+                    ✓ {category?.availableSlots || 0}/8
+                  </span>
+                  <span
+                    className='badge'
+                    style={{
+                      backgroundColor: '#17a2b8',
+                      fontSize: '0.75rem',
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '4px',
+                    }}
+                  >
+                    {category?.tierId?.name || 'Tier'}
+                  </span>
+                  </div>
+                  {category.pricing90 && category.pricing90.length > 0 && (
+                    <div style={{ fontSize: '0.8rem', color: '#555', marginTop: '4px' }}>
+                      {category.pricing90.map(p => `${p.ad_type.charAt(0).toUpperCase() + p.ad_type.slice(1)} ₹${p.price}/90d`).join(' | ')}
+                    </div>
+                  )}
+                </div>
+                {/* slot statuses - 2 column layout (banners left, stamps right) */}
+                {category.slotStatuses && category.slotStatuses.length > 0 && (
+                  <div style={{ borderTop: '1px solid #e0e0e0', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
+                    <div className='row g-0'>
+                      <div className='col-6' style={{ paddingRight: '0.25rem' }}>
+                        <strong style={{ fontSize: '0.7rem', color: '#555' }}>Banners</strong>
+                        <ul className='list-unstyled mb-0' style={{ margin: 0, fontSize: '0.7rem' }}>
+                          {category.slotStatuses.filter(s => s.slot.startsWith('banner')).map((s) => (
+                            <li key={s.slot} style={{ color: s.available ? '#28a745' : '#dc3545', fontWeight: '500', lineHeight: '1.2', paddingBottom: '1px' }}>
+                              <span style={{ marginRight: '2px' }}>{s.available ? '✓' : '✕'}</span>
+                              {getSlotCompactName(s.slot)}: {s.available ? 'Available' : `Aft ${new Date(s.freeDate).toLocaleDateString('en-IN')}`}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className='col-6' style={{ paddingLeft: '0.25rem' }}>
+                        <strong style={{ fontSize: '0.7rem', color: '#555' }}>Stamps</strong>
+                        <ul className='list-unstyled mb-0' style={{ margin: 0, fontSize: '0.7rem' }}>
+                          {category.slotStatuses.filter(s => s.slot.startsWith('stamp')).map((s) => (
+                            <li key={s.slot} style={{ color: s.available ? '#28a745' : '#dc3545', fontWeight: '500', lineHeight: '1.2', paddingBottom: '1px' }}>
+                              <span style={{ marginRight: '2px' }}>{s.available ? '✓' : '✕'}</span>
+                              {getSlotCompactName(s.slot)}: {s.available ? 'Available' : `Aft ${new Date(s.freeDate).toLocaleDateString('en-IN')}`}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </Card.Body>
+            </Card>
+          </Col>
+        ))}
+      </Row>
+    );
+  };
+
   const renderCategoryStep = () => {
     if (categoriesLoading) {
       return (
@@ -400,18 +550,12 @@ const Advertisement = () => {
     }
     
     let categories = categoriesData?.getCategoriesWithAvailableSlots || [];
+    const allCategoriesCount = categories.length;
+    
     if (searchTerm) {
       const lower = searchTerm.toLowerCase();
       categories = categories.filter(cat =>
         cat.name && cat.name.toLowerCase().includes(lower)
-      );
-    }
-    
-    if (categories.length === 0) {
-      return (
-        <Alert variant='warning'>
-          No categories with tiers assigned. Please contact admin to set up ad tiers for categories.
-        </Alert>
       );
     }
 
@@ -426,96 +570,7 @@ const Advertisement = () => {
             onChange={e => setSearchTerm(e.target.value)}
           />
         </div>
-        <Row className='g-2'>
-          {categories && categories.filter(cat => cat && cat.id).map((category) => (
-            <Col key={category?.id} md={6} lg={4}>
-              <Card
-                className={`cursor-pointer transition-all ${selectedCategory === category?.id ? 'border-primary shadow-sm' : 'border-light shadow-xs'}`}
-                onClick={() => handleCategoryChange(category?.id)}
-                style={{
-                  cursor: 'pointer',
-                  borderRadius: '10px',
-                  border: selectedCategory === category?.id ? '2px solid #0d6efd' : '1px solid #e0e0e0',
-                  transition: 'all 0.3s ease',
-                  minHeight: 'auto',
-                }}
-                onMouseEnter={(e) => {
-                  if (selectedCategory !== category?.id) {
-                    e.currentTarget.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.08)';
-                    e.currentTarget.style.transform = 'translateY(-1px)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (selectedCategory !== category?.id) {
-                    e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.04)';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                  }
-                }}
-              >
-                <Card.Body style={{ padding: '0.75rem' }}>
-                  <div className='d-flex gap-1 mb-2' style={{ flexWrap: 'wrap' }}>
-                  <Card.Title className='fw-bold mb-2' style={{ fontSize: '0.95rem', color: '#333', marginBottom: '0.5rem !important' }}>
-                    {category?.name || 'Unnamed'}
-                  </Card.Title>
-                    <div className='d-flex ml-auto gap-1' style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
-                    <span
-                      className='badge'
-                      style={{
-                        backgroundColor: '#28a745',
-                        fontSize: '0.75rem',
-                        padding: '0.25rem 0.5rem',
-                        borderRadius: '4px',
-                      }}
-                    >
-                      ✓ {category?.availableSlots || 0}/8
-                    </span>
-                    <span
-                      className='badge'
-                      style={{
-                        backgroundColor: '#17a2b8',
-                        fontSize: '0.75rem',
-                        padding: '0.25rem 0.5rem',
-                        borderRadius: '4px',
-                      }}
-                    >
-                      {category?.tierId?.name || 'Tier'}
-                    </span>
-                    </div>
-                  </div>
-                  {/* slot statuses - 2 column layout (banners left, stamps right) */}
-                  {category.slotStatuses && category.slotStatuses.length > 0 && (
-                    <div style={{ borderTop: '1px solid #e0e0e0', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
-                      <div className='row g-0'>
-                        <div className='col-6' style={{ paddingRight: '0.25rem' }}>
-                          <strong style={{ fontSize: '0.7rem', color: '#555' }}>Banners</strong>
-                          <ul className='list-unstyled mb-0' style={{ margin: 0, fontSize: '0.7rem' }}>
-                            {category.slotStatuses.filter(s => s.slot.startsWith('banner')).map((s) => (
-                              <li key={s.slot} style={{ color: s.available ? '#28a745' : '#dc3545', fontWeight: '500', lineHeight: '1.2', paddingBottom: '1px' }}>
-                                <span style={{ marginRight: '2px' }}>{s.available ? '✓' : '✕'}</span>
-                                {s.slot}: {s.available ? 'free' : `Aft ${new Date(s.freeDate).toLocaleDateString()}`}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div className='col-6' style={{ paddingLeft: '0.25rem' }}>
-                          <strong style={{ fontSize: '0.7rem', color: '#555' }}>Stamps</strong>
-                          <ul className='list-unstyled mb-0' style={{ margin: 0, fontSize: '0.7rem' }}>
-                            {category.slotStatuses.filter(s => s.slot.startsWith('stamp')).map((s) => (
-                              <li key={s.slot} style={{ color: s.available ? '#28a745' : '#dc3545', fontWeight: '500', lineHeight: '1.2', paddingBottom: '1px' }}>
-                                <span style={{ marginRight: '2px' }}>{s.available ? '✓' : '✕'}</span>
-                                {s.slot}: {s.available ? 'free' : `Aft ${new Date(s.freeDate).toLocaleDateString()}`}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </Card.Body>
-              </Card>
-            </Col>
-          ))}
-        </Row>
+        {renderCategoryContent(categories, allCategoriesCount)}
       </div>
     );
   };
@@ -553,7 +608,7 @@ const Advertisement = () => {
             {[
               { value: 90, label: '90 Days' },
               { value: 180, label: '180 Days' },
-              { value: 365, label: '365 Days' },
+              { value: 360, label: '360 Days' },
             ].map((option) => (
               <Button
                 key={option.value}
@@ -587,21 +642,26 @@ const Advertisement = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {pricing.adCategories.map((category) => {
-                    const { ad_type: adType = 'unknown', duration_days: durationDays = 30, price: basePrice = 0 } = category || {};
-                    const baseDuration = durationDays;
-                    const ratePerDay = Math.round((basePrice / baseDuration) * 100) / 100;
-                    const computedPrice = Math.round(ratePerDay * selectedDuration);
-                    const isSelectedType = selectedSlots.some(s => s.startsWith(adType));
-                    return (
-                    <tr key={category?.id || `${adType}-${Math.random()}`} className={isSelectedType ? 'table-active' : ''}>
-                      <td><strong>{adType.charAt(0).toUpperCase() + adType.slice(1)}</strong></td>
-                      <td>{baseDuration} days</td>
-                      <td>₹{basePrice}</td>
-                      <td>₹{ratePerDay}</td>
-                      <td><strong>₹{computedPrice}</strong></td>
-                    </tr>
-                  )})}
+                  {pricing.adCategories
+                    .filter(category => {
+                      const { duration_days: durationDays = 30 } = category || {};
+                      return durationDays === selectedDuration;
+                    })
+                    .map((category) => {
+                      const { ad_type: adType = 'unknown', duration_days: durationDays = 30, price: basePrice = 0 } = category || {};
+                      const baseDuration = durationDays;
+                      const ratePerDay = Math.round((basePrice / baseDuration) * 100) / 100;
+                      const computedPrice = Math.round(ratePerDay * selectedDuration);
+                      const isSelectedType = selectedSlots.some(s => s.startsWith(adType));
+                      return (
+                      <tr key={category?.id || `${adType}-${Math.random()}`} className={isSelectedType ? 'table-active' : ''}>
+                        <td><strong>{adType.charAt(0).toUpperCase() + adType.slice(1)}</strong></td>
+                        <td>{baseDuration} days</td>
+                        <td>₹{basePrice}</td>
+                        <td>₹{ratePerDay}</td>
+                        <td><strong>₹{computedPrice}</strong></td>
+                      </tr>
+                    )})}
                 </tbody>
             </table>
           ) : (
@@ -735,6 +795,16 @@ const Advertisement = () => {
               }
 
               let label = getSlotDisplayName(slot);
+              // append price for this slot type
+              try {
+                const type = slot.split('_')[0];
+                const priceForType = computePricingPreview(type)?.total;
+                if (priceForType) {
+                  label += ` - ₹${priceForType}`;
+                }
+              } catch (e) {
+                console.error('Error computing price for slot:', e);
+              }
               if (!status.available) {
                 const until = status.freeDate ? new Date(status.freeDate).toLocaleDateString() : 'unknown';
                 label += ` (booked until ${until})`;
@@ -772,6 +842,16 @@ const Advertisement = () => {
               }
 
               let label = getSlotDisplayName(slot);
+              // append price
+              try {
+                const type = slot.split('_')[0];
+                const priceForType = computePricingPreview(type)?.total;
+                if (priceForType) {
+                  label += ` - ₹${priceForType}`;
+                }
+              } catch (e) {
+                console.error('Error computing price for slot:', e);
+              }
               if (!status.available) {
                 const until = status.freeDate ? new Date(status.freeDate).toLocaleDateString() : 'unknown';
                 label += ` (booked until ${until})`;
@@ -802,9 +882,208 @@ const Advertisement = () => {
     );
   };
 
+  const renderWizardStepContent = () => {
+    switch (currentWizardStep) {
+      case 1:
+        return (
+          <div>
+            <h5 className='mb-3'>Select Duration & Start Preference</h5>
+            {renderPricingStep()}
+          </div>
+        );
+      case 2:
+        return (
+          <div>
+            <h5 className='mb-3'>Select Available Slots</h5>
+            {renderSlotSelectionStep()}
+          </div>
+        );
+      case 3:
+        return (
+          <div>
+            <h5 className='mb-3'>Upload Advertisement Images</h5>
+            {selectedSlots.length > 0 ? (
+              <ImageUpload
+                selectedSlots={selectedSlots}
+                slotMedia={slotMedia}
+                onSlotMediaChange={(slot, field, value) => {
+                  setSlotMedia((m) => ({
+                    ...m,
+                    [slot]: {
+                      ...m[slot],
+                      [field]: value,
+                    },
+                  }));
+                }}
+              />
+            ) : (
+              <Alert variant='warning'>Please select slots first</Alert>
+            )}
+          </div>
+        );
+      case 4:
+        return (
+          <div>
+            <h5 className='mb-3'>Review & Submit</h5>
+            {selectedSlots.length > 0 && (
+              <Card className='mb-3 border-success'>
+                <Card.Body>
+                  <div className='row'>
+                    {(() => {
+                      const counts = { banner: 0, stamp: 0 };
+                      selectedSlots.forEach(s => {
+                        const type = s.split('_')[0];
+                        if (type === 'banner' || type === 'stamp') counts[type] += 1;
+                      });
+
+                      const bannerPrice = counts.banner > 0 ? computePricingPreview('banner')?.total : 0;
+                      const stampPrice = counts.stamp > 0 ? computePricingPreview('stamp')?.total : 0;
+                      const totalPrice = (bannerPrice * counts.banner) + (stampPrice * counts.stamp);
+
+                      return (
+                        <>
+                          <h6 className='mb-3'>Order Summary</h6>
+                          <Row className='g-3'>
+                            {counts.banner > 0 && (
+                              <Col md={6}>
+                                <small className='text-muted'>Banners Selected</small>
+                                <div className='h6'>{counts.banner} × ₹{bannerPrice}</div>
+                                <div className='fw-bold' style={{ color: '#17a2b8' }}>₹{Math.round(bannerPrice * counts.banner)}</div>
+                              </Col>
+                            )}
+                            {counts.stamp > 0 && (
+                              <Col md={6}>
+                                <small className='text-muted'>Stamps Selected</small>
+                                <div className='h6'>{counts.stamp} × ₹{stampPrice}</div>
+                                <div className='fw-bold' style={{ color: '#28a745' }}>₹{Math.round(stampPrice * counts.stamp)}</div>
+                              </Col>
+                            )}
+                          </Row>
+                          <hr />
+                          <div className='d-flex justify-content-between align-items-center'>
+                            <span className='fw-bold'>Total Cost</span>
+                            <span className='h5 fw-bold' style={{ color: '#0d6efd' }}>₹{Math.round(totalPrice)}</span>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </Card.Body>
+              </Card>
+            )}
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <>
       <HtmlHead title={title} description={description} />
+
+      {/* Wizard Modal after category selection */}
+      <Modal size='lg' show={showWizardModal} onHide={handleWizardClose} centered backdrop='static'>
+        <Modal.Header closeButton>
+          <div className='w-100'>
+            <Modal.Title>Advertisement Submission Wizard</Modal.Title>
+            <small className='text-muted d-block mt-2'>
+              {selectedCategoryData?.name || 'Selected Category'}
+            </small>
+          </div>
+        </Modal.Header>
+
+        {/* Step Indicators */}
+        <Modal.Body>
+          <div className='mb-4'>
+            {/* Step numbers */}
+            <div className='d-flex justify-content-between mb-2'>
+              {[1, 2, 3, 4].map((step) => (
+                <div key={step} className='text-center' style={{ flex: 1 }}>
+                  <div
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      margin: '0 auto 8px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '14px',
+                      fontWeight: 'bold',
+                      backgroundColor: step <= currentWizardStep ? '#0d6efd' : '#e9ecef',
+                      color: step <= currentWizardStep ? 'white' : '#6c757d',
+                      transition: 'all 0.3s ease',
+                    }}
+                  >
+                    {step < currentWizardStep ? '✓' : step}
+                  </div>
+                  <small style={{ fontSize: '12px', color: step <= currentWizardStep ? '#0d6efd' : '#6c757d' }}>
+                    {step === 1 && 'Duration'}
+                    {step === 2 && 'Slots'}
+                    {step === 3 && 'Images'}
+                    {step === 4 && 'Review'}
+                  </small>
+                </div>
+              ))}
+            </div>
+
+            {/* Progress Bar */}
+            <ProgressBar
+              now={(currentWizardStep / 4) * 100}
+              style={{ height: '4px' }}
+              className='mb-3'
+            />
+          </div>
+
+          {/* Step Content */}
+          <div style={{ minHeight: '400px' }}>
+            {renderWizardStepContent()}
+          </div>
+        </Modal.Body>
+
+        {/* Navigation Buttons */}
+        <Modal.Footer>
+          <Button variant='secondary' onClick={handleWizardClose}>
+            Close
+          </Button>
+          <Button
+            variant='outline-primary'
+            onClick={handleWizardPrevious}
+            disabled={currentWizardStep === 1}
+          >
+            ← Previous
+          </Button>
+          {currentWizardStep < 4 ? (
+            <Button
+              variant='primary'
+              onClick={handleWizardNext}
+              disabled={
+                (currentWizardStep === 1 && selectedDuration === null) ||
+                (currentWizardStep === 2 && selectedSlots.length === 0) ||
+                (currentWizardStep === 3 && selectedSlots.some(slot => {
+                  const media = slotMedia[slot] || {};
+                  return !media.mobileImage && !media.desktopImage;
+                }))
+              }
+            >
+              Next →
+            </Button>
+          ) : (
+            <Button
+              variant='success'
+              onClick={() => {
+                handlePreview();
+                setShowWizardModal(false);
+              }}
+              disabled={submitLoading}
+            >
+              {submitLoading ? 'Submitting...' : 'Submit Advertisement'}
+            </Button>
+          )}
+        </Modal.Footer>
+      </Modal>
+
       <div className='container-xl'>
         <Row className='mb-3'>
           <Col>
@@ -821,10 +1100,8 @@ const Advertisement = () => {
             slots={selectedSlots.map((s) => getSlotDisplayName(s)).join(', ')}
             duration={selectedDuration}
             pricing={pricingData?.getCategoryPricing}
-            mobileImage={bannerMobileImage || stampMobileImage}
-            desktopImage={bannerDesktopImage || stampDesktopImage}
-            mobileRedirectUrl={mobileRedirectUrl}
-            desktopRedirectUrl={desktopRedirectUrl}
+            slotMedia={slotMedia}
+            totalPrice={computeTotalForSelectedSlots()}
             onEdit={() => setShowPreview(false)}
             onSubmit={handleSubmit}
             submitting={submitLoading}
@@ -845,7 +1122,7 @@ const Advertisement = () => {
             </Card>
 
             {/* Step 2: View Pricing & Select Duration */}
-            {selectedCategory && (
+            {selectedCategory && !showWizardModal && (
               <Card className='mb-4'>
                 <Card.Header>
                   <Card.Title className='mb-0'>
@@ -860,7 +1137,7 @@ const Advertisement = () => {
             )}
 
             {/* Step 3: Slot Selection */}
-            {selectedCategory && (
+            {selectedCategory && !showWizardModal && (
               <Card className='mb-4'>
                 <Card.Header>
                   <Card.Title className='mb-0'>
@@ -875,7 +1152,7 @@ const Advertisement = () => {
             )}
 
             {/* Step 4: Image Upload */}
-            {selectedSlots.length > 0 && (
+            {selectedSlots.length > 0 && !showWizardModal && (
               <Card className='mb-4'>
                 <Card.Header>
                   <Card.Title className='mb-0'>
@@ -886,21 +1163,23 @@ const Advertisement = () => {
                 <Card.Body>
                   <ImageUpload
                     selectedSlots={selectedSlots}
-                    onBannerMobileImageChange={setBannerMobileImage}
-                    onBannerDesktopImageChange={setBannerDesktopImage}
-                    onStampMobileImageChange={setStampMobileImage}
-                    onStampDesktopImageChange={setStampDesktopImage}
-                    mobileRedirectUrl={mobileRedirectUrl}
-                    desktopRedirectUrl={desktopRedirectUrl}
-                    onMobileRedirectUrlChange={setMobileRedirectUrl}
-                    onDesktopRedirectUrlChange={setDesktopRedirectUrl}
+                    slotMedia={slotMedia}
+                    onSlotMediaChange={(slot, field, value) => {
+                      setSlotMedia((m) => ({
+                        ...m,
+                        [slot]: {
+                          ...m[slot],
+                          [field]: value,
+                        },
+                      }));
+                    }}
                   />
                 </Card.Body>
               </Card>
             )}
 
             {/* Selected Slots Summary */}
-            {selectedSlots.length > 0 && (
+            {selectedSlots.length > 0 && !showWizardModal && (
               <Card className='mb-4 border-success'>
                 <Card.Header>
                   <Card.Title className='mb-0'>
@@ -963,11 +1242,11 @@ const Advertisement = () => {
 
             {/* Action Buttons */}
             {(() => {
-              const needsBanner = selectedSlots.some(s => s.startsWith('banner'));
-                const needsStamp = selectedSlots.some(s => s.startsWith('stamp'));
-                const ready = (needsBanner ? (bannerMobileImage || bannerDesktopImage) : true)
-                  && (needsStamp ? (stampMobileImage || stampDesktopImage) : true)
-                  && selectedSlots.length > 0;
+              const ready = selectedSlots.length > 0 && !showWizardModal &&
+                selectedSlots.every(slot => {
+                  const media = slotMedia[slot] || {};
+                  return media.mobileImage || media.desktopImage;
+                });
               return ready ? (
               <Card>
                 <Card.Body className='text-end'>
@@ -978,10 +1257,7 @@ const Advertisement = () => {
                       setSelectedCategory('');
                       setSelectedDuration(30);
                       setSelectedSlots([]);
-                      setBannerMobileImage(null);
-                      setBannerDesktopImage(null);
-                      setStampMobileImage(null);
-                      setStampDesktopImage(null);
+                      setSlotMedia({});
                     }}
                   >
                     Reset
