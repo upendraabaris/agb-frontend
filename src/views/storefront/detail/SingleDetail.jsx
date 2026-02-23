@@ -38,6 +38,28 @@ const GET_AD_CONTENT = gql`
   }
 `;
 
+const GET_APPROVED_ADS_BY_PRODUCT = gql`
+  query GetApprovedAdsByProduct($productId: ID) {
+    getApprovedAdsByProduct(productId: $productId) {
+      id
+      medias {
+        slot
+        media_type
+        mobile_image_url
+        desktop_image_url
+        mobile_redirect_url
+        desktop_redirect_url
+      }
+      durations {
+        slot
+        status
+        start_date
+        end_date
+      }
+    }
+  }
+`;
+
 const CHECK_WISHLIST_DUPLICACY = gql`
   query Wishlist {
     wishlist {
@@ -241,6 +263,33 @@ const SingleDetail = ({ product }) => {
       },
     });
   }, [getproductDetailsPageSlider]);
+
+  const [getApprovedProductAds, { data: approvedAdsData }] = useLazyQuery(GET_APPROVED_ADS_BY_PRODUCT, {
+    fetchPolicy: 'network-only',
+  });
+
+  useEffect(() => {
+    if (product?.id) {
+      getApprovedProductAds({ variables: { productId: product.id } });
+    }
+  }, [product?.id]);
+
+  // Flatten all running medias across all approved ad requests
+  const now = new Date();
+  const approvedAds = approvedAdsData?.getApprovedAdsByProduct || [];
+  const activeMedias = approvedAds.flatMap((adReq) =>
+    adReq.medias.filter((media) => {
+      const dur = adReq.durations.find((d) => d.slot === media.slot);
+      if (!dur || dur.status !== 'approved') return false;
+      const start = dur.start_date ? new Date(dur.start_date) : null;
+      const end = dur.end_date ? new Date(dur.end_date) : null;
+      if (start && end) return now >= start && now <= end;
+      return true; // no dates set but approved — show it
+    })
+  );
+  const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const bannerMedias = activeMedias.filter((m) => m.slot.startsWith('banner_'));
+  const stampMedias = activeMedias.filter((m) => m.slot.startsWith('stamp_'));
 
   useEffect(() => {
     window.scrollTo({
@@ -659,6 +708,27 @@ const SingleDetail = ({ product }) => {
                 <>
                   {productDetailsPageSlider && productDetailsPageSlider.getAds && (
                     <img src={productDetailsPageSlider.getAds.images} className="d-block w-100 rounded" alt={productDetailsPageSlider.getAds.key} />
+                  )}
+                  {/* ── Approved Product Banner Ads ── */}
+                  {bannerMedias.length > 0 && (
+                    <div className="mb-2">
+                      {bannerMedias.map((media, i) => {
+                        const imgUrl = isMobileDevice
+                          ? media.mobile_image_url || media.desktop_image_url
+                          : media.desktop_image_url || media.mobile_image_url;
+                        const redirectUrl = isMobileDevice
+                          ? media.mobile_redirect_url || media.desktop_redirect_url
+                          : media.desktop_redirect_url || media.mobile_redirect_url;
+                        if (!imgUrl) return null;
+                        return redirectUrl ? (
+                          <a key={i} href={redirectUrl} target="_blank" rel="noopener noreferrer">
+                            <img src={imgUrl} className="d-block w-100 rounded mb-1" alt={`Ad Banner ${i + 1}`} style={{ objectFit: 'cover', maxHeight: '180px' }} />
+                          </a>
+                        ) : (
+                          <img key={i} src={imgUrl} className="d-block w-100 rounded mb-1" alt={`Ad Banner ${i + 1}`} style={{ objectFit: 'cover', maxHeight: '180px' }} />
+                        );
+                      })}
+                    </div>
                   )}
                 </>
               )}
@@ -1141,6 +1211,29 @@ const SingleDetail = ({ product }) => {
           </Row>
         </div>
       </Card>
+
+      {/* ── Approved Product Stamp Ads ── */}
+      {stampMedias.length > 0 && (
+        <Row className="mb-3 g-2">
+          {stampMedias.map((media, i) => {
+            const imgUrl = isMobileDevice ? (media.mobile_image_url || media.desktop_image_url) : (media.desktop_image_url || media.mobile_image_url);
+            const redirectUrl = isMobileDevice ? (media.mobile_redirect_url || media.desktop_redirect_url) : (media.desktop_redirect_url || media.mobile_redirect_url);
+            if (!imgUrl) return null;
+            return (
+              <Col key={i} xs={6} sm={4} md={3}>
+                {redirectUrl ? (
+                  <a href={redirectUrl} target="_blank" rel="noopener noreferrer">
+                    <img src={imgUrl} className="w-100 rounded border" alt={`Ad Stamp ${i + 1}`} style={{ objectFit: 'cover', height: '120px' }} />
+                  </a>
+                ) : (
+                  <img src={imgUrl} className="w-100 rounded border" alt={`Ad Stamp ${i + 1}`} style={{ objectFit: 'cover', height: '120px' }} />
+                )}
+              </Col>
+            );
+          })}
+        </Row>
+      )}
+
       <Row>
         <Col xl="12" className="mb-0">
           {product?.description && <div className="text-center fw-bold py-1 bg_color text-white pt-2 pb-2 rounded"> Product Details</div>}
