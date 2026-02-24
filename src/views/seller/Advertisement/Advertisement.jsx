@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useHistory } from 'react-router-dom';
 import { useQuery, useMutation, gql } from '@apollo/client';
 import { Card, Button, Row, Col, Alert, Spinner, Modal, ProgressBar } from 'react-bootstrap';
 import { toast } from 'react-toastify';
@@ -17,6 +18,7 @@ const GET_CATEGORIES_WITH_SLOTS = gql`
       description
       order
       adTierId
+      parent
       availableSlots
       bookedSlots
       bookedBanner
@@ -71,6 +73,39 @@ const CREATE_CATEGORY_REQUEST = gql`
 `;
 
 const Advertisement = () => {
+  const history = useHistory();
+  
+  // Tab state for category selection
+  const [categoryTab, setCategoryTab] = useState('category'); // 'category', 'subcategory', 'subsubcategory'
+
+  // Queries
+  const { data: categoriesData, loading: categoriesLoading, error: categoriesError } = useQuery(GET_CATEGORIES_WITH_SLOTS);
+
+  // Build category hierarchy based on parent field
+  const allCategories = categoriesData?.getCategoriesWithAvailableSlots || [];
+  
+  // Create a map for quick parent lookup
+  const categoryMap = {};
+  allCategories.forEach(cat => {
+    categoryMap[cat.id] = cat;
+  });
+
+  // Filter categories by level:
+  // - Top-level (Category): parent is null
+  // - SubCategory: parent exists and parent's parent is null
+  // - SubSubCategory: parent exists and parent's parent also exists
+  const topLevelCategories = allCategories.filter(cat => !cat.parent);
+  const subCategories = allCategories.filter(cat => {
+    if (!cat.parent) return false;
+    const parentCat = categoryMap[cat.parent];
+    return parentCat && !parentCat.parent;
+  });
+  const subSubCategories = allCategories.filter(cat => {
+    if (!cat.parent) return false;
+    const parentCat = categoryMap[cat.parent];
+    return parentCat && parentCat.parent;
+  });
+
   const title = 'Submit Advertisement';
   const description = 'Submit your advertisement to available slots';
 
@@ -87,9 +122,6 @@ const Advertisement = () => {
   const [showWizardModal, setShowWizardModal] = useState(false);
   const [currentWizardStep, setCurrentWizardStep] = useState(1);
 
-  // Queries
-  const { data: categoriesData, loading: categoriesLoading, error: categoriesError } = useQuery(GET_CATEGORIES_WITH_SLOTS);
-  
   const { data: pricingData, loading: pricingLoading, error: pricingError } = useQuery(
     GET_CATEGORY_PRICING,
     {
@@ -118,7 +150,14 @@ const Advertisement = () => {
     },
     onError: (error) => {
       console.error('[Advertisement] Mutation error:', error);
-      toast.error(error.message || 'Failed to submit advertisement');
+      if (error.message === 'Authorization header is missing' || error.message === 'jwt expired') {
+        toast.error('Please login to submit advertisement');
+        setTimeout(() => {
+          history.push('/login');
+        }, 2000);
+      } else {
+        toast.error(error.message || 'Failed to submit advertisement');
+      }
     },
   });
 
@@ -179,19 +218,11 @@ const Advertisement = () => {
 
   const handleSlotToggle = (slotName) => {
     // prevent selecting a slot that's already booked for this category
-    const parts = slotName.split('_');
-    const type = parts[0];
-    const num = parseInt(parts[1], 10);
-    const bookedBanner = selectedCategoryData?.bookedBanner || 0;
-    const bookedStamp = selectedCategoryData?.bookedStamp || 0;
-    const availableBanner = Math.max(0, 4 - bookedBanner);
-    const availableStamp = Math.max(0, 4 - bookedStamp);
-
-    if ((type === 'banner' && num > availableBanner) || (type === 'stamp' && num > availableStamp)) {
+    const slotStatus = selectedCategoryData?.slotStatuses?.find(s => s.slot === slotName);
+    if (slotStatus && !slotStatus.available) {
       toast.error('This slot is already booked');
       return;
     }
-
     setSelectedSlots((prevSlots) => {
       if (prevSlots.includes(slotName)) {
         const updated = prevSlots.filter((slot) => slot !== slotName);
@@ -549,28 +580,56 @@ const Advertisement = () => {
       );
     }
     
-    let categories = categoriesData?.getCategoriesWithAvailableSlots || [];
-    const allCategoriesCount = categories.length;
-    
+    // Tab bar UI
+    const tabOptions = [
+      { key: 'category', label: 'Category' },
+      { key: 'subcategory', label: 'Sub Category' },
+      { key: 'subsubcategory', label: 'Sub Sub Category' },
+    ];
+
+    let list = [];
+    let allCount = 0;
+    if (categoryTab === 'category') {
+      list = topLevelCategories;
+      allCount = list.length;
+    } else if (categoryTab === 'subcategory') {
+      list = subCategories;
+      allCount = list.length;
+    } else if (categoryTab === 'subsubcategory') {
+      list = subSubCategories;
+      allCount = list.length;
+    }
+
     if (searchTerm) {
-      const lower = searchTerm.toLowerCase();
-      categories = categories.filter(cat =>
-        cat.name && cat.name.toLowerCase().includes(lower)
-      );
+      list = list.filter(cat => cat.name?.toLowerCase().includes(searchTerm.toLowerCase()));
     }
 
     return (
       <div>
+        {/* Tab bar */}
+        <div className='mb-3 d-flex'>
+          {tabOptions.map(tab => (
+            <button
+              key={tab.key}
+              type='button'
+              className={`btn btn-sm ${categoryTab === tab.key ? 'btn-primary' : 'btn-outline-secondary'} me-2`}
+              style={{ minWidth: 120 }}
+              onClick={() => setCategoryTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
         <div className='mb-3'>
           <input
             type='text'
             className='form-control'
-            placeholder='Search categories...'
+            placeholder={`Search ${tabOptions.find(t => t.key === categoryTab)?.label}...`}
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
           />
         </div>
-        {renderCategoryContent(categories, allCategoriesCount)}
+        {renderCategoryContent(list, allCount)}
       </div>
     );
   };
@@ -1189,52 +1248,26 @@ const Advertisement = () => {
                 </Card.Header>
                 <Card.Body>
                   <div className='row'>
-                    {(() => {
-                      const counts = { banner: 0, stamp: 0 };
-                      selectedSlots.forEach(s => {
-                        const type = s.split('_')[0];
-                        if (type === 'banner' || type === 'stamp') counts[type] += 1;
-                      });
-
-                      const bannerPrice = counts.banner > 0 ? computePricingPreview('banner')?.total : 0;
-                      const stampPrice = counts.stamp > 0 ? computePricingPreview('stamp')?.total : 0;
-                      const totalPrice = (bannerPrice * counts.banner) + (stampPrice * counts.stamp);
-
+                    {selectedSlots.map((slot) => {
+                      const media = slotMedia[slot] || {};
                       return (
-                        <>
-                          {counts.banner > 0 && (
-                            <div className='col-md-4'>
-                              <div className='card' style={{ backgroundColor: '#f8f9fa', borderColor: '#dee2e6' }}>
-                                <div className='card-body'>
-                                  <div className='text-muted small'>Banners Selected</div>
-                                  <div className='h6 mt-2'>{counts.banner} × ₹{bannerPrice}</div>
-                                  <div className='h5 mt-2' style={{ color: '#17a2b8' }}>₹{Math.round(bannerPrice * counts.banner)}</div>
-                                </div>
-                              </div>
+                        <div key={slot} className='col-md-6 mb-2'>
+                          <div className='card p-2'>
+                            <strong>{getSlotDisplayName(slot)}</strong>
+                            <div>
+                              {media.mobileImage ? (
+                                <img src={media.mobileImage} alt={slot} style={{ maxWidth: '100%', borderRadius: '4px', marginBottom: '8px' }} />
+                              ) : (
+                                <span className='text-muted'>No image uploaded</span>
+                              )}
                             </div>
-                          )}
-                          {counts.stamp > 0 && (
-                            <div className='col-md-4'>
-                              <div className='card' style={{ backgroundColor: '#f8f9fa', borderColor: '#dee2e6' }}>
-                                <div className='card-body'>
-                                  <div className='text-muted small'>Stamps Selected</div>
-                                  <div className='h6 mt-2'>{counts.stamp} × ₹{stampPrice}</div>
-                                  <div className='h5 mt-2' style={{ color: '#28a745' }}>₹{Math.round(stampPrice * counts.stamp)}</div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                          <div className='col-md-4'>
-                            <div className='card' style={{ backgroundColor: '#e7f3ff', borderColor: '#0d6efd', borderWidth: '2px' }}>
-                              <div className='card-body'>
-                                <div className='text-muted small'>Total Cost</div>
-                                <div className='h4 mt-2 fw-bold' style={{ color: '#0d6efd' }}>₹{Math.round(totalPrice)}</div>
-                              </div>
-                            </div>
+                            {media.mobileRedirectUrl && (
+                              <small className='text-break'>Redirect: <a href={media.mobileRedirectUrl} target='_blank' rel='noopener noreferrer'>{media.mobileRedirectUrl}</a></small>
+                            )}
                           </div>
-                        </>
+                        </div>
                       );
-                    })()}
+                    })}
                   </div>
                 </Card.Body>
               </Card>
