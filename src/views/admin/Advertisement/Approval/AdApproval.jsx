@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation, gql } from '@apollo/client';
+import { useQuery, useMutation, gql, useLazyQuery } from '@apollo/client';
 import { Row, Col, Card, Button, Badge, Modal, Form, Spinner, Alert, Table } from 'react-bootstrap';
 import moment from 'moment';
 import { toast } from 'react-toastify';
@@ -24,8 +24,7 @@ const GET_AD_REQUESTS = gql`
         media_type
         mobile_image_url
         desktop_image_url
-        mobile_redirect_url
-        desktop_redirect_url
+        redirect_url
       }
       durations {
         id
@@ -34,9 +33,35 @@ const GET_AD_REQUESTS = gql`
         start_date
         end_date
         status
+        start_preference
+        quarters_covered
+        pricing_breakdown {
+          quarter
+          start
+          end
+          days
+          rate_per_day
+          subtotal
+        }
+        total_price
       }
       createdAt
       updatedAt
+    }
+  }
+`;
+
+const CHECK_SLOT_AVAILABILITY = gql`
+  query CheckSlotAvailability($requestId: ID!, $start_date: String!) {
+    checkSlotAvailability(requestId: $requestId, start_date: $start_date) {
+      available
+      details {
+        slot
+        startDate
+        endDate
+        conflict
+        conflictId
+      }
     }
   }
 `;
@@ -75,9 +100,26 @@ function AdApproval() {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [showRejectionModal, setShowRejectionModal] = useState(false);
-  const [approvalDate, setApprovalDate] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [allRequests, setAllRequests] = useState([]);
+
+  const [availabilityResult, setAvailabilityResult] = useState(null);
+  const [checkAvailability, { loading: checkingAvailability }] = useLazyQuery(
+    CHECK_SLOT_AVAILABILITY,
+    {
+      fetchPolicy: 'network-only',
+      onCompleted: (data) => {
+        if (data && data.checkSlotAvailability) {
+          setAvailabilityResult(data.checkSlotAvailability);
+        } else {
+          setAvailabilityResult(null);
+        }
+      },
+      onError: () => {
+        setAvailabilityResult(null);
+      }
+    }
+  );
 
   const { loading, error, data, refetch } = useQuery(GET_AD_REQUESTS, {
     variables: { status: currentFilter },
@@ -91,13 +133,33 @@ function AdApproval() {
     }
   }, [data]);
 
+  // whenever a new request is selected, check slot availability using stored start_date
+  React.useEffect(() => {
+    const storedStartDate = selectedRequest?.durations?.[0]?.start_date;
+    if (selectedRequest && storedStartDate) {
+      checkAvailability({ variables: { requestId: selectedRequest.id, start_date: storedStartDate } });
+    } else {
+      setAvailabilityResult(null);
+    }
+  }, [selectedRequest, checkAvailability]);
+
+  // compute projected total price if breakdown exists, otherwise estimate from first duration
+  const computeProjectedTotal = () => {
+    if (!selectedRequest?.durations || selectedRequest.durations.length === 0) return 0;
+    const durFirst = selectedRequest.durations[0];
+    if (durFirst.pricing_breakdown && durFirst.pricing_breakdown.length > 0) {
+      return durFirst.pricing_breakdown.reduce((sum, b) => sum + (b.subtotal || 0), 0);
+    }
+    // fallback: estimate if no breakdown yet (shouldn't happen for pending requests)
+    return durFirst.total_price || 0;
+  };
+
   const [approveAd, { loading: approveLoading }] = useMutation(APPROVE_AD, {
     onCompleted: (response) => {
       if (response.approveAdRequest.success) {
         toast.success('Ad approved successfully!');
         setShowApprovalModal(false);
         setSelectedRequest(null);
-        setApprovalDate('');
         refetch();
       }
     },
@@ -122,15 +184,10 @@ function AdApproval() {
   });
 
   const handleApprove = async () => {
-    if (!approvalDate) {
-      toast.error('Please select a start date');
-      return;
-    }
     await approveAd({
       variables: {
         input: {
           requestId: selectedRequest.id,
-          start_date: approvalDate,
         },
       },
     });
@@ -150,7 +207,6 @@ function AdApproval() {
   const handleFilterChange = (newFilter) => {
     setCurrentFilter(newFilter);
     setSelectedRequest(null);
-    setApprovalDate('');
   };
 
   const getStatusBadge = (status) => {
@@ -385,11 +441,11 @@ function AdApproval() {
                         />
                         <small className="text-muted">Slot: {media.slot}</small>
                         <small>Type: {media.media_type}</small>
-                        {media.mobile_redirect_url && (
+                        {media.redirect_url && (
                           <small className="text-break">
                             Redirect:{' '}
-                            <a href={media.mobile_redirect_url} target="_blank" rel="noopener noreferrer">
-                              {media.mobile_redirect_url}
+                            <a href={media.redirect_url} target="_blank" rel="noopener noreferrer">
+                              {media.redirect_url}
                             </a>
                           </small>
                         )}
@@ -407,22 +463,58 @@ function AdApproval() {
                   <div className="fw-bold">{selectedRequest.durations[0].duration_days} days</div>
                 </div>
               )}
+              {selectedRequest.durations && selectedRequest.durations.length > 0 && (
+                <>
+                  <div className="mb-3">
+                    <small className="text-muted">Total Price</small>
+                    <div className="fw-bold">₹{selectedRequest.durations[0].total_price || computeProjectedTotal()}</div>
+                  </div>
+                  {selectedRequest.durations[0].quarters_covered && selectedRequest.durations[0].quarters_covered.length > 0 && (
+                    <div className="mb-3">
+                      <small className="text-muted">Quarters Covered</small>
+                      <div className="fw-bold">
+                        {selectedRequest.durations[0].quarters_covered.join(', ')}
+                      </div>
+                    </div>
+                  )}
+                  {selectedRequest.durations[0].pricing_breakdown && selectedRequest.durations[0].pricing_breakdown.length > 0 && (
+                    <div className="mb-3">
+                      <small className="text-muted">Pricing Breakdown</small>
+                      <ul className="mb-0">
+                        {selectedRequest.durations[0].pricing_breakdown.map((b, i) => (
+                          <li key={i}>
+                            <strong>{b.quarter}</strong>
+                            {b.start && b.end && ` (${new Date(b.start).toLocaleDateString()} - ${new Date(b.end).toLocaleDateString()})`}
+                            : {b.days}d @ ₹{b.rate_per_day}/d = ₹{b.subtotal}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              )}
 
               {selectedRequest.status === 'pending' && (
                 <div className="mb-0">
-                  <Form.Group className="mb-3">
-                    <Form.Label>Select Start Date</Form.Label>
-                    <Form.Control
-                      type="date"
-                      value={approvalDate}
-                      onChange={(e) => setApprovalDate(e.target.value)}
-                      min={moment().format('YYYY-MM-DD')}
-                    />
-                    <Form.Text className="text-muted">
-                      End date will be calculated as: {approvalDate && approvalDate} +{' '}
-                      {selectedRequest.durations?.[0]?.duration_days || 30} days
-                    </Form.Text>
-                  </Form.Group>
+                  {availabilityResult && (
+                    <div className="mb-3">
+                      <small className="text-muted">Slot availability</small>
+                      {availabilityResult.available ? (
+                        <div className="text-success">✓ All slots free for the chosen quarters.</div>
+                      ) : (
+                        <div className="text-danger">
+                          <strong>✗ Conflicts detected:</strong>
+                          <ul className="mb-0">
+                            {availabilityResult.details.map((d) => (
+                              <li key={d.slot}>
+                                {d.slot}: Already booked{d.conflictQuarters ? ` in ${d.conflictQuarters}` : ''}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -433,7 +525,14 @@ function AdApproval() {
             Cancel
           </Button>
           {selectedRequest?.status === 'pending' && (
-            <Button variant="success" onClick={handleApprove} disabled={approveLoading || !approvalDate}>
+            <Button
+              variant="success"
+              onClick={handleApprove}
+              disabled={
+                approveLoading ||
+                (availabilityResult && !availabilityResult.available)
+              }
+            >
               {approveLoading ? <Spinner animation="border" size="sm" className="me-2" /> : null}
               Approve
             </Button>

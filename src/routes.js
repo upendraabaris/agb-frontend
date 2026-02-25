@@ -1609,8 +1609,8 @@ const routesAndMenuItems = {
       roles: [USER_ROLE.Seller],
       hidden: true,
       subs: [
-        { path: '/list', label: 'Advertisement List', component: MyAds },
-        { path: '/add', label: 'Add Advertisement', component: Advertisement },
+        { path: '/list', label: 'My Ad List', component: MyAds },
+        { path: '/add', label: 'Ad at Categories', component: Advertisement },
         { path: '/reporting', label: 'Reporting', component: SellerReports },
       ],
     },

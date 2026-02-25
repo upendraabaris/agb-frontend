@@ -22,8 +22,7 @@ const GET_MY_ADS = gql`
         media_type
         mobile_image_url
         desktop_image_url
-        mobile_redirect_url
-        desktop_redirect_url
+        redirect_url
       }
       durations {
         id

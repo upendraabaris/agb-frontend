@@ -226,8 +226,7 @@ export const GET_APPROVED_ADS_BY_CATEGORY = gql`
         media_type
         mobile_image_url
         desktop_image_url
-        mobile_redirect_url
-        desktop_redirect_url
+        redirect_url
       }
       durations {
         id
@@ -411,15 +410,20 @@ const SubcategoryL2 = () => {
   });
 
   // Prepare stamp ads (medias with slot containing 'stamp')
+  // Prepare stamp ads (flatten all medias with slot containing 'stamp')
   const stampAds = useMemo(() => {
     if (!approvedAds || approvedAds.length === 0) return [];
-    return approvedAds.filter((ad) => ad.medias && ad.medias.some((m) => m.slot && m.slot.toLowerCase().includes('stamp')));
+    return approvedAds
+      .flatMap((ad) => (ad.medias || []).filter((m) => m.slot && m.slot.toLowerCase().includes('stamp'))
+        .map((m) => ({ ...m, ad })));
   }, [approvedAds]);
 
-  // Prepare banner ads (medias with slot containing 'banner')
+  // Prepare banner ads (flatten all medias with slot containing 'banner')
   const bannerAds = useMemo(() => {
     if (!approvedAds || approvedAds.length === 0) return [];
-    return approvedAds.filter((ad) => ad.medias && ad.medias.some((m) => m.slot && m.slot.toLowerCase().includes('banner')));
+    return approvedAds
+      .flatMap((ad) => (ad.medias || []).filter((m) => m.slot && m.slot.toLowerCase().includes('banner'))
+        .map((m) => ({ ...m, ad })));
   }, [approvedAds]);
 
     // Ensure Bootstrap carousel instances are initialized after ads render
@@ -569,13 +573,12 @@ const SubcategoryL2 = () => {
         {!loadingAds && bannerAds && bannerAds.length > 0 && (
           <div id="categoryTopAdsCarousel" className="carousel slide mb-3 rounded border" data-bs-ride="carousel">
             <div className="carousel-inner rounded">
-              {bannerAds.map((ad, index) => {
-                const media = ad.medias.find((m) => m.slot && m.slot.toLowerCase().includes('banner')) || ad.medias?.[0];
-                const adImage = width < 768 ? media?.mobile_image_url : media?.desktop_image_url;
-                const adUrl = width < 768 ? media?.mobile_redirect_url : media?.desktop_redirect_url;
+              {bannerAds.map((item, index) => {
+                const adImage = width < 768 ? item.mobile_image_url : item.desktop_image_url;
+                const adUrl = item.redirect_url;
                 return (
                   <div 
-                    key={ad.id} 
+                    key={`${item.ad?.id}-${item.slot}-${index}`} 
                     className={`carousel-item ${index === 0 ? 'active' : ''}`}
                   >
                     <a 
@@ -586,12 +589,12 @@ const SubcategoryL2 = () => {
                     >
                       <img
                         src={adImage}
-                        alt={`Ad from ${ad.sellerName}`}
+                        alt={`Ad from ${item.ad?.sellerName}`}
                         className="d-block w-100 rounded"
                         style={{ objectFit: 'cover', height: '280px' }}
                       />
                       <div className="carousel-caption d-none d-md-block">
-                        <h4 className="text-white fw-bold">{ad.sellerName}</h4>
+                        <h4 className="text-white fw-bold">{item.ad?.sellerName}</h4>
                       </div>
                     </a>
                   </div>
@@ -714,7 +717,7 @@ const SubcategoryL2 = () => {
                   <Card className="h-100 hover-border-color border overflow-hidden">
                     {ad.medias && ad.medias.length > 0 && (
                       <a 
-                        href={ad.medias[0]?.mobile_redirect_url || ad.medias[0]?.desktop_redirect_url || '#'} 
+                        href={ad.medias[0]?.redirect_url || '#'} 
                         target="_blank" 
                         rel="noopener noreferrer"
                         style={{ textDecoration: 'none', display: 'block' }}
@@ -739,7 +742,7 @@ const SubcategoryL2 = () => {
                       </div>
                       <div className="text-center mt-2">
                         <a 
-                          href={ad.medias[0]?.mobile_redirect_url || ad.medias[0]?.desktop_redirect_url || '#'} 
+                          href={ad.medias[0]?.redirect_url || '#'} 
                           target="_blank" 
                           rel="noopener noreferrer"
                           className="btn btn-sm btn_color"
@@ -1053,12 +1056,11 @@ const SubcategoryL2 = () => {
       <aside>
         <Row className="g-4 mt-2 mark pb-4">
           {stampAds && stampAds.length > 0 ? (
-            stampAds.slice(0, 4).map((ad) => {
-              const media = ad.medias.find((m) => m.slot && m.slot.toLowerCase().includes('stamp')) || ad.medias[0];
-              const img = width < 768 ? media.mobile_image_url || media.desktop_image_url : media.desktop_image_url || media.mobile_image_url;
-              const url = width < 768 ? media.mobile_redirect_url || media.desktop_redirect_url : media.desktop_redirect_url || media.mobile_redirect_url;
+            stampAds.slice(0, 4).map((item, index) => {
+              const img = width < 768 ? item.mobile_image_url || item.desktop_image_url : item.desktop_image_url || item.mobile_image_url;
+              const url = item.redirect_url;
               return (
-                <Col sm="6" lg="3" key={ad.id}>
+                <Col sm="6" lg="3" key={`${item.ad?.id}-${item.slot}-${index}`}>
                   <Card className="w-100 hover-img-scale-up">
                     <a href={url || '#'} target="_blank" rel="noopener noreferrer">
                       <img src={img || '/img/advertisement/c1.jpeg'} className="img-fluid img_1 scale" alt="stamp ad"/>
