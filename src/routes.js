@@ -4,6 +4,9 @@ import { lazy, React } from 'react';
 import Advertisement from 'views/seller/Advertisement/Advertisement';
 import MyAds from 'views/seller/Advertisement/MyAds';
 import SellerReports from 'views/seller/Advertisement/SellerReports';
+import ProductAdvertisement from 'views/seller/Advertisement/ProductAdvertisement';
+import MyProductAds from 'views/seller/Advertisement/MyProductAds';
+import ProductAdApproval from 'views/admin/Advertisement/Approval/ProductAdApproval';
 
 /* ------------------------------------------------------------------ */
 /* -------------------------  Master Panel   ------------------------ */
@@ -1103,6 +1106,7 @@ const routesAndMenuItems = {
         { path: '/ads_category_master', label: 'Ad Tier', component: ad.adTier },
         { path: '/ads_category', label: 'Ads Pricing', component: ad.adsCategory },
         { path: '/approval', label: 'Ad Approvals', component: ad.approval },
+        { path: '/product-approval', label: 'Product Ad Approvals', component: ProductAdApproval },
         { path: '/reporting', label: 'Reporting', component: ad.reporting },
       ],
     },
@@ -1612,6 +1616,8 @@ const routesAndMenuItems = {
         { path: '/list', label: 'My Ad List', component: MyAds },
         { path: '/add', label: 'Ad at Categories', component: Advertisement },
         { path: '/reporting', label: 'Reporting', component: SellerReports },
+        { path: '/product-list', label: 'My Product Ads', component: MyProductAds },
+        { path: '/ads-product', label: 'Advertise a Product', component: ProductAdvertisement },
       ],
     },
 
