@@ -29,8 +29,7 @@ const GET_MY_ACTIVE_ADS = gql`
         slot
         mobileImageUrl
         desktopImageUrl
-        mobileRedirectUrl
-        desktopRedirectUrl
+        redirectUrl
       }
     }
   }
@@ -243,8 +242,7 @@ const SellerReports = () => {
                                                                 <th>Slot</th>
                                                                 <th>Mobile Image</th>
                                                                 <th>Desktop Image</th>
-                                                                <th>Mobile Redirect</th>
-                                                                <th>Desktop Redirect</th>
+                                                                <th>Redirect URL</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -264,11 +262,11 @@ const SellerReports = () => {
                                                                             </a>
                                                                         </td>
                                                                         <td className="text-truncate" style={{ maxWidth: '150px' }}>
-                                                                            <small>{ad.media.mobileRedirectUrl}</small>
+                                                                            <small>{ad.media.redirectUrl}</small>
                                                                         </td>
-                                                                        <td className="text-truncate" style={{ maxWidth: '150px' }}>
+                                                                        {/* <td className="text-truncate" style={{ maxWidth: '150px' }}>
                                                                             <small>{ad.media.desktopRedirectUrl}</small>
-                                                                        </td>
+                                                                        </td> */}
                                                                     </tr>
                                                                 ))}
                                                         </tbody>
