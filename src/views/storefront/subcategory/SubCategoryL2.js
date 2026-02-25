@@ -226,8 +226,7 @@ export const GET_APPROVED_ADS_BY_CATEGORY = gql`
         media_type
         mobile_image_url
         desktop_image_url
-        mobile_redirect_url
-        desktop_redirect_url
+        redirect_url
       }
       durations {
         id
@@ -576,7 +575,7 @@ const SubcategoryL2 = () => {
             <div className="carousel-inner rounded">
               {bannerAds.map((item, index) => {
                 const adImage = width < 768 ? item.mobile_image_url : item.desktop_image_url;
-                const adUrl = width < 768 ? item.mobile_redirect_url : item.desktop_redirect_url;
+                const adUrl = item.redirect_url;
                 return (
                   <div 
                     key={`${item.ad?.id}-${item.slot}-${index}`} 
@@ -718,7 +717,7 @@ const SubcategoryL2 = () => {
                   <Card className="h-100 hover-border-color border overflow-hidden">
                     {ad.medias && ad.medias.length > 0 && (
                       <a 
-                        href={ad.medias[0]?.mobile_redirect_url || ad.medias[0]?.desktop_redirect_url || '#'} 
+                        href={ad.medias[0]?.redirect_url || '#'} 
                         target="_blank" 
                         rel="noopener noreferrer"
                         style={{ textDecoration: 'none', display: 'block' }}
@@ -743,7 +742,7 @@ const SubcategoryL2 = () => {
                       </div>
                       <div className="text-center mt-2">
                         <a 
-                          href={ad.medias[0]?.mobile_redirect_url || ad.medias[0]?.desktop_redirect_url || '#'} 
+                          href={ad.medias[0]?.redirect_url || '#'} 
                           target="_blank" 
                           rel="noopener noreferrer"
                           className="btn btn-sm btn_color"
@@ -1059,7 +1058,7 @@ const SubcategoryL2 = () => {
           {stampAds && stampAds.length > 0 ? (
             stampAds.slice(0, 4).map((item, index) => {
               const img = width < 768 ? item.mobile_image_url || item.desktop_image_url : item.desktop_image_url || item.mobile_image_url;
-              const url = width < 768 ? item.mobile_redirect_url || item.desktop_redirect_url : item.desktop_redirect_url || item.mobile_redirect_url;
+              const url = item.redirect_url;
               return (
                 <Col sm="6" lg="3" key={`${item.ad?.id}-${item.slot}-${index}`}>
                   <Card className="w-100 hover-img-scale-up">

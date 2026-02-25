@@ -128,11 +128,6 @@ const PreviewSection = ({
                       <img src={media.mobileImage} alt='mobile' className='img-fluid' style={{ maxHeight: '120px' }} />
                     </div>
                   )}
-                  {media.mobileRedirectUrl && (
-                    <div className='mb-2'>
-                      <strong>Mobile URL:</strong> <a href={media.mobileRedirectUrl} target='_blank' rel='noopener noreferrer'>{media.mobileRedirectUrl}</a>
-                    </div>
-                  )}
                   {media.desktopImage && (
                     <div className='mb-2'>
                       <strong>Desktop Image:</strong>
@@ -140,9 +135,12 @@ const PreviewSection = ({
                       <img src={media.desktopImage} alt='desktop' className='img-fluid' style={{ maxHeight: '120px' }} />
                     </div>
                   )}
-                  {media.desktopRedirectUrl && (
+                  <div className='mb-2'>
+                    <strong>URL Type:</strong> <Badge bg={(media.urlType || 'external') === 'internal' ? 'info' : 'secondary'}>{(media.urlType || 'external').charAt(0).toUpperCase() + (media.urlType || 'external').slice(1)}</Badge>
+                  </div>
+                  {media.redirectUrl && (
                     <div className='mb-2'>
-                      <strong>Desktop URL:</strong> <a href={media.desktopRedirectUrl} target='_blank' rel='noopener noreferrer'>{media.desktopRedirectUrl}</a>
+                      <strong>Redirect URL:</strong> <a href={media.redirectUrl} target='_blank' rel='noopener noreferrer'>{media.redirectUrl}</a>
                     </div>
                   )}
                 </Col>

@@ -58,6 +58,19 @@ const GET_CATEGORY_PRICING = gql`
   }
 `;
 
+// Get seller's products for internal URL selection
+const GET_SELLER_PRODUCTS = gql`
+  query GetSellerProducts {
+    getProductByForSeller(limit: 100) {
+      id
+      previewName
+      fullName
+      identifier
+      thumbnail
+    }
+  }
+`;
+
 // Create category request with media and slots
 const CREATE_CATEGORY_REQUEST = gql`
   mutation CreateCategoryRequest($input: CreateCategoryRequestInput!) {
@@ -80,6 +93,10 @@ const Advertisement = () => {
 
   // Queries
   const { data: categoriesData, loading: categoriesLoading, error: categoriesError } = useQuery(GET_CATEGORIES_WITH_SLOTS);
+  
+  // Get seller's products for internal URL dropdown
+  const { data: sellerProductsData } = useQuery(GET_SELLER_PRODUCTS);
+  const sellerProducts = sellerProductsData?.getProductByForSeller || [];
 
   // Build category hierarchy based on parent field
   const allCategories = categoriesData?.getCategoriesWithAvailableSlots || [];
@@ -236,7 +253,7 @@ const Advertisement = () => {
       // new slot, initialize media entry
       setSlotMedia((m) => ({
         ...m,
-        [slotName]: { mobileImage: '', desktopImage: '', mobileRedirectUrl: '', desktopRedirectUrl: '' },
+        [slotName]: { mobileImage: '', desktopImage: '', redirectUrl: '' },
       }));
       return [...prevSlots, slotName];
     });
@@ -277,31 +294,39 @@ const Advertisement = () => {
 
   const getQuarterLabel = (date) => {
     const m = date.getUTCMonth() + 1;
-    if (m >= 1 && m <= 3) return 'Q1';
-    if (m >= 4 && m <= 6) return 'Q2';
-    if (m >= 7 && m <= 9) return 'Q3';
-    return 'Q4';
+    const year = date.getUTCFullYear();
+    if (m >= 1 && m <= 3) return `Q1 ${year}`;
+    if (m >= 4 && m <= 6) return `Q2 ${year}`;
+    if (m >= 7 && m <= 9) return `Q3 ${year}`;
+    return `Q4 ${year}`;
   };
 
   const getQuarterEnd = (date) => {
-    const q = getQuarterLabel(date);
+    const m = date.getUTCMonth() + 1;
     const year = date.getUTCFullYear();
-    if (q === 'Q1') return new Date(Date.UTC(year, 2, 31, 23,59,59,999));
-    if (q === 'Q2') return new Date(Date.UTC(year, 5, 30, 23,59,59,999));
-    if (q === 'Q3') return new Date(Date.UTC(year, 8, 30, 23,59,59,999));
+    if (m >= 1 && m <= 3) return new Date(Date.UTC(year, 2, 31, 23,59,59,999));
+    if (m >= 4 && m <= 6) return new Date(Date.UTC(year, 5, 30, 23,59,59,999));
+    if (m >= 7 && m <= 9) return new Date(Date.UTC(year, 8, 30, 23,59,59,999));
     return new Date(Date.UTC(year, 11, 31, 23,59,59,999));
   };
 
   const splitIntervalByQuarter = (startDate, totalDays) => {
     const segments = [];
     let remaining = totalDays;
-    let cursor = new Date(startDate);
+    // Normalize to UTC midnight to avoid timezone issues
+    let cursor = new Date(Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()));
     while (remaining > 0) {
       const qEnd = getQuarterEnd(cursor);
       const msPerDay = 24 * 60 * 60 * 1000;
       const diff = Math.floor((Date.UTC(qEnd.getUTCFullYear(), qEnd.getUTCMonth(), qEnd.getUTCDate()) - Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), cursor.getUTCDate())) / msPerDay) + 1;
       const take = Math.min(remaining, diff);
-      segments.push({ quarter: getQuarterLabel(cursor), start: new Date(cursor), days: take });
+      const segmentEnd = addDays(cursor, take - 1);
+      segments.push({ 
+        quarter: getQuarterLabel(cursor), 
+        start: new Date(cursor), 
+        end: segmentEnd,
+        days: take 
+      });
       cursor = addDays(cursor, take);
       remaining -= take;
     }
@@ -309,11 +334,39 @@ const Advertisement = () => {
   };
 
   // compute pricing preview for a specific ad type (banner/stamp)
+  // Logic: If starting today, first fill current quarter remaining days, then add full selected duration from next quarter
   const computePricingPreview = (adType = 'banner') => {
     const pricing = pricingData?.getCategoryPricing;
     if (!pricing) return null;
-    const segmentsStart = startPreference === 'next_quarter' ? getNextQuarterStart(new Date()) : new Date();
-    const segments = splitIntervalByQuarter(segmentsStart, selectedDuration);
+    
+    const today = new Date();
+    const segments = [];
+    
+    if (startPreference === 'next_quarter') {
+      // Simple case: start from next quarter with full duration
+      const nextQStart = getNextQuarterStart(today);
+      const segs = splitIntervalByQuarter(nextQStart, selectedDuration);
+      segments.push(...segs);
+    } else {
+      // Complex case: current quarter remaining + full duration from next quarter
+      const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+      const currentQEnd = getQuarterEnd(todayUTC);
+      const msPerDay = 24 * 60 * 60 * 1000;
+      const remainingInCurrentQ = Math.floor((Date.UTC(currentQEnd.getUTCFullYear(), currentQEnd.getUTCMonth(), currentQEnd.getUTCDate()) - Date.UTC(todayUTC.getUTCFullYear(), todayUTC.getUTCMonth(), todayUTC.getUTCDate())) / msPerDay) + 1;
+      
+      // First segment: remaining days in current quarter
+      segments.push({
+        quarter: getQuarterLabel(todayUTC),
+        start: new Date(todayUTC),
+        end: new Date(currentQEnd),
+        days: remainingInCurrentQ
+      });
+      
+      // Second segment: full selected duration from next quarter start
+      const nextQStart = getNextQuarterStart(todayUTC);
+      const nextQSegs = splitIntervalByQuarter(nextQStart, selectedDuration);
+      segments.push(...nextQSegs);
+    }
 
     // find adCategory: first try exact duration match, then match by type with closest duration, fallback to first
     let adCat = null;
@@ -336,11 +389,19 @@ const Advertisement = () => {
     const baseDuration = durationDays;
     const basePrice = price;
     const ratePerDay = Math.round((basePrice / baseDuration) * 100) / 100;
-    const breakdown = segments.map(s => ({ quarter: s.quarter, days: s.days, rate_per_day: ratePerDay, subtotal: Math.round(ratePerDay * s.days) }));
+    const breakdown = segments.map(s => ({ 
+      quarter: s.quarter, 
+      start: s.start,
+      end: s.end,
+      days: s.days, 
+      rate_per_day: ratePerDay, 
+      subtotal: Math.round(ratePerDay * s.days) 
+    }));
     const total = breakdown.reduce((sum, b) => sum + b.subtotal, 0);
-    const startDate = segmentsStart;
-    const endDate = addDays(segmentsStart, selectedDuration - 1);
-    return { startDate, endDate, breakdown, total };
+    const totalDays = segments.reduce((sum, s) => sum + s.days, 0);
+    const startDate = segments[0]?.start || today;
+    const endDate = segments[segments.length - 1]?.end || today;
+    return { startDate, endDate, breakdown, total, totalDays };
   };
 
   // compute total price for selected slots (sums per-slot pricing using adType)
@@ -405,9 +466,9 @@ const Advertisement = () => {
           slot,
           media_type: 'both',
           mobile_image_url: media.mobileImage || '',
-          mobile_redirect_url: media.mobileRedirectUrl || '',
           desktop_image_url: media.desktopImage || '',
-          desktop_redirect_url: media.desktopRedirectUrl || '',
+          redirect_url: media.redirectUrl || '',
+          url_type: media.urlType || 'external',
         };
       });
 
@@ -763,13 +824,14 @@ const Advertisement = () => {
                 <div className='d-flex justify-content-between align-items-center mb-2'>
                   <div>
                     <strong>Start:</strong> {preview.startDate.toLocaleDateString()} &nbsp; <strong>End:</strong> {preview.endDate.toLocaleDateString()}
+                    {preview.totalDays && <span className='ms-2 text-muted'>({preview.totalDays} days total)</span>}
                   </div>
                   <div><strong>Total:</strong> ₹{preview.total}</div>
                 </div>
                 <ul className='mb-0' style={{ fontSize: '0.9rem' }}>
                   {preview.breakdown.map((b, i) => (
                     <li key={i} className='py-1'>
-                      <strong>{b.quarter}:</strong> {b.days} days × ₹{b.rate_per_day} = ₹{b.subtotal}
+                      <strong>{b.quarter}</strong> ({b.start?.toLocaleDateString()} - {b.end?.toLocaleDateString()}): {b.days} days × ₹{b.rate_per_day} = ₹{b.subtotal}
                     </li>
                   ))}
                 </ul>
@@ -965,6 +1027,7 @@ const Advertisement = () => {
               <ImageUpload
                 selectedSlots={selectedSlots}
                 slotMedia={slotMedia}
+                sellerProducts={sellerProducts}
                 onSlotMediaChange={(slot, field, value) => {
                   setSlotMedia((m) => ({
                     ...m,
@@ -1223,6 +1286,7 @@ const Advertisement = () => {
                   <ImageUpload
                     selectedSlots={selectedSlots}
                     slotMedia={slotMedia}
+                    sellerProducts={sellerProducts}
                     onSlotMediaChange={(slot, field, value) => {
                       setSlotMedia((m) => ({
                         ...m,

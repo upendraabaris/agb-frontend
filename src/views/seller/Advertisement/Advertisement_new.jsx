@@ -311,9 +311,8 @@ const Advertisement = () => {
         slot,
         media_type: 'both', // banner and stamp
         mobile_image_url: mobileImage,
-        mobile_redirect_url: mobileRedirectUrl,
         desktop_image_url: desktopImage,
-        desktop_redirect_url: desktopRedirectUrl,
+        redirect_url: mobileRedirectUrl || desktopRedirectUrl,
       }));
 
       const result = await createCategoryRequest({

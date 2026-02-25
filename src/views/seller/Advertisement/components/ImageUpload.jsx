@@ -1,8 +1,11 @@
-import React from 'react';
-import { Form, Row, Col, Card } from 'react-bootstrap';
+import React, { useState } from 'react';
+import { Form, Row, Col, Card, InputGroup, ListGroup } from 'react-bootstrap';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
 
-const ImageUpload = ({ selectedSlots = [], slotMedia = {}, onSlotMediaChange = () => {} }) => {
+const ImageUpload = ({ selectedSlots = [], slotMedia = {}, onSlotMediaChange = () => {}, sellerProducts = [] }) => {
+  const [productSearch, setProductSearch] = useState({});
+  const [showDropdown, setShowDropdown] = useState({});
+
   const formatSlotName = (slot) => {
     if (!slot) return slot;
     const parts = slot.split('_');
@@ -27,10 +30,29 @@ const ImageUpload = ({ selectedSlots = [], slotMedia = {}, onSlotMediaChange = (
     onSlotMediaChange(slot, field, e.target.value);
   };
 
+  const handleProductSelect = (slot, product) => {
+    const productUrl = `/product/${product.identifier?.replace(/\s/g, '_').toLowerCase()}`;
+    onSlotMediaChange(slot, 'redirectUrl', productUrl);
+    onSlotMediaChange(slot, 'selectedProductName', product.previewName || product.fullName);
+    setProductSearch((prev) => ({ ...prev, [slot]: '' }));
+    setShowDropdown((prev) => ({ ...prev, [slot]: false }));
+  };
+
+  const getFilteredProducts = (slot) => {
+    const search = productSearch[slot] || '';
+    if (!search) return sellerProducts.slice(0, 10);
+    return sellerProducts.filter(
+      (p) =>
+        (p.previewName || '').toLowerCase().includes(search.toLowerCase()) ||
+        (p.fullName || '').toLowerCase().includes(search.toLowerCase()) ||
+        (p.identifier || '').toLowerCase().includes(search.toLowerCase())
+    ).slice(0, 10);
+  };
+
   return (
     <div>
       <p className='text-muted mb-4'>
-        Upload advertisement images and redirect URLs for each selected slot.
+        Upload advertisement images and redirect URL for each selected slot.
       </p>
 
       {selectedSlots.map((slot) => {
@@ -78,14 +100,6 @@ const ImageUpload = ({ selectedSlots = [], slotMedia = {}, onSlotMediaChange = (
                       />
                     </div>
                   </Form.Group>
-                  <Form.Group className='mt-2'>
-                    <Form.Label className='fw-bold'>Mobile Redirect URL</Form.Label>
-                    <Form.Control
-                      type='text'
-                      value={media.mobileRedirectUrl || ''}
-                      onChange={(e) => handleUrlChange(e, slot, 'mobileRedirectUrl')}
-                    />
-                  </Form.Group>
                 </Col>
                 <Col md={6} className='mb-3'>
                   <Form.Group>
@@ -123,13 +137,118 @@ const ImageUpload = ({ selectedSlots = [], slotMedia = {}, onSlotMediaChange = (
                       />
                     </div>
                   </Form.Group>
+                </Col>
+              </Row>
+              <Row>
+                <Col md={6}>
                   <Form.Group className='mt-2'>
-                    <Form.Label className='fw-bold'>Desktop Redirect URL</Form.Label>
-                    <Form.Control
-                      type='text'
-                      value={media.desktopRedirectUrl || ''}
-                      onChange={(e) => handleUrlChange(e, slot, 'desktopRedirectUrl')}
-                    />
+                    <Form.Label className='fw-bold'>URL Type</Form.Label>
+                    <div className='d-flex gap-4'>
+                      <Form.Check
+                        type='radio'
+                        id={`urlType-external-${slot}`}
+                        label='External URL'
+                        name={`urlType-${slot}`}
+                        checked={(media.urlType || 'external') === 'external'}
+                        onChange={() => onSlotMediaChange(slot, 'urlType', 'external')}
+                      />
+                      <Form.Check
+                        type='radio'
+                        id={`urlType-internal-${slot}`}
+                        label='Internal URL'
+                        name={`urlType-${slot}`}
+                        checked={media.urlType === 'internal'}
+                        onChange={() => onSlotMediaChange(slot, 'urlType', 'internal')}
+                      />
+                    </div>
+                    <Form.Text className='text-muted'>
+                      External: Links outside this website | Internal: Links within this website
+                    </Form.Text>
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className='mt-2'>
+                    <Form.Label className='fw-bold'>Redirect URL</Form.Label>
+                    {(media.urlType || 'external') === 'external' ? (
+                      <>
+                        <Form.Control
+                          type='text'
+                          placeholder='https://example.com'
+                          value={media.redirectUrl || ''}
+                          onChange={(e) => handleUrlChange(e, slot, 'redirectUrl')}
+                        />
+                        <Form.Text className='text-muted'>
+                          Enter full URL (e.g., https://example.com)
+                        </Form.Text>
+                      </>
+                    ) : (
+                      <div style={{ position: 'relative' }}>
+                        <InputGroup>
+                          <InputGroup.Text>
+                            <CsLineIcons icon='search' size={16} />
+                          </InputGroup.Text>
+                          <Form.Control
+                            type='text'
+                            placeholder='Search your products...'
+                            value={productSearch[slot] || ''}
+                            onChange={(e) => {
+                              setProductSearch((prev) => ({ ...prev, [slot]: e.target.value }));
+                              setShowDropdown((prev) => ({ ...prev, [slot]: true }));
+                            }}
+                            onFocus={() => setShowDropdown((prev) => ({ ...prev, [slot]: true }))}
+                          />
+                        </InputGroup>
+                        {showDropdown[slot] && sellerProducts.length > 0 && (
+                          <ListGroup
+                            style={{
+                              position: 'absolute',
+                              top: '100%',
+                              left: 0,
+                              right: 0,
+                              zIndex: 1000,
+                              maxHeight: '200px',
+                              overflowY: 'auto',
+                              boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                            }}
+                          >
+                            {getFilteredProducts(slot).map((product) => (
+                              <ListGroup.Item
+                                key={product.id}
+                                action
+                                onClick={() => handleProductSelect(slot, product)}
+                                style={{ cursor: 'pointer' }}
+                              >
+                                <div className='d-flex align-items-center'>
+                                  {product.thumbnail && (
+                                    <img
+                                      src={product.thumbnail}
+                                      alt=''
+                                      style={{ width: '30px', height: '30px', objectFit: 'cover', marginRight: '10px' }}
+                                    />
+                                  )}
+                                  <div>
+                                    <div className='fw-bold'>{product.previewName || product.fullName}</div>
+                                    <small className='text-muted'>{product.identifier}</small>
+                                  </div>
+                                </div>
+                              </ListGroup.Item>
+                            ))}
+                            {getFilteredProducts(slot).length === 0 && (
+                              <ListGroup.Item className='text-muted'>No products found</ListGroup.Item>
+                            )}
+                          </ListGroup>
+                        )}
+                        {media.redirectUrl && (
+                          <div className='mt-2 p-2 bg-light rounded'>
+                            <small className='text-muted'>Selected:</small>
+                            <div className='fw-bold text-primary'>{media.selectedProductName || media.redirectUrl}</div>
+                          </div>
+                        )}
+                        <Form.Text className='text-muted'>
+                          Search and select your product
+                        </Form.Text>
+                      </div>
+                    )}
                   </Form.Group>
                 </Col>
               </Row>

@@ -24,8 +24,7 @@ const GET_AD_REQUESTS = gql`
         media_type
         mobile_image_url
         desktop_image_url
-        mobile_redirect_url
-        desktop_redirect_url
+        redirect_url
       }
       durations {
         id
@@ -38,6 +37,8 @@ const GET_AD_REQUESTS = gql`
         quarters_covered
         pricing_breakdown {
           quarter
+          start
+          end
           days
           rate_per_day
           subtotal
@@ -99,7 +100,6 @@ function AdApproval() {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [showRejectionModal, setShowRejectionModal] = useState(false);
-  const [approvalDate, setApprovalDate] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [allRequests, setAllRequests] = useState([]);
 
@@ -133,33 +133,15 @@ function AdApproval() {
     }
   }, [data]);
 
-  // whenever a new request is selected or the proposed date changes, check slot availability
+  // whenever a new request is selected, check slot availability using stored start_date
   React.useEffect(() => {
-    if (selectedRequest && approvalDate) {
-      checkAvailability({ variables: { requestId: selectedRequest.id, start_date: approvalDate } });
+    const storedStartDate = selectedRequest?.durations?.[0]?.start_date;
+    if (selectedRequest && storedStartDate) {
+      checkAvailability({ variables: { requestId: selectedRequest.id, start_date: storedStartDate } });
     } else {
       setAvailabilityResult(null);
     }
-  }, [selectedRequest, approvalDate, checkAvailability]);
-
-  React.useEffect(() => {
-    if (selectedRequest) {
-      const pref = selectedRequest.durations?.[0]?.start_preference || 'today';
-      let defaultDate = moment().format('YYYY-MM-DD');
-      if (pref === 'next_quarter') {
-        const now = new Date();
-        const m = now.getUTCMonth();
-        const y = now.getUTCFullYear();
-        if (m <= 2) defaultDate = moment(Date.UTC(y, 3, 1)).format('YYYY-MM-DD');
-        else if (m <= 5) defaultDate = moment(Date.UTC(y, 6, 1)).format('YYYY-MM-DD');
-        else if (m <= 8) defaultDate = moment(Date.UTC(y, 9, 1)).format('YYYY-MM-DD');
-        else defaultDate = moment(Date.UTC(y + 1, 0, 1)).format('YYYY-MM-DD');
-      }
-      setApprovalDate(defaultDate);
-    } else {
-      setApprovalDate('');
-    }
-  }, [selectedRequest]);
+  }, [selectedRequest, checkAvailability]);
 
   // compute projected total price if breakdown exists, otherwise estimate from first duration
   const computeProjectedTotal = () => {
@@ -178,7 +160,6 @@ function AdApproval() {
         toast.success('Ad approved successfully!');
         setShowApprovalModal(false);
         setSelectedRequest(null);
-        setApprovalDate('');
         refetch();
       }
     },
@@ -203,15 +184,10 @@ function AdApproval() {
   });
 
   const handleApprove = async () => {
-    if (!approvalDate) {
-      toast.error('Please select a start date');
-      return;
-    }
     await approveAd({
       variables: {
         input: {
           requestId: selectedRequest.id,
-          start_date: approvalDate,
         },
       },
     });
@@ -231,7 +207,6 @@ function AdApproval() {
   const handleFilterChange = (newFilter) => {
     setCurrentFilter(newFilter);
     setSelectedRequest(null);
-    setApprovalDate('');
   };
 
   const getStatusBadge = (status) => {
@@ -466,11 +441,11 @@ function AdApproval() {
                         />
                         <small className="text-muted">Slot: {media.slot}</small>
                         <small>Type: {media.media_type}</small>
-                        {media.mobile_redirect_url && (
+                        {media.redirect_url && (
                           <small className="text-break">
                             Redirect:{' '}
-                            <a href={media.mobile_redirect_url} target="_blank" rel="noopener noreferrer">
-                              {media.mobile_redirect_url}
+                            <a href={media.redirect_url} target="_blank" rel="noopener noreferrer">
+                              {media.redirect_url}
                             </a>
                           </small>
                         )}
@@ -507,7 +482,11 @@ function AdApproval() {
                       <small className="text-muted">Pricing Breakdown</small>
                       <ul className="mb-0">
                         {selectedRequest.durations[0].pricing_breakdown.map((b, i) => (
-                          <li key={i}>{`${b.quarter}: ${b.days}d @ ₹${b.rate_per_day}/d = ₹${b.subtotal}`}</li>
+                          <li key={i}>
+                            <strong>{b.quarter}</strong>
+                            {b.start && b.end && ` (${new Date(b.start).toLocaleDateString()} - ${new Date(b.end).toLocaleDateString()})`}
+                            : {b.days}d @ ₹{b.rate_per_day}/d = ₹{b.subtotal}
+                          </li>
                         ))}
                       </ul>
                     </div>
@@ -517,27 +496,6 @@ function AdApproval() {
 
               {selectedRequest.status === 'pending' && (
                 <div className="mb-0">
-                  <Form.Group className="mb-3">
-                    <Form.Label>Select Start Date</Form.Label>
-                    <Form.Control
-                      type="date"
-                      value={approvalDate}
-                      onChange={(e) => setApprovalDate(e.target.value)}
-                      min={moment().format('YYYY-MM-DD')}
-                    />
-                    <Form.Text className="text-muted">
-                      End date will be calculated as: {approvalDate && approvalDate} +{' '}
-                      {selectedRequest.durations?.[0]?.duration_days || 30} days
-                    </Form.Text>
-                  </Form.Group>
-                  <div className="mb-3">
-                    <small className="text-muted">Projected Total Price</small>
-                    {selectedRequest.status === 'pending' && (!selectedRequest.durations[0].pricing_breakdown || selectedRequest.durations[0].pricing_breakdown.length === 0) ? (
-                      <div className="text-muted"><em>Will be calculated upon approval</em></div>
-                    ) : (
-                      <div className="fw-bold">₹{computeProjectedTotal()}</div>
-                    )}
-                  </div>
                   {availabilityResult && (
                     <div className="mb-3">
                       <small className="text-muted">Slot availability</small>
@@ -571,7 +529,7 @@ function AdApproval() {
               variant="success"
               onClick={handleApprove}
               disabled={
-                approveLoading || !approvalDate ||
+                approveLoading ||
                 (availabilityResult && !availabilityResult.available)
               }
             >
