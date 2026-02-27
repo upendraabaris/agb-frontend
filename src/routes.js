@@ -7,6 +7,7 @@ import SellerReports from 'views/seller/Advertisement/SellerReports';
 import ProductAdvertisement from 'views/seller/Advertisement/ProductAdvertisement';
 import MyProductAds from 'views/seller/Advertisement/MyProductAds';
 import ProductAdApproval from 'views/admin/Advertisement/Approval/ProductAdApproval';
+import SellerWallet from 'views/seller/Wallet/SellerWallet';
 
 /* ------------------------------------------------------------------ */
 /* -------------------------  Master Panel   ------------------------ */
@@ -1619,6 +1620,14 @@ const routesAndMenuItems = {
         { path: '/product-list', label: 'My Product Ads', component: MyProductAds },
         { path: '/ads-product', label: 'Advertise a Product', component: ProductAdvertisement },
       ],
+    },
+    {
+      path: `${appSeller}/wallet`,
+      component: SellerWallet,
+      label: 'Wallet',
+      icon: 'money',
+      roles: [USER_ROLE.Seller],
+      hidden: true,
     },
 
     /* ------------------------------------------------------------------ */
