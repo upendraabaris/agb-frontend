@@ -3,7 +3,7 @@ import { Form, Row, Col, Card, InputGroup, ListGroup } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
 
-const ImageUpload = ({ selectedSlots = [], slotMedia = {}, onSlotMediaChange = () => {}, sellerProducts = [] }) => {
+const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSlotMediaChange = () => {}, sellerProducts = [] }) => {
   const [productSearch, setProductSearch] = useState({});
   const [showDropdown, setShowDropdown] = useState({});
 
@@ -182,17 +182,17 @@ const ImageUpload = ({ selectedSlots = [], slotMedia = {}, onSlotMediaChange = (
                     <div className='d-flex gap-4'>
                       <Form.Check
                         type='radio'
-                        id={`urlType-external-${slot}`}
+                        id={`urlType-external-${categoryId}-${slot}`}
                         label='External URL'
-                        name={`urlType-${slot}`}
+                        name={`urlType-${categoryId}-${slot}`}
                         checked={(media.urlType || 'external') === 'external'}
                         onChange={() => onSlotMediaChange(slot, 'urlType', 'external')}
                       />
                       <Form.Check
                         type='radio'
-                        id={`urlType-internal-${slot}`}
+                        id={`urlType-internal-${categoryId}-${slot}`}
                         label='Internal URL'
-                        name={`urlType-${slot}`}
+                        name={`urlType-${categoryId}-${slot}`}
                         checked={media.urlType === 'internal'}
                         onChange={() => onSlotMediaChange(slot, 'urlType', 'internal')}
                       />

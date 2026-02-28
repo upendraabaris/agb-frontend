@@ -249,15 +249,36 @@ const Advertisement = () => {
     setAddCatSearchTerm('');
   };
 
+  // Get the slot names from the first category (cart[0] or current if cart is empty)
+  const getFirstCategorySlots = () => {
+    if (categoryCart.length > 0) return categoryCart[0].slots;
+    return selectedSlots;
+  };
+
   // Handle adding another category from the inline picker
   const handleAddAnotherCategory = async (categoryId) => {
     // First save current work to cart
     handleSaveToCart();
 
+    // Auto-select the same slots as the first category, but exclude booked ones
+    const firstSlots = getFirstCategorySlots();
+    const newCatData = allCategories.find(c => c.id === categoryId);
+    const newCatSlotMap = {};
+    (newCatData?.slotStatuses || []).forEach(s => { newCatSlotMap[s.slot] = s; });
+    const availableSlots = firstSlots.filter(slot => {
+      const status = newCatSlotMap[slot];
+      return !status || status.available;
+    });
+
     // Now switch to the new category
     setSelectedCategory(categoryId);
-    setSelectedSlots([]);
-    setSlotMedia({});
+    setSelectedSlots([...availableSlots]);
+    // Initialize empty media for each pre-selected available slot
+    const newMedia = {};
+    availableSlots.forEach(slot => {
+      newMedia[slot] = { mobileImage: '', desktopImage: '', redirectUrl: '' };
+    });
+    setSlotMedia(newMedia);
     setShowAddCategoryPicker(false);
     setAddCatSearchTerm('');
 
@@ -1023,14 +1044,13 @@ const Advertisement = () => {
             <Alert variant='info'>No pricing tiers configured for this category</Alert>
           )}
 
+          {/* Pricing breakdown hidden
           {preview && (
             <Card className='mt-3'>
               <Card.Body>
-                {/* Show the pricing summary */}
                 <div className='mb-3 p-2' style={{ backgroundColor: '#f0f0f0', borderRadius: '4px', fontSize: '0.85rem' }}>
                   <strong>Pricing:</strong> {getSlotDisplayName(selectedSlotForPreview)} — ₹{preview.total} ({getDurationLabel(selectedDuration)})
                 </div>
-
                 <div className='d-flex justify-content-between align-items-center mb-2'>
                   <div>
                     <strong>Start:</strong> {preview.startDate.toLocaleDateString()} &nbsp; <strong>End:</strong> {preview.endDate.toLocaleDateString()}
@@ -1048,6 +1068,7 @@ const Advertisement = () => {
               </Card.Body>
             </Card>
           )}
+          */}
         </div>
       </div>
     );
@@ -1076,8 +1097,17 @@ const Advertisement = () => {
       slotMap[s.slot] = s;
     });
 
-    const bannerSlots = ['banner_1', 'banner_2', 'banner_3', 'banner_4'];
-    const stampSlots = ['stamp_1', 'stamp_2', 'stamp_3', 'stamp_4'];
+    let bannerSlots = ['banner_1', 'banner_2', 'banner_3', 'banner_4'];
+    let stampSlots = ['stamp_1', 'stamp_2', 'stamp_3', 'stamp_4'];
+
+    // For 2nd+ category: only show the same slots as the first category selected
+    const isSubsequentCategory = categoryCart.length > 0 && !categoryCart.some(c => c.categoryId === selectedCategory);
+    if (isSubsequentCategory) {
+      const firstSlots = categoryCart[0].slots;
+      bannerSlots = bannerSlots.filter(s => firstSlots.includes(s));
+      stampSlots = stampSlots.filter(s => firstSlots.includes(s));
+    }
+
     const availableBanner = bannerSlots.filter((s) => slotMap[s]?.available).length;
     const availableStamp = stampSlots.filter((s) => slotMap[s]?.available).length;
 
@@ -1086,6 +1116,12 @@ const Advertisement = () => {
         <Alert variant='info'>
           Available Slots: {selectedCategoryData.availableSlots || 0}/{(selectedCategoryData.bookedSlots || 0) + (selectedCategoryData.availableSlots || 0)}
         </Alert>
+
+        {isSubsequentCategory && (
+          <Alert variant='warning' className='py-2' style={{ fontSize: '0.85rem' }}>
+            Showing only the slot positions matching your first category selection ({categoryCart[0].slots.map(s => getSlotDisplayName(s)).join(', ')})
+          </Alert>
+        )}
 
         {/* legend */}
         <div className='mb-2'>
@@ -1125,30 +1161,33 @@ const Advertisement = () => {
                 variant = 'outline-success';
               }
 
-              let label = getSlotDisplayName(slot);
-              // append per-slot price
+              let priceLabel = '';
               try {
                 const priceForSlot = computePricingPreview(slot)?.total;
                 if (priceForSlot) {
-                  label += ` - ₹${priceForSlot}`;
+                  priceLabel = `₹${priceForSlot}`;
                 }
               } catch (e) {
                 console.error('Error computing price for slot:', e);
-              }
-              if (!status.available) {
-                const until = status.freeDate ? new Date(status.freeDate).toLocaleDateString() : 'unknown';
-                label += ` (booked until ${until})`;
               }
 
               return (
                 <Col key={slot} xs={6} sm={4} md={3}>
                   <Button
                     variant={variant}
-                    className='w-100'
+                    className='w-100 d-flex flex-column align-items-center justify-content-center'
                     onClick={() => handleSlotToggle(slot)}
                     disabled={disabled}
+                    style={{ fontSize: '0.8rem', whiteSpace: 'normal', lineHeight: '1.4', padding: '0.5rem', minHeight: '52px' }}
                   >
-                    {label}
+                    <span className='fw-bold'>{getSlotDisplayName(slot)}</span>
+                    {disabled ? (
+                      <small style={{ fontSize: '0.65rem' }}>
+                        Booked till {status.freeDate ? new Date(status.freeDate).toLocaleDateString('en-IN') : 'N/A'}
+                      </small>
+                    ) : (
+                      priceLabel && <small>{priceLabel}</small>
+                    )}
                   </Button>
                 </Col>
               );
@@ -1360,6 +1399,7 @@ const Advertisement = () => {
                     {entry.slots.length} slot(s)
                   </h6>
                   <ImageUpload
+                    categoryId={entry.categoryId}
                     selectedSlots={entry.slots}
                     slotMedia={entry.categoryId === selectedCategory ? slotMedia : entry.slotMedia}
                     sellerProducts={sellerProducts}
@@ -1709,6 +1749,7 @@ const Advertisement = () => {
                 </Card.Header>
                 <Card.Body>
                   <ImageUpload
+                    categoryId={selectedCategory}
                     selectedSlots={selectedSlots}
                     slotMedia={slotMedia}
                     sellerProducts={sellerProducts}

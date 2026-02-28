@@ -3,6 +3,7 @@ import { USER_ROLE } from 'constants.js';
 import { lazy, React } from 'react';
 import Advertisement from 'views/seller/Advertisement/Advertisement';
 import MyAds from 'views/seller/Advertisement/MyAds';
+import SellerWallet from 'views/seller/Advertisement/Wallet/SellerWallet';
 
 /* ------------------------------------------------------------------ */
 /* -------------------------  Master Panel   ------------------------ */
@@ -1610,7 +1611,15 @@ const routesAndMenuItems = {
         { path: '/list', label: 'My Ad List', component: MyAds },
         { path: '/add', label: 'Ad at Categories', component: Advertisement },
       ],
-  },
+    },
+    {
+      path: `${appSeller}/wallet`,
+      component: SellerWallet,
+      label: 'Wallet',
+      icon: 'money',
+      roles: [USER_ROLE.Seller],
+      hidden: true,
+    },
 
     /* ------------------------------------------------------------------ */
     /* --------------------------    BA Dashboard   --------------------- */
