@@ -43,8 +43,11 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
           e.target.value = '';
           return;
         }
-        const field = device === 'mobile' ? 'mobileImage' : 'desktopImage';
-        onSlotMediaChange(slot, field, dataUrl);
+        // Store base64 for preview AND raw File object for upload
+        const previewField = device === 'mobile' ? 'mobileImage' : 'desktopImage';
+        const fileField = device === 'mobile' ? 'mobileFile' : 'desktopFile';
+        onSlotMediaChange(slot, previewField, dataUrl);
+        onSlotMediaChange(slot, fileField, file);
       };
       img.src = dataUrl;
     };

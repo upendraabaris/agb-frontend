@@ -83,6 +83,17 @@ const GET_SELLER_PRODUCTS = gql`
   }
 `;
 
+// Upload file to server (returns URL path)
+const UPLOAD_FILE = gql`
+  mutation UploadFile($file: Upload!) {
+    uploadFile(file: $file) {
+      success
+      url
+      message
+    }
+  }
+`;
+
 // Create category request with media and slots
 const CREATE_CATEGORY_REQUEST = gql`
   mutation CreateCategoryRequest($input: CreateCategoryRequestInput!) {
@@ -169,7 +180,9 @@ const Advertisement = () => {
   // Lazy query for fetching pricing when adding another category
   const [fetchCategoryPricing] = useLazyQuery(GET_CATEGORY_PRICING);
 
+  const [uploadFile] = useMutation(UPLOAD_FILE);
   const [createCategoryRequest, { loading: submitLoading }] = useMutation(CREATE_CATEGORY_REQUEST);
+  const [uploading, setUploading] = useState(false);
 
   // Handle errors
   React.useEffect(() => {
@@ -639,23 +652,46 @@ const Advertisement = () => {
         return;
       }
 
-      const mutationPromises = validEntries.map(entry => {
-        const medias = entry.slots.map(slot => {
-          const media = entry.slotMedia[slot] || {};
-          return {
-            slot,
-            media_type: 'both',
-            mobile_image_url: media.mobileImage || '',
-            desktop_image_url: media.desktopImage || '',
-            redirect_url: media.redirectUrl || '',
-            url_type: media.urlType || 'external',
-          };
-        });
+      // --- Upload all image files first, then build medias with URLs ---
+      setUploading(true);
+      const uploadOneFile = async (file) => {
+        const res = await uploadFile({ variables: { file } });
+        if (!res.data?.uploadFile?.success) {
+          throw new Error(res.data?.uploadFile?.message || 'File upload failed');
+        }
+        return res.data.uploadFile.url; // e.g. "uploads/12345-1709123456.jpg"
+      };
+
+      // Build medias for all entries (upload files in parallel per entry)
+      const uploadAndSubmit = validEntries.map(async (entry) => {
+        const mediasWithUrls = await Promise.all(
+          entry.slots.map(async (slot) => {
+            const media = entry.slotMedia[slot] || {};
+            const [mobileUrl, desktopUrl] = await Promise.all([
+              media.mobileFile instanceof File
+                ? uploadOneFile(media.mobileFile)
+                : Promise.resolve(media.mobileImage || ''),
+              media.desktopFile instanceof File
+                ? uploadOneFile(media.desktopFile)
+                : Promise.resolve(media.desktopImage || ''),
+            ]);
+
+            return {
+              slot,
+              media_type: 'both',
+              mobile_image_url: mobileUrl,
+              desktop_image_url: desktopUrl,
+              redirect_url: media.redirectUrl || '',
+              url_type: media.urlType || 'external',
+            };
+          })
+        );
+
         return createCategoryRequest({
           variables: {
             input: {
               category_id: entry.categoryId,
-              medias,
+              medias: mediasWithUrls,
               duration_type: durationTypeMap[selectedDuration] || 'quarterly',
               start_preference: startPreference === 'today' ? 'today' : 'select_quarter',
               start_quarter: selectedStartQuarter || undefined,
@@ -663,8 +699,9 @@ const Advertisement = () => {
           },
         });
       });
+      setUploading(false);
 
-      const results = await Promise.all(mutationPromises);
+      const results = await Promise.all(uploadAndSubmit);
 
       if (results.length > 0) {
         const catNames = allCats.filter(c => c.slots.length > 0).map(c => c.categoryName).join(', ');

@@ -112,8 +112,7 @@ function DefaultAdForm({ show, onHide, onSuccess, editingAd, selectedSlot }) {
     try {
       const response = await uploadFile({
         variables: {
-          file,
-          folder: 'default-ads'
+          file
         }
       });
       
