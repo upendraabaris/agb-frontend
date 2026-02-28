@@ -4,6 +4,10 @@ import { lazy, React } from 'react';
 import Advertisement from 'views/seller/Advertisement/Advertisement';
 import MyAds from 'views/seller/Advertisement/MyAds';
 import SellerWallet from 'views/seller/Advertisement/Wallet/SellerWallet';
+import SellerReports from 'views/seller/Advertisement/SellerReports';
+import ProductAdvertisement from 'views/seller/Advertisement/ProductAdvertisement';
+import MyProductAds from 'views/seller/Advertisement/MyProductAds';
+import ProductAdApproval from 'views/admin/Advertisement/Approval/ProductAdApproval';
 
 /* ------------------------------------------------------------------ */
 /* -------------------------  Master Panel   ------------------------ */
@@ -34,6 +38,7 @@ const ad = {
   cat: lazy(() => import('views/admin/Advertisement/Cat/ListCat')),
   pro: lazy(() => import('views/admin/Advertisement/Pro/ProductAd')),
   adsCategory: lazy(() => import('views/admin/Advertisement/Cat/AdCategoryManager')),
+  reporting: lazy(() => import('views/admin/Advertisement/AdminReports')),
   adTier: lazy(() => import('views/admin/Advertisement/CategoryMaster/AdTierMasterManager')),
   approval: lazy(() => import('views/admin/Advertisement/Approval/AdApproval')),
   pricing: lazy(() => import('views/admin/Advertisement/Pricing/AdPricingSetup')),
@@ -314,6 +319,9 @@ const sellerProducts = {
 };
 const sellerreview = {
   reviewList: lazy(() => import('views/seller/Review/ReviewListView')),
+};
+const sellerAd = {
+  dashboard: lazy(() => import('views/seller/Advertisement/SellerReports')),
 };
 const superSellerProducts = {
   list: lazy(() => import('views/superSeller/Product/List/ListViewProduct')),
@@ -1103,6 +1111,8 @@ const routesAndMenuItems = {
         { path: '/pricing', label: 'Pricing Config', component: ad.pricing },
         { path: '/approval', label: 'Ad Approvals', component: ad.approval },
         { path: '/default-ads', label: 'Default Ads', component: ad.defaultAds },
+        { path: '/product-approval', label: 'Product Ad Approvals', component: ProductAdApproval },
+        { path: '/reporting', label: 'Reporting', component: ad.reporting },
       ],
     },
     {
@@ -1610,6 +1620,9 @@ const routesAndMenuItems = {
       subs: [
         { path: '/list', label: 'My Ad List', component: MyAds },
         { path: '/add', label: 'Ad at Categories', component: Advertisement },
+        { path: '/reporting', label: 'Reporting', component: SellerReports },
+        { path: '/product-list', label: 'My Product Ads', component: MyProductAds },
+        { path: '/ads-product', label: 'Advertise a Product', component: ProductAdvertisement },
       ],
     },
     {
@@ -1805,7 +1818,7 @@ const routesAndMenuItems = {
         { path: '/detail/:id', label: 'Detail', component: accountsPaymentTransfer.detail, hideInMenu: true },
       ],
     },
-    
+
   ],
 };
 
