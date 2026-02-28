@@ -3,6 +3,7 @@ import { USER_ROLE } from 'constants.js';
 import { lazy, React } from 'react';
 import Advertisement from 'views/seller/Advertisement/Advertisement';
 import MyAds from 'views/seller/Advertisement/MyAds';
+import SellerWallet from 'views/seller/Advertisement/Wallet/SellerWallet';
 import SellerReports from 'views/seller/Advertisement/SellerReports';
 import ProductAdvertisement from 'views/seller/Advertisement/ProductAdvertisement';
 import MyProductAds from 'views/seller/Advertisement/MyProductAds';
@@ -40,6 +41,8 @@ const ad = {
   reporting: lazy(() => import('views/admin/Advertisement/AdminReports')),
   adTier: lazy(() => import('views/admin/Advertisement/CategoryMaster/AdTierMasterManager')),
   approval: lazy(() => import('views/admin/Advertisement/Approval/AdApproval')),
+  pricing: lazy(() => import('views/admin/Advertisement/Pricing/AdPricingSetup')),
+  defaultAds: lazy(() => import('views/admin/Advertisement/DefaultAds/DefaultAdsList')),
 };
 const b2b = {
   list: lazy(() => import('views/admin/B2B/List/ListB2B')),
@@ -1104,8 +1107,10 @@ const routesAndMenuItems = {
         { path: '/category_advertisment', label: 'Category Ads', component: ad.cat },
         { path: '/productDetailPageSlider', label: 'Product Detail Ads', component: ad.pro },
         { path: '/ads_category_master', label: 'Ad Tier', component: ad.adTier },
-        { path: '/ads_category', label: 'Ads Pricing', component: ad.adsCategory },
+        { path: '/ads_category', label: 'Ads Pricing (Legacy)', component: ad.adsCategory },
+        { path: '/pricing', label: 'Pricing Config', component: ad.pricing },
         { path: '/approval', label: 'Ad Approvals', component: ad.approval },
+        { path: '/default-ads', label: 'Default Ads', component: ad.defaultAds },
         { path: '/product-approval', label: 'Product Ad Approvals', component: ProductAdApproval },
         { path: '/reporting', label: 'Reporting', component: ad.reporting },
       ],
@@ -1619,6 +1624,14 @@ const routesAndMenuItems = {
         { path: '/product-list', label: 'My Product Ads', component: MyProductAds },
         { path: '/ads-product', label: 'Advertise a Product', component: ProductAdvertisement },
       ],
+    },
+    {
+      path: `${appSeller}/wallet`,
+      component: SellerWallet,
+      label: 'Wallet',
+      icon: 'money',
+      roles: [USER_ROLE.Seller],
+      hidden: true,
     },
 
     /* ------------------------------------------------------------------ */

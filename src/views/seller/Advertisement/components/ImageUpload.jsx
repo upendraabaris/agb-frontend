@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Form, Row, Col, Card, InputGroup, ListGroup } from 'react-bootstrap';
+import { toast } from 'react-toastify';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
 
-const ImageUpload = ({ selectedSlots = [], slotMedia = {}, onSlotMediaChange = () => {}, sellerProducts = [] }) => {
+const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSlotMediaChange = () => {}, sellerProducts = [] }) => {
   const [productSearch, setProductSearch] = useState({});
   const [showDropdown, setShowDropdown] = useState({});
 
@@ -11,17 +12,44 @@ const ImageUpload = ({ selectedSlots = [], slotMedia = {}, onSlotMediaChange = (
     const parts = slot.split('_');
     const type = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
     const num = parts[1];
-    return `${type} #${num}`;
+    return `${type} ${num}`;
   };
 
   const handleImageChange = (e, slot, device) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
+
+    // Size validation: max 500KB
+    if (file.size > 500 * 1024) {
+      toast.error(`Image size must be 500KB or less. Your file: ${Math.round(file.size / 1024)}KB`);
+      e.target.value = '';
+      return;
+    }
+
+    const slotType = slot.split('_')[0];
+    const requiredWidth = slotType === 'banner' ? 2000 : 1000;
+    const requiredHeight = slotType === 'banner' ? 300 : 500;
+
     const reader = new FileReader();
     reader.onloadend = () => {
       const dataUrl = reader.result;
-      const field = device === 'mobile' ? 'mobileImage' : 'desktopImage';
-      onSlotMediaChange(slot, field, dataUrl);
+      // Dimension validation
+      const img = new window.Image();
+      img.onload = () => {
+        if (img.width !== requiredWidth || img.height !== requiredHeight) {
+          toast.error(
+            `${slotType === 'banner' ? 'Banner' : 'Stamp'} image must be exactly ${requiredWidth}\u00d7${requiredHeight}px. Your image: ${img.width}\u00d7${img.height}px`
+          );
+          e.target.value = '';
+          return;
+        }
+        // Store base64 for preview AND raw File object for upload
+        const previewField = device === 'mobile' ? 'mobileImage' : 'desktopImage';
+        const fileField = device === 'mobile' ? 'mobileFile' : 'desktopFile';
+        onSlotMediaChange(slot, previewField, dataUrl);
+        onSlotMediaChange(slot, fileField, file);
+      };
+      img.src = dataUrl;
     };
     reader.readAsDataURL(file);
   };
@@ -60,7 +88,12 @@ const ImageUpload = ({ selectedSlots = [], slotMedia = {}, onSlotMediaChange = (
         return (
           <Card key={slot} className='mb-4'>
             <Card.Header className='bg-light'>
-              <Card.Title className='mb-0'>{formatSlotName(slot)}</Card.Title>
+              <Card.Title className='mb-0'>
+                {formatSlotName(slot)}
+                <small className='text-muted ms-2' style={{ fontSize: '0.75rem', fontWeight: 'normal' }}>
+                  ({slot.startsWith('banner') ? '2000\u00d7300px' : '1000\u00d7500px'}, max 500KB)
+                </small>
+              </Card.Title>
             </Card.Header>
             <Card.Body>
               <Row>
@@ -81,7 +114,10 @@ const ImageUpload = ({ selectedSlots = [], slotMedia = {}, onSlotMediaChange = (
                       ) : (
                         <div>
                           <CsLineIcons icon='image' className='mb-2 display-4' />
-                          <p className='text-muted mb-2'>Drag or click to upload</p>
+                          <p className='text-muted mb-1'>Drag or click to upload</p>
+                          <p className='text-muted mb-0' style={{ fontSize: '0.7rem' }}>
+                            {slot.startsWith('banner') ? '2000 \u00d7 300px' : '1000 \u00d7 500px'} | Max 500KB
+                          </p>
                         </div>
                       )}
                       <Form.Control
@@ -118,7 +154,10 @@ const ImageUpload = ({ selectedSlots = [], slotMedia = {}, onSlotMediaChange = (
                       ) : (
                         <div>
                           <CsLineIcons icon='image' className='mb-2 display-4' />
-                          <p className='text-muted mb-2'>Drag or click to upload</p>
+                          <p className='text-muted mb-1'>Drag or click to upload</p>
+                          <p className='text-muted mb-0' style={{ fontSize: '0.7rem' }}>
+                            {slot.startsWith('banner') ? '2000 \u00d7 300px' : '1000 \u00d7 500px'} | Max 500KB
+                          </p>
                         </div>
                       )}
                       <Form.Control
@@ -146,17 +185,17 @@ const ImageUpload = ({ selectedSlots = [], slotMedia = {}, onSlotMediaChange = (
                     <div className='d-flex gap-4'>
                       <Form.Check
                         type='radio'
-                        id={`urlType-external-${slot}`}
+                        id={`urlType-external-${categoryId}-${slot}`}
                         label='External URL'
-                        name={`urlType-${slot}`}
+                        name={`urlType-${categoryId}-${slot}`}
                         checked={(media.urlType || 'external') === 'external'}
                         onChange={() => onSlotMediaChange(slot, 'urlType', 'external')}
                       />
                       <Form.Check
                         type='radio'
-                        id={`urlType-internal-${slot}`}
+                        id={`urlType-internal-${categoryId}-${slot}`}
                         label='Internal URL'
-                        name={`urlType-${slot}`}
+                        name={`urlType-${categoryId}-${slot}`}
                         checked={media.urlType === 'internal'}
                         onChange={() => onSlotMediaChange(slot, 'urlType', 'internal')}
                       />

@@ -212,6 +212,23 @@ export const GETSUPERSELLERBYCATEGORYNAME = gql`
   }
 `;
 
+// Default ads query
+const GET_ALL_DEFAULT_ADS = gql`
+  query GetAllDefaultAds {
+    getAllDefaultAds {
+      id
+      ad_type
+      slot_position
+      slot_name
+      mobile_image_url
+      desktop_image_url
+      redirect_url
+      title
+      is_active
+    }
+  }
+`;
+
 export const GET_APPROVED_ADS_BY_CATEGORY = gql`
   query GetApprovedAdsByCategory($categoryName: String) {
     getApprovedAdsByCategory(categoryName: $categoryName) {
@@ -409,28 +426,106 @@ const SubcategoryL2 = () => {
     },
   });
 
-  // Prepare stamp ads (medias with slot containing 'stamp')
+  // DEFAULT ADS
+  const [defaultAds, setDefaultAds] = useState([]);
+  const [defaultAdsLoaded, setDefaultAdsLoaded] = useState(false);
+  const [getDefaultAds] = useLazyQuery(GET_ALL_DEFAULT_ADS, {
+    fetchPolicy: 'network-only',
+    onCompleted(res) {
+      console.log('[GET_ALL_DEFAULT_ADS] response:', res);
+      setDefaultAds((res?.getAllDefaultAds || []).filter(ad => ad.is_active));
+      setDefaultAdsLoaded(true);
+    },
+    onError(error) {
+      console.error('GET_ALL_DEFAULT_ADS', error);
+      setDefaultAdsLoaded(true); // Mark loaded even on error so UI doesn't wait forever
+    },
+  });
+
+  // Fetch default ads on mount
+  useEffect(() => {
+    getDefaultAds();
+    // eslint-disable-next-line
+  }, []);
+
   // Prepare stamp ads (flatten all medias with slot containing 'stamp')
   const stampAds = useMemo(() => {
-    if (!approvedAds || approvedAds.length === 0) return [];
-    return approvedAds
-      .flatMap((ad) => (ad.medias || []).filter((m) => m.slot && m.slot.toLowerCase().includes('stamp'))
-        .map((m) => ({ ...m, ad })));
-  }, [approvedAds]);
+    // Build paid stamp ads indexed by slot position
+    const paidStamps = {};
+    if (approvedAds && approvedAds.length > 0) {
+      approvedAds.forEach((ad) => {
+        (ad.medias || []).forEach((m) => {
+          if (m.slot && m.slot.toLowerCase().includes('stamp')) {
+            paidStamps[m.slot] = { ...m, ad, source: 'paid' };
+          }
+        });
+      });
+    }
+    // Fill all 4 stamp slots: paid first, then default fallback
+    const result = [];
+    [1, 2, 3, 4].forEach(pos => {
+      const slotName = `stamp_${pos}`;
+      if (paidStamps[slotName]) {
+        result.push(paidStamps[slotName]);
+      } else {
+        const fallback = defaultAds.find(d => d.ad_type === 'stamp' && d.slot_position === pos);
+        if (fallback) {
+          result.push({
+            slot: slotName,
+            mobile_image_url: fallback.mobile_image_url,
+            desktop_image_url: fallback.desktop_image_url,
+            redirect_url: fallback.redirect_url || '',
+            ad: { id: fallback.id, sellerName: fallback.title || 'Default Ad' },
+            source: 'default',
+          });
+        }
+      }
+    });
+    return result;
+  }, [approvedAds, defaultAds]);
 
   // Prepare banner ads (flatten all medias with slot containing 'banner')
   const bannerAds = useMemo(() => {
-    if (!approvedAds || approvedAds.length === 0) return [];
-    return approvedAds
-      .flatMap((ad) => (ad.medias || []).filter((m) => m.slot && m.slot.toLowerCase().includes('banner'))
-        .map((m) => ({ ...m, ad })));
-  }, [approvedAds]);
+    // Build paid banner ads indexed by slot position
+    const paidBanners = {};
+    if (approvedAds && approvedAds.length > 0) {
+      approvedAds.forEach((ad) => {
+        (ad.medias || []).forEach((m) => {
+          if (m.slot && m.slot.toLowerCase().includes('banner')) {
+            paidBanners[m.slot] = { ...m, ad, source: 'paid' };
+          }
+        });
+      });
+    }
+    // Fill all 4 banner slots: paid first, then default fallback
+    const result = [];
+    [1, 2, 3, 4].forEach(pos => {
+      const slotName = `banner_${pos}`;
+      if (paidBanners[slotName]) {
+        result.push(paidBanners[slotName]);
+      } else {
+        const fallback = defaultAds.find(d => d.ad_type === 'banner' && d.slot_position === pos);
+        if (fallback) {
+          result.push({
+            slot: slotName,
+            mobile_image_url: fallback.mobile_image_url,
+            desktop_image_url: fallback.desktop_image_url,
+            redirect_url: fallback.redirect_url || '',
+            ad: { id: fallback.id, sellerName: fallback.title || 'Default Ad' },
+            source: 'default',
+          });
+        }
+      }
+    });
+    return result;
+  }, [approvedAds, defaultAds]);
 
     // Ensure Bootstrap carousel instances are initialized after ads render
     useEffect(() => {
-      if (typeof window === 'undefined') return;
+      if (typeof window === 'undefined') return undefined;
+      if (!defaultAdsLoaded) return undefined; // Wait for default ads to load before initializing carousel
       const bs = window.bootstrap;
-      if (!bs) return;
+      if (!bs) return undefined;
 
       const initCarousel = (id) => {
         const el = document.getElementById(id);
@@ -439,22 +534,26 @@ const SubcategoryL2 = () => {
         const items = el.querySelectorAll('.carousel-item');
         items.forEach((it, idx) => it.classList.toggle('active', idx === 0));
         try {
-          // create or get existing instance
+          // Dispose existing instance and re-create to avoid stale state
           const existing = bs.Carousel.getInstance(el);
-          if (!existing) {
-            // initialize a new carousel instance
-            bs.Carousel(el, { interval: 5000, ride: 'carousel' });
-          }
+          if (existing) existing.dispose();
+          // eslint-disable-next-line no-new
+          new bs.Carousel(el, { interval: 5000, ride: 'carousel' });
         } catch (e) {
           // ignore initialization errors
         }
       };
 
       if (bannerAds && bannerAds.length > 0) {
-        initCarousel('approvedAdsCarousel');
-        initCarousel('categoryTopAdsCarousel');
+        // Small timeout to let React render the DOM before carousel init
+        const timer = setTimeout(() => {
+          initCarousel('approvedAdsCarousel');
+          initCarousel('categoryTopAdsCarousel');
+        }, 100);
+        return () => clearTimeout(timer);
       }
-    }, [approvedAds, bannerAds]);
+      return undefined;
+    }, [approvedAds, bannerAds, defaultAdsLoaded]);
 
   // When category data is available, fetch approved ads by categoryId
   useEffect(() => {
@@ -570,7 +669,7 @@ const SubcategoryL2 = () => {
 
       <aside>
         {/* APPROVED ADS CAROUSEL - TOP OF CATEGORY PAGE */}
-        {!loadingAds && bannerAds && bannerAds.length > 0 && (
+        {!loadingAds && defaultAdsLoaded && bannerAds && bannerAds.length > 0 && (
           <div id="categoryTopAdsCarousel" className="carousel slide mb-3 rounded border" data-bs-ride="carousel">
             <div className="carousel-inner rounded">
               {bannerAds.map((item, index) => {
@@ -593,9 +692,11 @@ const SubcategoryL2 = () => {
                         className="d-block w-100 rounded"
                         style={{ objectFit: 'cover', height: '280px' }}
                       />
-                      <div className="carousel-caption d-none d-md-block">
-                        <h4 className="text-white fw-bold">{item.ad?.sellerName}</h4>
-                      </div>
+                      {item.source !== 'default' && (
+                        <div className="carousel-caption d-none d-md-block">
+                          <h4 className="text-white fw-bold">{item.ad?.sellerName}</h4>
+                        </div>
+                      )}
                     </a>
                   </div>
                 );
@@ -627,7 +728,7 @@ const SubcategoryL2 = () => {
         )}
 
         {/* CATEGORY SLIDER IMAGE - FALLBACK WHEN NO BANNER ADS */}
-        {!loadingAds && (!bannerAds || bannerAds.length === 0) && categorySliderImageData?.getCategoryByName?.sliderImage && (
+        {!loadingAds && defaultAdsLoaded && (!bannerAds || bannerAds.length === 0) && categorySliderImageData?.getCategoryByName?.sliderImage && (
           <div className="container-fluid px-0 rounded border mb-3">
             {/* <img src={categorySliderImageData.getCategoryByName.sliderImage} className="d-block w-100 rounded" alt="Slider Image" /> */}
             <img src={categorySliderImageData.getCategoryByName.sliderImage} className="d-block w-100 rounded" alt="" />
