@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useHistory } from 'react-router-dom';
-import { useQuery, useMutation, gql } from '@apollo/client';
+import { useQuery, useLazyQuery, useMutation, gql } from '@apollo/client';
 import { Card, Button, Row, Col, Alert, Spinner, Modal, ProgressBar } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import HtmlHead from 'components/html-head/HtmlHead';
@@ -36,6 +36,16 @@ const GET_CATEGORIES_WITH_SLOTS = gql`
         ad_type
         price
       }
+      quarterAvailability {
+        quarter
+        label
+        startDate
+        endDate
+        slots {
+          slot
+          available
+        }
+      }
     }
   }
 `;
@@ -50,6 +60,8 @@ const GET_CATEGORY_PRICING = gql`
       adCategories {
         id
         ad_type
+        slot_name
+        slot_position
         price
         priority
         duration_days
@@ -130,6 +142,7 @@ const Advertisement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDuration, setSelectedDuration] = useState(90);
   const [startPreference, setStartPreference] = useState('today');
+  const [selectedStartQuarter, setSelectedStartQuarter] = useState(null);
   const [selectedSlots, setSelectedSlots] = useState([]);
   // media & url details per-slot (keyed by slot name)
   const [slotMedia, setSlotMedia] = useState({});
@@ -139,6 +152,12 @@ const Advertisement = () => {
   const [showWizardModal, setShowWizardModal] = useState(false);
   const [currentWizardStep, setCurrentWizardStep] = useState(1);
 
+  // Multi-category cart: [{ categoryId, categoryName, slots, slotMedia, pricingData }]
+  const [categoryCart, setCategoryCart] = useState([]);
+  const [showAddCategoryPicker, setShowAddCategoryPicker] = useState(false);
+  const [addCatSearchTerm, setAddCatSearchTerm] = useState('');
+  const [addCatTab, setAddCatTab] = useState('category');
+
   const { data: pricingData, loading: pricingLoading, error: pricingError } = useQuery(
     GET_CATEGORY_PRICING,
     {
@@ -147,36 +166,10 @@ const Advertisement = () => {
     }
   );
 
-  const [createCategoryRequest, { loading: submitLoading }] = useMutation(CREATE_CATEGORY_REQUEST, {
-    onCompleted: (data) => {
-      console.log('[Advertisement] Mutation completed:', data);
-      toast.success('Advertisement submitted successfully!');
-      setSubmittedCategoryName(
-        categoriesData?.getCategoriesWithAvailableSlots?.find(
-          (cat) => cat.id === selectedCategory
-        )?.name || ''
-      );
-      setShowSuccessModal(true);
-      setShowPreview(false);
-      
-      // Reset form
-      setSelectedCategory('');
-      setSelectedDuration(30);
-      setSelectedSlots([]);
-      setSlotMedia({});
-    },
-    onError: (error) => {
-      console.error('[Advertisement] Mutation error:', error);
-      if (error.message === 'Authorization header is missing' || error.message === 'jwt expired') {
-        toast.error('Please login to submit advertisement');
-        setTimeout(() => {
-          history.push('/login');
-        }, 2000);
-      } else {
-        toast.error(error.message || 'Failed to submit advertisement');
-      }
-    },
-  });
+  // Lazy query for fetching pricing when adding another category
+  const [fetchCategoryPricing] = useLazyQuery(GET_CATEGORY_PRICING);
+
+  const [createCategoryRequest, { loading: submitLoading }] = useMutation(CREATE_CATEGORY_REQUEST);
 
   // Handle errors
   React.useEffect(() => {
@@ -207,8 +200,31 @@ const Advertisement = () => {
     setCurrentWizardStep(1);
   };
 
+  // Save current category slots to cart and prepare for adding another
+  const handleSaveToCart = () => {
+    if (!selectedCategory || selectedSlots.length === 0) return;
+    const catData = allCategories.find(c => c.id === selectedCategory);
+    const existing = categoryCart.findIndex(c => c.categoryId === selectedCategory);
+    const entry = {
+      categoryId: selectedCategory,
+      categoryName: catData?.name || 'Unknown',
+      slots: [...selectedSlots],
+      slotMedia: { ...slotMedia },
+      pricingData: pricingData?.getCategoryPricing || null,
+    };
+    if (existing >= 0) {
+      setCategoryCart(prev => prev.map((c, i) => (i === existing ? entry : c)));
+    } else {
+      setCategoryCart(prev => [...prev, entry]);
+    }
+  };
+
   const handleWizardNext = () => {
     if (currentWizardStep < 4) {
+      // Save current slots to cart before entering images or review step
+      if (currentWizardStep === 2 || currentWizardStep === 3) {
+        handleSaveToCart();
+      }
       setCurrentWizardStep(currentWizardStep + 1);
     }
   };
@@ -225,8 +241,69 @@ const Advertisement = () => {
     setSelectedCategory('');
     setSelectedDuration(90);
     setStartPreference('today');
+    setSelectedStartQuarter(null);
     setSelectedSlots([]);
     setSlotMedia({});
+    setCategoryCart([]);
+    setShowAddCategoryPicker(false);
+    setAddCatSearchTerm('');
+  };
+
+  // Handle adding another category from the inline picker
+  const handleAddAnotherCategory = async (categoryId) => {
+    // First save current work to cart
+    handleSaveToCart();
+
+    // Now switch to the new category
+    setSelectedCategory(categoryId);
+    setSelectedSlots([]);
+    setSlotMedia({});
+    setShowAddCategoryPicker(false);
+    setAddCatSearchTerm('');
+
+    // Go back to Step 2 for the new category
+    setCurrentWizardStep(2);
+  };
+
+  // Remove a category from the cart
+  const handleRemoveFromCart = (categoryId) => {
+    setCategoryCart(prev => prev.filter(c => c.categoryId !== categoryId));
+  };
+
+  // Get all slots across cart + current selection (for images step)
+  const getAllCartSlots = () => {
+    const cartSlots = [];
+    categoryCart.forEach(entry => {
+      if (entry.categoryId === selectedCategory) return; // skip current, use live state
+      entry.slots.forEach(slot => {
+        cartSlots.push({ categoryId: entry.categoryId, categoryName: entry.categoryName, slot, media: entry.slotMedia[slot] || {} });
+      });
+    });
+    // Add current category's slots
+    selectedSlots.forEach(slot => {
+      const catData = allCategories.find(c => c.id === selectedCategory);
+      cartSlots.push({ categoryId: selectedCategory, categoryName: catData?.name || 'Unknown', slot, media: slotMedia[slot] || {} });
+    });
+    return cartSlots;
+  };
+
+  // Get all unique slots for image upload (grouped by category)
+  const getAllCategoriesForImages = () => {
+    const cats = [];
+    categoryCart.forEach(entry => {
+      if (entry.categoryId === selectedCategory) return;
+      cats.push(entry);
+    });
+    // Current category
+    const catData = allCategories.find(c => c.id === selectedCategory);
+    cats.push({
+      categoryId: selectedCategory,
+      categoryName: catData?.name || 'Unknown',
+      slots: [...selectedSlots],
+      slotMedia: { ...slotMedia },
+      pricingData: pricingData?.getCategoryPricing || null,
+    });
+    return cats;
   };
 
   const handleDurationChange = (duration) => {
@@ -260,16 +337,24 @@ const Advertisement = () => {
   };
 
   const handlePreview = () => {
-    if (!selectedCategory || selectedSlots.length === 0) {
-      toast.error('Please fill in all required fields');
+    // Save current category to cart first
+    handleSaveToCart();
+    const allCats = getAllCategoriesForImages();
+    if (allCats.length === 0 || allCats.every(c => c.slots.length === 0)) {
+      toast.error('Please select at least one slot');
       return;
     }
-    // ensure each selected slot has at least one image uploaded
-    const missing = selectedSlots.some(slot => {
-      const media = slotMedia[slot] || {};
-      return !media.mobileImage && !media.desktopImage;
+    // Validate all entries have images
+    let missingImage = false;
+    allCats.forEach(entry => {
+      entry.slots.forEach(slot => {
+        const media = entry.slotMedia[slot] || {};
+        if (!media.mobileImage && !media.desktopImage) {
+          missingImage = true;
+        }
+      });
     });
-    if (missing) {
+    if (missingImage) {
       toast.error('Please upload at least one image for each selected slot');
       return;
     }
@@ -333,162 +418,257 @@ const Advertisement = () => {
     return segments;
   };
 
-  // compute pricing preview for a specific ad type (banner/stamp)
-  // Logic: If starting today, first fill current quarter remaining days, then add full selected duration from next quarter
-  const computePricingPreview = (adType = 'banner') => {
-    const pricing = pricingData?.getCategoryPricing;
-    if (!pricing) return null;
-    
-    const today = new Date();
-    const segments = [];
-    
-    if (startPreference === 'next_quarter') {
-      // Simple case: start from next quarter with full duration
-      const nextQStart = getNextQuarterStart(today);
-      const segs = splitIntervalByQuarter(nextQStart, selectedDuration);
-      segments.push(...segs);
-    } else {
-      // Complex case: current quarter remaining + full duration from next quarter
-      const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
-      const currentQEnd = getQuarterEnd(todayUTC);
-      const msPerDay = 24 * 60 * 60 * 1000;
-      const remainingInCurrentQ = Math.floor((Date.UTC(currentQEnd.getUTCFullYear(), currentQEnd.getUTCMonth(), currentQEnd.getUTCDate()) - Date.UTC(todayUTC.getUTCFullYear(), todayUTC.getUTCMonth(), todayUTC.getUTCDate())) / msPerDay) + 1;
-      
-      // First segment: remaining days in current quarter
-      segments.push({
-        quarter: getQuarterLabel(todayUTC),
-        start: new Date(todayUTC),
-        end: new Date(currentQEnd),
-        days: remainingInCurrentQ
-      });
-      
-      // Second segment: full selected duration from next quarter start
-      const nextQStart = getNextQuarterStart(todayUTC);
-      const nextQSegs = splitIntervalByQuarter(nextQStart, selectedDuration);
-      segments.push(...nextQSegs);
-    }
+  // Duration helpers to avoid nested ternaries
+  const QUARTER_MAP = { 360: 4, 180: 2, 90: 1 };
+  const DURATION_LABEL_MAP = { 360: 'Yearly', 180: 'Half-Yearly', 90: 'Quarterly' };
+  const getNumQuarters = (dur) => QUARTER_MAP[dur] || 1;
+  const getDurationLabel = (dur) => DURATION_LABEL_MAP[dur] || 'Quarterly';
 
-    // find adCategory: first try exact duration match, then match by type with closest duration, fallback to first
-    let adCat = null;
-    if (pricing.adCategories && pricing.adCategories.length > 0) {
-      // Try exact match: same ad_type AND same duration_days
-      adCat = pricing.adCategories.find(ac => ac.ad_type === adType && ac.duration_days === selectedDuration);
-      // If no exact match, try same ad_type with any duration
-      if (!adCat) {
-        adCat = pricing.adCategories.find(ac => ac.ad_type === adType);
-      }
-      // Final fallback: first entry
-      if (!adCat) {
-        const [firstEntry] = pricing.adCategories;
-        adCat = firstEntry;
-      }
+  // Generate selectable quarter options (current + next 4)
+  const getSelectableQuarters = () => {
+    const today = new Date();
+    const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+    const currentQStartMonth = Math.floor(todayUTC.getUTCMonth() / 3) * 3;
+    let cursor = new Date(Date.UTC(todayUTC.getUTCFullYear(), currentQStartMonth, 1));
+    const quarters = [];
+    for (let i = 0; i < 5; i += 1) {
+      quarters.push({
+        label: getQuarterLabel(cursor),
+        startDate: cursor.toISOString().split('T')[0],
+        isCurrent: i === 0,
+      });
+      cursor = getNextQuarterStart(cursor);
     }
-    if (!adCat) return null;
-    
-    const { duration_days: durationDays = 30, price = 0 } = adCat;
-    const baseDuration = durationDays;
-    const basePrice = price;
-    const ratePerDay = Math.round((basePrice / baseDuration) * 100) / 100;
-    const breakdown = segments.map(s => ({ 
-      quarter: s.quarter, 
-      start: s.start,
-      end: s.end,
-      days: s.days, 
-      rate_per_day: ratePerDay, 
-      subtotal: Math.round(ratePerDay * s.days) 
-    }));
-    const total = breakdown.reduce((sum, b) => sum + b.subtotal, 0);
-    const totalDays = segments.reduce((sum, s) => sum + s.days, 0);
-    const startDate = segments[0]?.start || today;
-    const endDate = segments[segments.length - 1]?.end || today;
-    return { startDate, endDate, breakdown, total, totalDays };
+    return quarters;
   };
 
-  // compute total price for selected slots (sums per-slot pricing using adType)
+  // compute pricing preview for a specific slot (e.g. 'banner_1', 'stamp_2')
+  // Falls back to adType-level if slotName not provided
+  const computePricingPreview = (slotName = 'banner_1') => {
+    const pricing = pricingData?.getCategoryPricing;
+    if (!pricing) return null;
+
+    const adType = slotName.split('_')[0]; // 'banner' or 'stamp'
+    const today = new Date();
+    const numQuarters = getNumQuarters(selectedDuration);
+    const segments = [];
+    let proRataCharge = 0;
+
+    // Find per-slot quarterly price for pro-rata calculation
+    const slotQuarterlyPrice = pricing.adCategories?.find(
+      ac => ac.slot_name === slotName && ac.duration_days === 90
+    )?.price || 0;
+
+    if (startPreference === 'today') {
+      // Today mode: current quarter remaining charged pro-rata + N full paid quarters
+      const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+      const currentQEnd = getQuarterEnd(todayUTC);
+      const remainingDays = Math.floor((currentQEnd - todayUTC) / (24 * 60 * 60 * 1000)) + 1;
+
+      // Full quarter length for pro-rata calculation
+      const qStartMonth = Math.floor(todayUTC.getUTCMonth() / 3) * 3;
+      const currentQStart = new Date(Date.UTC(todayUTC.getUTCFullYear(), qStartMonth, 1));
+      const fullQuarterDays = Math.floor((currentQEnd - currentQStart) / (24 * 60 * 60 * 1000)) + 1;
+
+      // Pro-rata = (remaining / full) × quarterly price for THIS specific slot
+      proRataCharge = Math.round((remainingDays / fullQuarterDays) * slotQuarterlyPrice);
+
+      segments.push({ quarter: `${getQuarterLabel(todayUTC)} (Pro-rata)`, start: new Date(todayUTC), end: currentQEnd, days: remainingDays });
+
+      let cursor = getNextQuarterStart(todayUTC);
+      for (let i = 0; i < numQuarters; i += 1) {
+        const qEnd = getQuarterEnd(cursor);
+        const days = Math.floor((qEnd - cursor) / (24 * 60 * 60 * 1000)) + 1;
+        segments.push({ quarter: getQuarterLabel(cursor), start: new Date(cursor), end: qEnd, days });
+        cursor = getNextQuarterStart(cursor);
+      }
+    } else {
+      // Specific quarter mode: N full quarters from selected start
+      const startDate = selectedStartQuarter ? new Date(selectedStartQuarter) : getNextQuarterStart(today);
+      let cursor = new Date(startDate);
+      for (let i = 0; i < numQuarters; i += 1) {
+        const qEnd = getQuarterEnd(cursor);
+        const days = Math.floor((qEnd - cursor) / (24 * 60 * 60 * 1000)) + 1;
+        segments.push({ quarter: getQuarterLabel(cursor), start: new Date(cursor), end: qEnd, days });
+        cursor = getNextQuarterStart(cursor);
+      }
+    }
+
+    // Find per-slot price for selected duration
+    let adCat = pricing.adCategories?.find(ac => ac.slot_name === slotName && ac.duration_days === selectedDuration);
+    // Fallback: same ad_type position 1
+    if (!adCat) adCat = pricing.adCategories?.find(ac => ac.ad_type === adType && ac.duration_days === selectedDuration);
+    if (!adCat) return null;
+
+    // Total = full duration price for this slot + pro-rata for current quarter (0 for next_quarter)
+    const totalPrice = adCat.price + proRataCharge;
+    const totalDays = segments.reduce((sum, s) => sum + s.days, 0);
+
+    // Build breakdown with accurate per-segment subtotals
+    let breakdown;
+    if (proRataCharge > 0 && segments.length > 1) {
+      // Today mode: first segment is pro-rata, rest are paid quarters
+      const proRataSeg = segments[0];
+      const paidSegs = segments.slice(1);
+      const paidTotalDays = paidSegs.reduce((sum, s) => sum + s.days, 0);
+      const proRataRate = Math.round((proRataCharge / proRataSeg.days) * 100) / 100;
+      const paidRate = Math.round((adCat.price / paidTotalDays) * 100) / 100;
+
+      breakdown = [
+        { quarter: proRataSeg.quarter, start: proRataSeg.start, end: proRataSeg.end, days: proRataSeg.days, rate_per_day: proRataRate, subtotal: proRataCharge },
+        ...paidSegs.map(s => ({
+          quarter: s.quarter, start: s.start, end: s.end, days: s.days,
+          rate_per_day: paidRate,
+          subtotal: Math.round((s.days / paidTotalDays) * adCat.price)
+        }))
+      ];
+    } else {
+      // Next quarter mode: uniform rate across all segments
+      const ratePerDay = Math.round((totalPrice / totalDays) * 100) / 100;
+      breakdown = segments.map(s => ({
+        quarter: s.quarter, start: s.start, end: s.end, days: s.days,
+        rate_per_day: ratePerDay,
+        subtotal: Math.round(ratePerDay * s.days)
+      }));
+    }
+    const startDate = segments[0]?.start || today;
+    const endDate = segments[segments.length - 1]?.end || today;
+    return { startDate, endDate, breakdown, total: totalPrice, totalDays };
+  };
+
+  // compute total price for selected slots (sums per-slot pricing)
   const computeTotalForSelectedSlots = () => {
     if (!selectedSlots || selectedSlots.length === 0) return 0;
     let sum = 0;
-    // count slots per ad type
-    const counts = { banner: 0, stamp: 0 };
-    selectedSlots.forEach(s => {
-      const type = s.split('_')[0];
-      if (type === 'banner' || type === 'stamp') counts[type] += 1;
+    selectedSlots.forEach(slot => {
+      const p = computePricingPreview(slot);
+      if (p) sum += p.total;
     });
-    if (counts.banner > 0) {
-      const p = computePricingPreview('banner');
-      if (p) sum += p.total * counts.banner;
-    }
-    if (counts.stamp > 0) {
-      const p = computePricingPreview('stamp');
-      if (p) sum += p.total * counts.stamp;
-    }
     return sum;
+  };
+
+  // Compute pricing for a cart entry using its stored pricingData
+  const computeCartEntryPrice = (entry) => {
+    let sum = 0;
+    entry.slots.forEach(slotName => {
+      const pricing = entry.pricingData;
+      if (!pricing) return;
+      const adType = slotName.split('_')[0];
+      const slotQuarterlyPrice = pricing.adCategories?.find(
+        ac => ac.slot_name === slotName && ac.duration_days === 90
+      )?.price || 0;
+
+      let proRataCharge = 0;
+      if (startPreference === 'today') {
+        const today = new Date();
+        const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+        const currentQEnd = getQuarterEnd(todayUTC);
+        const remainingDays = Math.floor((currentQEnd - todayUTC) / (24 * 60 * 60 * 1000)) + 1;
+        const qStartMonth = Math.floor(todayUTC.getUTCMonth() / 3) * 3;
+        const currentQStart = new Date(Date.UTC(todayUTC.getUTCFullYear(), qStartMonth, 1));
+        const fullQuarterDays = Math.floor((currentQEnd - currentQStart) / (24 * 60 * 60 * 1000)) + 1;
+        proRataCharge = Math.round((remainingDays / fullQuarterDays) * slotQuarterlyPrice);
+      }
+
+      let adCat = pricing.adCategories?.find(ac => ac.slot_name === slotName && ac.duration_days === selectedDuration);
+      if (!adCat) adCat = pricing.adCategories?.find(ac => ac.ad_type === adType && ac.duration_days === selectedDuration);
+      const slotPrice = adCat?.price || 0;
+      sum += slotPrice + proRataCharge;
+    });
+    return sum;
+  };
+
+  // Compute grand total across all cart entries + current
+  const computeGrandTotal = () => {
+    let total = 0;
+    const allCats = getAllCategoriesForImages();
+    allCats.forEach(entry => {
+      if (entry.categoryId === selectedCategory) {
+        total += computeTotalForSelectedSlots();
+      } else {
+        total += computeCartEntryPrice(entry);
+      }
+    });
+    return total;
   };
 
   const handleSubmit = async () => {
     try {
-      if (!selectedCategory || selectedSlots.length === 0) {
+      // Save current to cart
+      handleSaveToCart();
+      const allCats = getAllCategoriesForImages();
+      if (allCats.length === 0 || allCats.every(c => c.slots.length === 0)) {
         toast.error('Please fill in all required fields');
         return;
       }
-      const missing = selectedSlots.some(slot => {
-        const media = slotMedia[slot] || {};
-        return !media.mobileImage && !media.desktopImage;
+
+      const durationTypeMap = { 90: 'quarterly', 180: 'half_yearly', 360: 'yearly' };
+
+      // Validate all entries and build mutation promises
+      const validEntries = allCats.filter(entry => entry.slots.length > 0);
+      const validationError = validEntries.find(entry => {
+        const selectedCat = allCategories.find(cat => cat.id === entry.categoryId);
+        if (!selectedCat) return true;
+        if (!selectedCat.tierId || !selectedCat.tierId.id) return true;
+        return false;
       });
-      if (missing) {
-        toast.error('Please upload at least one image for each selected slot');
+      if (validationError) {
+        const cat = allCategories.find(c => c.id === validationError.categoryId);
+        toast.error(cat ? `${cat.name} is not mapped to an ad tier` : `Category ${validationError.categoryName} not found`);
         return;
       }
 
-      const selectedCat = categoriesData?.getCategoriesWithAvailableSlots?.find(
-        (cat) => cat.id === selectedCategory
-      );
-
-      if (!selectedCat) {
-        toast.error('Category not found');
-        return;
-      }
-
-      if (!selectedCat.tierId || !selectedCat.tierId.id) {
-        toast.error('Selected category is not mapped to an ad tier. Please contact admin.');
-        return;
-      }
-
-      if (selectedCat.availableSlots < selectedSlots.length) {
-        toast.error('Not enough available slots for this selection');
-        return;
-      }
-
-      // Create media objects for each selected slot (pick per-type images)
-      const medias = selectedSlots.map((slot) => {
-        const media = slotMedia[slot] || {};
-        return {
-          slot,
-          media_type: 'both',
-          mobile_image_url: media.mobileImage || '',
-          desktop_image_url: media.desktopImage || '',
-          redirect_url: media.redirectUrl || '',
-          url_type: media.urlType || 'external',
-        };
-      });
-
-      const result = await createCategoryRequest({
-        variables: {
-          input: {
-            category_id: selectedCategory,
-            medias,
-            duration_days: selectedDuration,
-            start_preference: startPreference,
+      const mutationPromises = validEntries.map(entry => {
+        const medias = entry.slots.map(slot => {
+          const media = entry.slotMedia[slot] || {};
+          return {
+            slot,
+            media_type: 'both',
+            mobile_image_url: media.mobileImage || '',
+            desktop_image_url: media.desktopImage || '',
+            redirect_url: media.redirectUrl || '',
+            url_type: media.urlType || 'external',
+          };
+        });
+        return createCategoryRequest({
+          variables: {
+            input: {
+              category_id: entry.categoryId,
+              medias,
+              duration_type: durationTypeMap[selectedDuration] || 'quarterly',
+              start_preference: startPreference === 'today' ? 'today' : 'select_quarter',
+              start_quarter: selectedStartQuarter || undefined,
+            },
           },
-        },
+        });
       });
 
-      if (result.data) {
-        // Success handled in onSuccess callback
+      const results = await Promise.all(mutationPromises);
+
+      if (results.length > 0) {
+        const catNames = allCats.filter(c => c.slots.length > 0).map(c => c.categoryName).join(', ');
+        toast.success(`Ad request submitted for: ${catNames}`);
+        setSubmittedCategoryName(catNames);
+        setShowSuccessModal(true);
+        setShowPreview(false);
+
+        // Reset all
+        setSelectedCategory('');
+        setSelectedDuration(90);
+        setStartPreference('today');
+        setSelectedStartQuarter(null);
+        setSelectedSlots([]);
+        setSlotMedia({});
+        setCategoryCart([]);
       }
     } catch (error) {
       console.error('Error submitting advertisement:', error);
-      toast.error(error.message || 'Failed to submit advertisement');
+      if (error.message === 'Authorization header is missing' || error.message === 'jwt expired') {
+        toast.error('Please login to submit advertisement');
+        setTimeout(() => { history.push('/login'); }, 2000);
+      } else {
+        toast.error(error.message || 'Failed to submit advertisement');
+      }
     }
   };
 
@@ -498,7 +678,7 @@ const Advertisement = () => {
     const parts = slot.split('_');
     const slotType = parts[0].charAt(0).toUpperCase() + parts[0].slice(1); // Banner/Stamp
     const slotNumber = parts[1];
-    return `${slotType} #${slotNumber}`;
+    return `${slotType} ${slotNumber}`;
   };
 
   const getSlotCompactName = (slot) => {
@@ -553,6 +733,13 @@ const Advertisement = () => {
             >
               <Card.Body style={{ padding: '0.75rem' }}>
                 <div className='d-flex gap-1 mb-2' style={{ flexWrap: 'wrap' }}>
+                {category.parent && categoryMap[category.parent] && (
+                  <small className='text-muted d-block w-100 mb-1' style={{ fontSize: '0.7rem' }}>
+                    {categoryMap[category.parent].parent && categoryMap[categoryMap[category.parent].parent]
+                      ? `${categoryMap[categoryMap[category.parent].parent].name} › ${categoryMap[category.parent].name}`
+                      : categoryMap[category.parent].name}
+                  </small>
+                )}
                 <Card.Title className='fw-bold mb-2' style={{ fontSize: '0.95rem', color: '#333', marginBottom: '0.5rem !important' }}>
                   {category?.name || 'Unnamed'}
                 </Card.Title>
@@ -582,7 +769,7 @@ const Advertisement = () => {
                   </div>
                   {category.pricing90 && category.pricing90.length > 0 && (
                     <div style={{ fontSize: '0.8rem', color: '#555', marginTop: '4px' }}>
-                      {category.pricing90.map(p => `${p.ad_type.charAt(0).toUpperCase() + p.ad_type.slice(1)} ₹${p.price}/90d`).join(' | ')}
+                      {category.pricing90.map(p => `${p.ad_type.charAt(0).toUpperCase() + p.ad_type.slice(1)} ₹${p.price}/Qtr`).join(' | ')}
                     </div>
                   )}
                 </div>
@@ -612,6 +799,35 @@ const Advertisement = () => {
                           ))}
                         </ul>
                       </div>
+                    </div>
+                  </div>
+                )}
+                {/* Quarter Availability */}
+                {category.quarterAvailability && category.quarterAvailability.length > 0 && (
+                  <div style={{ borderTop: '1px solid #e0e0e0', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
+                    <strong style={{ fontSize: '0.7rem', color: '#555' }}>Quarter Availability</strong>
+                    <div className='d-flex gap-1 mt-1' style={{ flexWrap: 'wrap' }}>
+                      {category.quarterAvailability.map(q => {
+                        const availCount = q.slots.filter(s => s.available).length;
+                        const allBooked = availCount === 0;
+                        return (
+                          <span
+                            key={q.quarter}
+                            className='badge'
+                            title={`${q.label}\nBanners: ${q.slots.filter(s => s.slot.startsWith('banner') && s.available).length}/4 free\nStamps: ${q.slots.filter(s => s.slot.startsWith('stamp') && s.available).length}/4 free`}
+                            style={{
+                              backgroundColor: (() => { if (allBooked) return '#dc3545'; return availCount <= 4 ? '#ffc107' : '#28a745'; })(),
+                              fontSize: '0.65rem',
+                              padding: '0.2rem 0.4rem',
+                              borderRadius: '3px',
+                              color: (() => { if (allBooked) return '#fff'; return availCount <= 4 ? '#333' : '#fff'; })(),
+                              cursor: 'default',
+                            }}
+                          >
+                            {q.quarter}: {availCount}/8
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -717,18 +933,18 @@ const Advertisement = () => {
       return <Alert variant='warning'>No pricing available for this category</Alert>;
     }
 
-    // Get the first selected ad type (banner or stamp) for the breakdown preview
-    const selectedAdType = selectedSlots.length > 0 ? selectedSlots[0].split('_')[0] : 'banner';
-    const preview = computePricingPreview(selectedAdType);
+    // Get the first selected slot for the breakdown preview
+    const selectedSlotForPreview = selectedSlots.length > 0 ? selectedSlots[0] : 'banner_1';
+    const preview = computePricingPreview(selectedSlotForPreview);
     return (
       <div>
         <div className='mb-3'>
           <h6 className='mb-2'>Select Duration:</h6>
           <div className='d-flex gap-2 mb-2'>
             {[
-              { value: 90, label: '90 Days' },
-              { value: 180, label: '180 Days' },
-              { value: 360, label: '360 Days' },
+              { value: 90, label: 'Quarterly' },
+              { value: 180, label: 'Half-Yearly' },
+              { value: 360, label: 'Yearly' },
             ].map((option) => (
               <Button
                 key={option.value}
@@ -741,10 +957,38 @@ const Advertisement = () => {
             ))}
           </div>
 
-          <div className='d-flex align-items-center gap-2'>
-            <small className='text-muted'>Start From:</small>
-            <Button size='sm' variant={startPreference === 'today' ? 'primary' : 'outline-secondary'} onClick={() => setStartPreference('today')}>Today</Button>
-            <Button size='sm' variant={startPreference === 'next_quarter' ? 'primary' : 'outline-secondary'} onClick={() => setStartPreference('next_quarter')}>Next Quarter</Button>
+          <div className='mt-2'>
+            <small className='text-muted d-block mb-2'>Start From Quarter:</small>
+            <div className='d-flex gap-2 flex-wrap'>
+              {getSelectableQuarters().map((q) => {
+                const isSelected = q.isCurrent
+                  ? startPreference === 'today'
+                  : (startPreference === 'select_quarter' && selectedStartQuarter === q.startDate);
+                return (
+                  <Button
+                    key={q.startDate}
+                    size='sm'
+                    variant={isSelected ? 'primary' : 'outline-secondary'}
+                    onClick={() => {
+                      if (q.isCurrent) {
+                        setStartPreference('today');
+                        setSelectedStartQuarter(null);
+                      } else {
+                        setStartPreference('select_quarter');
+                        setSelectedStartQuarter(q.startDate);
+                      }
+                    }}
+                  >
+                    {q.isCurrent ? `${q.label} (Today)` : q.label}
+                  </Button>
+                );
+              })}
+            </div>
+            <small className='text-muted mt-1 d-block'>
+              {startPreference === 'today'
+                ? 'Your ad starts today with pro-rata pricing for the remaining current quarter.'
+                : 'Your ad starts from the selected quarter with full quarter pricing.'}
+            </small>
           </div>
         </div>
 
@@ -755,31 +999,22 @@ const Advertisement = () => {
               <thead>
                   <tr>
                     <th>Ad Type</th>
-                    <th>Base Duration</th>
-                    <th>Base Price</th>
-                    <th>/Day</th>
-                    <th>Price ({selectedDuration}d)</th>
+                    <th>Duration</th>
+                    <th>Price</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pricing.adCategories
-                    .filter(category => {
-                      const { duration_days: durationDays = 30 } = category || {};
-                      return durationDays === selectedDuration;
-                    })
+                    .filter(ac => (ac?.duration_days || 30) === selectedDuration)
                     .map((category) => {
-                      const { ad_type: adType = 'unknown', duration_days: durationDays = 30, price: basePrice = 0 } = category || {};
-                      const baseDuration = durationDays;
-                      const ratePerDay = Math.round((basePrice / baseDuration) * 100) / 100;
-                      const computedPrice = Math.round(ratePerDay * selectedDuration);
-                      const isSelectedType = selectedSlots.some(s => s.startsWith(adType));
+                      const { slot_name: slotName = '', price: basePrice = 0 } = category || {};
+                      const durationLabel = getDurationLabel(selectedDuration);
+                      const isSelectedSlot = selectedSlots.includes(slotName);
                       return (
-                      <tr key={category?.id || `${adType}-${Math.random()}`} className={isSelectedType ? 'table-active' : ''}>
-                        <td><strong>{adType.charAt(0).toUpperCase() + adType.slice(1)}</strong></td>
-                        <td>{baseDuration} days</td>
-                        <td>₹{basePrice}</td>
-                        <td>₹{ratePerDay}</td>
-                        <td><strong>₹{computedPrice}</strong></td>
+                      <tr key={category?.id || `${slotName}-${selectedDuration}`} className={isSelectedSlot ? 'table-active' : ''}>
+                        <td><strong>{getSlotDisplayName(slotName)}</strong></td>
+                        <td>{durationLabel}</td>
+                        <td><strong>₹{basePrice}</strong></td>
                       </tr>
                     )})}
                 </tbody>
@@ -791,34 +1026,9 @@ const Advertisement = () => {
           {preview && (
             <Card className='mt-3'>
               <Card.Body>
-                {/* Show the pricing data being used */}
+                {/* Show the pricing summary */}
                 <div className='mb-3 p-2' style={{ backgroundColor: '#f0f0f0', borderRadius: '4px', fontSize: '0.85rem' }}>
-                  <div style={{ marginBottom: '8px' }}>
-                    <strong>Pricing Used:</strong> {selectedAdType.charAt(0).toUpperCase() + selectedAdType.slice(1)}
-                  </div>
-                  {(() => {
-                    let adCat = null;
-                    if (pricing?.adCategories && pricing.adCategories.length > 0) {
-                      adCat = pricing.adCategories.find(ac => ac.ad_type === selectedAdType && ac.duration_days === selectedDuration);
-                      if (!adCat) {
-                        adCat = pricing.adCategories.find(ac => ac.ad_type === selectedAdType);
-                      }
-                      if (!adCat) {
-                        const [firstCategory] = pricing.adCategories;
-                        adCat = firstCategory;
-                      }
-                    }
-                    if (adCat) {
-                      const { duration_days: baseDays = 30, price: basePrice = 0 } = adCat;
-                      const ratePerDay = Math.round((basePrice / baseDays) * 100) / 100;
-                      return (
-                        <div>
-                          <span>₹{basePrice} ÷ {baseDays} days = <strong>₹{ratePerDay} per day</strong></span>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
+                  <strong>Pricing:</strong> {getSlotDisplayName(selectedSlotForPreview)} — ₹{preview.total} ({getDurationLabel(selectedDuration)})
                 </div>
 
                 <div className='d-flex justify-content-between align-items-center mb-2'>
@@ -916,12 +1126,11 @@ const Advertisement = () => {
               }
 
               let label = getSlotDisplayName(slot);
-              // append price for this slot type
+              // append per-slot price
               try {
-                const type = slot.split('_')[0];
-                const priceForType = computePricingPreview(type)?.total;
-                if (priceForType) {
-                  label += ` - ₹${priceForType}`;
+                const priceForSlot = computePricingPreview(slot)?.total;
+                if (priceForSlot) {
+                  label += ` - ₹${priceForSlot}`;
                 }
               } catch (e) {
                 console.error('Error computing price for slot:', e);
@@ -962,31 +1171,33 @@ const Advertisement = () => {
                 variant = 'outline-success';
               }
 
-              let label = getSlotDisplayName(slot);
-              // append price
+              let priceLabel = '';
               try {
-                const type = slot.split('_')[0];
-                const priceForType = computePricingPreview(type)?.total;
-                if (priceForType) {
-                  label += ` - ₹${priceForType}`;
+                const priceForSlot = computePricingPreview(slot)?.total;
+                if (priceForSlot) {
+                  priceLabel = `₹${priceForSlot}`;
                 }
               } catch (e) {
                 console.error('Error computing price for slot:', e);
-              }
-              if (!status.available) {
-                const until = status.freeDate ? new Date(status.freeDate).toLocaleDateString() : 'unknown';
-                label += ` (booked until ${until})`;
               }
 
               return (
                 <Col key={slot} xs={6} sm={4} md={3}>
                   <Button
                     variant={variant}
-                    className='w-100'
+                    className='w-100 d-flex flex-column align-items-center justify-content-center'
                     onClick={() => handleSlotToggle(slot)}
                     disabled={disabled}
+                    style={{ fontSize: '0.8rem', whiteSpace: 'normal', lineHeight: '1.4', padding: '0.5rem', minHeight: '52px' }}
                   >
-                    {label}
+                    <span className='fw-bold'>{getSlotDisplayName(slot)}</span>
+                    {disabled ? (
+                      <small style={{ fontSize: '0.65rem' }}>
+                        Booked till {status.freeDate ? new Date(status.freeDate).toLocaleDateString('en-IN') : 'N/A'}
+                      </small>
+                    ) : (
+                      priceLabel && <small>{priceLabel}</small>
+                    )}
                   </Button>
                 </Col>
               );
@@ -998,6 +1209,106 @@ const Advertisement = () => {
           <Alert variant={selectedSlots.length > 0 ? 'success' : 'secondary'}>
             Selected Slots: {selectedSlots.length > 0 ? selectedSlots.map((s) => getSlotDisplayName(s)).join(', ') : 'None'}
           </Alert>
+        </div>
+
+        {selectedSlots.length > 0 && (
+          <Alert variant='info' className='mt-2'>
+            <div className='d-flex justify-content-between align-items-center'>
+              <span><strong>Estimated Total Price:</strong></span>
+              <span className='h5 mb-0 fw-bold' style={{ color: '#0d6efd' }}>₹{computeTotalForSelectedSlots()}</span>
+            </div>
+            <small className='text-muted'>{getDurationLabel(selectedDuration)} | {startPreference === 'today' ? 'Starting Today' : `Starting ${selectedStartQuarter || 'Next Quarter'}`}</small>
+          </Alert>
+        )}
+      </div>
+    );
+  };
+
+  const renderAddCategoryPicker = () => {
+    const tabOptions = [
+      { key: 'category', label: 'Category' },
+      { key: 'subcategory', label: 'Sub Category' },
+      { key: 'subsubcategory', label: 'Sub Sub Category' },
+    ];
+    let list = [];
+    if (addCatTab === 'category') list = topLevelCategories;
+    else if (addCatTab === 'subcategory') list = subCategories;
+    else list = subSubCategories;
+
+    if (addCatSearchTerm) {
+      list = list.filter(cat => cat.name?.toLowerCase().includes(addCatSearchTerm.toLowerCase()));
+    }
+    // Exclude already-added categories
+    const addedIds = categoryCart.map(c => c.categoryId);
+    addedIds.push(selectedCategory);
+    list = list.filter(cat => !addedIds.includes(cat.id));
+
+    return (
+      <div className='border rounded p-3 mt-3' style={{ backgroundColor: '#f8f9fa' }}>
+        <div className='d-flex justify-content-between align-items-center mb-2'>
+          <h6 className='mb-0'>Add Another Category</h6>
+          <Button size='sm' variant='outline-secondary' onClick={() => setShowAddCategoryPicker(false)}>Cancel</Button>
+        </div>
+        <div className='d-flex gap-1 mb-2'>
+          {tabOptions.map(tab => (
+            <Button key={tab.key} size='sm' variant={addCatTab === tab.key ? 'primary' : 'outline-secondary'} onClick={() => setAddCatTab(tab.key)}>
+              {tab.label}
+            </Button>
+          ))}
+        </div>
+        <input
+          type='text'
+          className='form-control form-control-sm mb-2'
+          placeholder='Search categories...'
+          value={addCatSearchTerm}
+          onChange={e => setAddCatSearchTerm(e.target.value)}
+        />
+        <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+          {list.length === 0 && <small className='text-muted'>No categories available</small>}
+          {list.map(cat => (
+            <div
+              key={cat.id}
+              className='d-flex justify-content-between align-items-center p-2 border-bottom'
+              style={{ cursor: 'pointer' }}
+              onClick={() => handleAddAnotherCategory(cat.id)}
+              onKeyDown={e => e.key === 'Enter' && handleAddAnotherCategory(cat.id)}
+              role='button'
+              tabIndex={0}
+            >
+              <div>
+                <strong style={{ fontSize: '0.85rem' }}>{cat.name}</strong>
+                <div className='d-flex gap-1 mt-1'>
+                  <span className='badge bg-success' style={{ fontSize: '0.65rem' }}>{cat.availableSlots || 0}/8 free</span>
+                  <span className='badge bg-info' style={{ fontSize: '0.65rem' }}>{cat.tierId?.name || 'Tier'}</span>
+                </div>
+              </div>
+              <Button size='sm' variant='outline-primary'>+ Add</Button>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderCartSummaryBadges = () => {
+    if (categoryCart.length === 0) return null;
+    return (
+      <div className='mb-3'>
+        <small className='text-muted d-block mb-1'>Categories in cart:</small>
+        <div className='d-flex gap-1 flex-wrap'>
+          {categoryCart.filter(c => c.categoryId !== selectedCategory).map(entry => (
+            <span key={entry.categoryId} className='badge bg-primary d-flex align-items-center gap-1' style={{ fontSize: '0.75rem' }}>
+              {entry.categoryName} ({entry.slots.length} slots)
+              <button
+                type='button'
+                className='btn-close btn-close-white'
+                style={{ fontSize: '0.5rem', padding: '2px' }}
+                onClick={(e) => { e.stopPropagation(); handleRemoveFromCart(entry.categoryId); }}
+                aria-label='Remove'
+              />
+            </span>
+          ))}
+          <span className='badge bg-info'>{selectedCategoryData?.name || 'Current'} ({selectedSlots.length} slots)</span>
         </div>
       </div>
     );
@@ -1015,84 +1326,179 @@ const Advertisement = () => {
       case 2:
         return (
           <div>
-            <h5 className='mb-3'>Select Available Slots</h5>
+            <h5 className='mb-3'>Select Available Slots — {selectedCategoryData?.name}</h5>
+            {renderCartSummaryBadges()}
             {renderSlotSelectionStep()}
+
+            {/* Add another category option */}
+            {selectedSlots.length > 0 && !showAddCategoryPicker && (
+              <div className='text-center mt-3'>
+                <Button
+                  variant='outline-success'
+                  size='sm'
+                  onClick={() => { setShowAddCategoryPicker(true); setAddCatSearchTerm(''); }}
+                >
+                  + Add Another Category
+                </Button>
+              </div>
+            )}
+            {showAddCategoryPicker && renderAddCategoryPicker()}
           </div>
         );
       case 3:
         return (
           <div>
             <h5 className='mb-3'>Upload Advertisement Images</h5>
-            {selectedSlots.length > 0 ? (
-              <ImageUpload
-                selectedSlots={selectedSlots}
-                slotMedia={slotMedia}
-                sellerProducts={sellerProducts}
-                onSlotMediaChange={(slot, field, value) => {
-                  setSlotMedia((m) => ({
-                    ...m,
-                    [slot]: {
-                      ...m[slot],
-                      [field]: value,
-                    },
-                  }));
-                }}
-              />
-            ) : (
-              <Alert variant='warning'>Please select slots first</Alert>
-            )}
+            {(() => {
+              const allCats = getAllCategoriesForImages();
+              const hasSlots = allCats.some(c => c.slots.length > 0);
+              if (!hasSlots) return <Alert variant='warning'>Please select slots first</Alert>;
+              return allCats.filter(c => c.slots.length > 0).map(entry => (
+                <div key={entry.categoryId} className='mb-4'>
+                  <h6 className='border-bottom pb-2 mb-3'>
+                    <span className='badge bg-primary me-2' style={{ fontSize: '0.75rem' }}>{entry.categoryName}</span>
+                    {entry.slots.length} slot(s)
+                  </h6>
+                  <ImageUpload
+                    selectedSlots={entry.slots}
+                    slotMedia={entry.categoryId === selectedCategory ? slotMedia : entry.slotMedia}
+                    sellerProducts={sellerProducts}
+                    onSlotMediaChange={(slot, field, value) => {
+                      if (entry.categoryId === selectedCategory) {
+                        setSlotMedia((m) => ({ ...m, [slot]: { ...m[slot], [field]: value } }));
+                      } else {
+                        setCategoryCart(prev => prev.map(c => {
+                          if (c.categoryId !== entry.categoryId) return c;
+                          return { ...c, slotMedia: { ...c.slotMedia, [slot]: { ...c.slotMedia[slot], [field]: value } } };
+                        }));
+                      }
+                    }}
+                  />
+                </div>
+              ));
+            })()}
           </div>
         );
       case 4:
         return (
           <div>
             <h5 className='mb-3'>Review & Submit</h5>
-            {selectedSlots.length > 0 && (
-              <Card className='mb-3 border-success'>
-                <Card.Body>
-                  <div className='row'>
-                    {(() => {
-                      const counts = { banner: 0, stamp: 0 };
-                      selectedSlots.forEach(s => {
-                        const type = s.split('_')[0];
-                        if (type === 'banner' || type === 'stamp') counts[type] += 1;
-                      });
+            {(() => {
+              const fmtPrice = (v) => `\u20b9${Math.round(v).toLocaleString('en-IN')}`;
+              const allCats = getAllCategoriesForImages().filter(c => c.slots.length > 0);
+              if (allCats.length === 0) return <Alert variant='warning'>No slots selected</Alert>;
 
-                      const bannerPrice = counts.banner > 0 ? computePricingPreview('banner')?.total : 0;
-                      const stampPrice = counts.stamp > 0 ? computePricingPreview('stamp')?.total : 0;
-                      const totalPrice = (bannerPrice * counts.banner) + (stampPrice * counts.stamp);
+              // Build per-category data with slot prices + breakdown
+              const categoryRows = allCats.map(entry => {
+                let catTotal = 0;
+                const slotRows = entry.slots.map(slot => {
+                  let price = 0;
+                  let breakdown = null;
+                  if (entry.categoryId === selectedCategory) {
+                    const preview = computePricingPreview(slot);
+                    price = preview?.total || 0;
+                    breakdown = preview?.breakdown || null;
+                  } else {
+                    const pr = entry.pricingData;
+                    if (pr) {
+                      const adType = slot.split('_')[0];
+                      const slotQPrice = pr.adCategories?.find(ac => ac.slot_name === slot && ac.duration_days === 90)?.price || 0;
+                      let proRata = 0;
+                      if (startPreference === 'today') {
+                        const now = new Date();
+                        const nowUTC = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+                        const qEnd = getQuarterEnd(nowUTC);
+                        const rem = Math.floor((qEnd - nowUTC) / 86400000) + 1;
+                        const qsm = Math.floor(nowUTC.getUTCMonth() / 3) * 3;
+                        const qStart = new Date(Date.UTC(nowUTC.getUTCFullYear(), qsm, 1));
+                        const full = Math.floor((qEnd - qStart) / 86400000) + 1;
+                        proRata = Math.round((rem / full) * slotQPrice);
+                      }
+                      let adCat = pr.adCategories?.find(ac => ac.slot_name === slot && ac.duration_days === selectedDuration);
+                      if (!adCat) adCat = pr.adCategories?.find(ac => ac.ad_type === adType && ac.duration_days === selectedDuration);
+                      price = (adCat?.price || 0) + proRata;
+                    }
+                  }
+                  catTotal += price;
+                  return { slot, displayName: getSlotDisplayName(slot), price, breakdown };
+                });
+                return { ...entry, slotRows, catTotal };
+              });
 
-                      return (
-                        <>
-                          <h6 className='mb-3'>Order Summary</h6>
-                          <Row className='g-3'>
-                            {counts.banner > 0 && (
-                              <Col md={6}>
-                                <small className='text-muted'>Banners Selected</small>
-                                <div className='h6'>{counts.banner} × ₹{bannerPrice}</div>
-                                <div className='fw-bold' style={{ color: '#17a2b8' }}>₹{Math.round(bannerPrice * counts.banner)}</div>
-                              </Col>
-                            )}
-                            {counts.stamp > 0 && (
-                              <Col md={6}>
-                                <small className='text-muted'>Stamps Selected</small>
-                                <div className='h6'>{counts.stamp} × ₹{stampPrice}</div>
-                                <div className='fw-bold' style={{ color: '#28a745' }}>₹{Math.round(stampPrice * counts.stamp)}</div>
-                              </Col>
-                            )}
-                          </Row>
-                          <hr />
-                          <div className='d-flex justify-content-between align-items-center'>
-                            <span className='fw-bold'>Total Cost</span>
-                            <span className='h5 fw-bold' style={{ color: '#0d6efd' }}>₹{Math.round(totalPrice)}</span>
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                </Card.Body>
-              </Card>
-            )}
+              const grandTotal = categoryRows.reduce((sum, c) => sum + c.catTotal, 0);
+
+              return (
+                <>
+                  {/* Plan Info */}
+                  <Card className='mb-3' style={{ backgroundColor: '#f0f4ff', border: '1px solid #c5d5f7' }}>
+                    <Card.Body className='py-2 px-3'>
+                      <div className='d-flex flex-wrap gap-3' style={{ fontSize: '0.85rem' }}>
+                        <div><strong>Duration:</strong> {getDurationLabel(selectedDuration)}</div>
+                        <div><strong>Start:</strong> {startPreference === 'today' ? 'Today (Pro-rata)' : (selectedStartQuarter || 'Next Quarter')}</div>
+                        <div><strong>Categories:</strong> {categoryRows.length}</div>
+                        <div><strong>Total Slots:</strong> {categoryRows.reduce((s, c) => s + c.slotRows.length, 0)}</div>
+                      </div>
+                    </Card.Body>
+                  </Card>
+
+                  {/* Per-Category Breakdown */}
+                  {categoryRows.map(cat => (
+                    <Card key={cat.categoryId} className='mb-3'>
+                      <Card.Header className='py-2 d-flex justify-content-between align-items-center' style={{ backgroundColor: '#f8f9fa' }}>
+                        <span>
+                          <span className='badge bg-primary me-2' style={{ fontSize: '0.75rem' }}>{cat.categoryName}</span>
+                          <small className='text-muted'>{cat.slotRows.length} slot(s)</small>
+                        </span>
+                        <strong style={{ color: '#0d6efd' }}>{fmtPrice(cat.catTotal)}</strong>
+                      </Card.Header>
+                      <Card.Body className='py-2 px-3'>
+                        <table className='table table-sm table-borderless mb-0' style={{ fontSize: '0.85rem' }}>
+                          <thead>
+                            <tr style={{ borderBottom: '1px solid #dee2e6' }}>
+                              <th style={{ padding: '4px 8px' }}>Slot</th>
+                              <th style={{ padding: '4px 8px' }}>Breakdown</th>
+                              <th className='text-end' style={{ padding: '4px 8px' }}>Price</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {cat.slotRows.map(r => (
+                              <tr key={r.slot} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                                <td style={{ padding: '6px 8px', fontWeight: 600, whiteSpace: 'nowrap', verticalAlign: 'top' }}>{r.displayName}</td>
+                                <td style={{ padding: '6px 8px', fontSize: '0.8rem', color: '#555' }}>
+                                  {r.breakdown && r.breakdown.length > 0 ? (
+                                    r.breakdown.map((b, idx) => (
+                                      <div key={idx}>
+                                        {b.quarter}: {b.days}d &times; {`\u20b9${b.rate_per_day}`} = {fmtPrice(b.subtotal)}
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <span>{getDurationLabel(selectedDuration)}</span>
+                                  )}
+                                </td>
+                                <td className='text-end' style={{ padding: '6px 8px', fontWeight: 600, whiteSpace: 'nowrap', verticalAlign: 'top' }}>{fmtPrice(r.price)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </Card.Body>
+                    </Card>
+                  ))}
+
+                  {/* Grand Total */}
+                  <Card className='border-success'>
+                    <Card.Body className='py-3'>
+                      <div className='d-flex justify-content-between align-items-center'>
+                        <span className='fw-bold' style={{ fontSize: '1rem' }}>Grand Total</span>
+                        <span className='h4 fw-bold mb-0' style={{ color: '#0d6efd' }}>{fmtPrice(grandTotal)}</span>
+                      </div>
+                      {startPreference === 'today' && (
+                        <small className='text-muted d-block mt-1'>* Includes pro-rata charges for current quarter remaining days</small>
+                      )}
+                    </Card.Body>
+                  </Card>
+                </>
+              );
+            })()}
           </div>
         );
       default:
@@ -1111,6 +1517,11 @@ const Advertisement = () => {
             <Modal.Title>Advertisement Submission Wizard</Modal.Title>
             <small className='text-muted d-block mt-2'>
               {selectedCategoryData?.name || 'Selected Category'}
+              {categoryCart.filter(c => c.categoryId !== selectedCategory).length > 0 && (
+                <span className='ms-2 badge bg-info' style={{ fontSize: '0.7rem' }}>
+                  + {categoryCart.filter(c => c.categoryId !== selectedCategory).length} more
+                </span>
+              )}
             </small>
           </div>
         </Modal.Header>
@@ -1179,14 +1590,22 @@ const Advertisement = () => {
           {currentWizardStep < 4 ? (
             <Button
               variant='primary'
-              onClick={handleWizardNext}
+              onClick={() => {
+                if (currentWizardStep === 2) handleSaveToCart();
+                handleWizardNext();
+              }}
               disabled={
                 (currentWizardStep === 1 && selectedDuration === null) ||
                 (currentWizardStep === 2 && selectedSlots.length === 0) ||
-                (currentWizardStep === 3 && selectedSlots.some(slot => {
-                  const media = slotMedia[slot] || {};
-                  return !media.mobileImage && !media.desktopImage;
-                }))
+                (currentWizardStep === 3 && (() => {
+                  const allCats = getAllCategoriesForImages();
+                  return allCats.some(entry =>
+                    entry.slots.some(slot => {
+                      const media = entry.categoryId === selectedCategory ? slotMedia[slot] : entry.slotMedia[slot];
+                      return !(media?.mobileImage || media?.desktopImage);
+                    })
+                  );
+                })())
               }
             >
               Next →
@@ -1218,12 +1637,18 @@ const Advertisement = () => {
 
         {showPreview ? (
           <PreviewSection
-            category={selectedCategoryData}
-            slots={selectedSlots.map((s) => getSlotDisplayName(s)).join(', ')}
+            cartEntries={getAllCategoriesForImages().filter(c => c.slots.length > 0)}
+            selectedCategory={selectedCategory}
+            allCategories={allCategories}
             duration={selectedDuration}
-            pricing={pricingData?.getCategoryPricing}
-            slotMedia={slotMedia}
-            totalPrice={computeTotalForSelectedSlots()}
+            durationLabel={getDurationLabel(selectedDuration)}
+            startPreference={startPreference}
+            selectedStartQuarter={selectedStartQuarter}
+            computePricingPreview={computePricingPreview}
+            computeCartEntryPrice={computeCartEntryPrice}
+            computeGrandTotal={computeGrandTotal}
+            getSlotDisplayName={getSlotDisplayName}
+            getQuarterEnd={getQuarterEnd}
             onEdit={() => setShowPreview(false)}
             onSubmit={handleSubmit}
             submitting={submitLoading}
