@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Form, Row, Col, Card, InputGroup, ListGroup } from 'react-bootstrap';
-import { toast } from 'react-toastify';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
 
 const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSlotMediaChange = () => {}, sellerProducts = [] }) => {
   const [productSearch, setProductSearch] = useState({});
   const [showDropdown, setShowDropdown] = useState({});
+  // Per-slot, per-device inline validation errors
+  const [imageErrors, setImageErrors] = useState({});
 
   const formatSlotName = (slot) => {
     if (!slot) return slot;
@@ -19,9 +20,11 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
     const file = e.target.files && e.target.files[0];
     if (!file) return;
 
+    const errorKey = `${slot}_${device}`;
+
     // Size validation: max 500KB
     if (file.size > 500 * 1024) {
-      toast.error(`Image size must be 500KB or less. Your file: ${Math.round(file.size / 1024)}KB`);
+      setImageErrors(prev => ({ ...prev, [errorKey]: `Image size must be 500KB or less. Your file: ${Math.round(file.size / 1024)}KB` }));
       e.target.value = '';
       return;
     }
@@ -37,12 +40,12 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
       const img = new window.Image();
       img.onload = () => {
         if (img.width !== requiredWidth || img.height !== requiredHeight) {
-          toast.error(
-            `${slotType === 'banner' ? 'Banner' : 'Stamp'} image must be exactly ${requiredWidth}\u00d7${requiredHeight}px. Your image: ${img.width}\u00d7${img.height}px`
-          );
+          setImageErrors(prev => ({ ...prev, [errorKey]: `${slotType === 'banner' ? 'Banner' : 'Stamp'} image must be exactly ${requiredWidth}\u00d7${requiredHeight}px. Your image: ${img.width}\u00d7${img.height}px` }));
           e.target.value = '';
           return;
         }
+        // Clear error on successful upload
+        setImageErrors(prev => { const copy = { ...prev }; delete copy[errorKey]; return copy; });
         // Store base64 for preview AND raw File object for upload
         const previewField = device === 'mobile' ? 'mobileImage' : 'desktopImage';
         const fileField = device === 'mobile' ? 'mobileFile' : 'desktopFile';
@@ -135,6 +138,11 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
                         }}
                       />
                     </div>
+                    {imageErrors[`${slot}_mobile`] && (
+                      <div className='text-danger mt-1' style={{ fontSize: '0.8rem' }}>
+                        <strong>✗</strong> {imageErrors[`${slot}_mobile`]}
+                      </div>
+                    )}
                   </Form.Group>
                 </Col>
                 <Col md={6} className='mb-3'>
@@ -175,6 +183,11 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
                         }}
                       />
                     </div>
+                    {imageErrors[`${slot}_desktop`] && (
+                      <div className='text-danger mt-1' style={{ fontSize: '0.8rem' }}>
+                        <strong>✗</strong> {imageErrors[`${slot}_desktop`]}
+                      </div>
+                    )}
                   </Form.Group>
                 </Col>
               </Row>
@@ -215,7 +228,13 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
                           placeholder='https://example.com'
                           value={media.redirectUrl || ''}
                           onChange={(e) => handleUrlChange(e, slot, 'redirectUrl')}
+                          isInvalid={!media.redirectUrl}
                         />
+                        {!media.redirectUrl && (
+                          <Form.Text className='text-danger'>
+                            Redirect URL is required
+                          </Form.Text>
+                        )}
                         <Form.Text className='text-muted'>
                           Enter full URL (e.g., https://example.com)
                         </Form.Text>
@@ -286,6 +305,11 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
                         <Form.Text className='text-muted'>
                           Search and select your product
                         </Form.Text>
+                        {!media.redirectUrl && (
+                          <Form.Text className='text-danger d-block'>
+                            Please select a product for redirect URL
+                          </Form.Text>
+                        )}
                       </div>
                     )}
                   </Form.Group>
