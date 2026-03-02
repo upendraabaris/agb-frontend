@@ -8,7 +8,6 @@ import SellerReports from 'views/seller/Advertisement/SellerReports';
 import ProductAdvertisement from 'views/seller/Advertisement/ProductAdvertisement';
 import MyProductAds from 'views/seller/Advertisement/MyProductAds';
 import ProductAdApproval from 'views/admin/Advertisement/Approval/ProductAdApproval';
-import SellerWallet from 'views/seller/Wallet/SellerWallet';
 
 /* ------------------------------------------------------------------ */
 /* -------------------------  Master Panel   ------------------------ */
