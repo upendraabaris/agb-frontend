@@ -108,6 +108,16 @@ const CREATE_CATEGORY_REQUEST = gql`
   }
 `;
 
+// Get seller wallet balance
+const GET_MY_WALLET = gql`
+  query GetMyWallet {
+    getMyWallet {
+      id
+      balance
+    }
+  }
+`;
+
 const Advertisement = () => {
   const history = useHistory();
   
@@ -163,11 +173,19 @@ const Advertisement = () => {
   const [showWizardModal, setShowWizardModal] = useState(false);
   const [currentWizardStep, setCurrentWizardStep] = useState(1);
 
-  // Multi-category cart: [{ categoryId, categoryName, slots, slotMedia, pricingData }]
-  const [categoryCart, setCategoryCart] = useState([]);
-  const [showAddCategoryPicker, setShowAddCategoryPicker] = useState(false);
-  const [addCatSearchTerm, setAddCatSearchTerm] = useState('');
-  const [addCatTab, setAddCatTab] = useState('category');
+  // Key for persisting wizard state across wallet recharge redirect
+  const AD_WIZARD_STORAGE_KEY = 'agb_ad_wizard_state';
+
+  // Multi-category selection (replaces one-by-one cart)
+  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [categoryPricingMap, setCategoryPricingMap] = useState({});
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [multiCatTab, setMultiCatTab] = useState('category');
+  const [multiCatSearch, setMultiCatSearch] = useState('');
+  // Image sharing mode (when multiple categories)
+  const [useSharedMedia, setUseSharedMedia] = useState(true);
+  const [sharedSlotMedia, setSharedSlotMedia] = useState({});
+  const [perCategorySlotMedia, setPerCategorySlotMedia] = useState({});
 
   const { data: pricingData, loading: pricingLoading, error: pricingError } = useQuery(
     GET_CATEGORY_PRICING,
@@ -183,6 +201,86 @@ const Advertisement = () => {
   const [uploadFile] = useMutation(UPLOAD_FILE);
   const [createCategoryRequest, { loading: submitLoading }] = useMutation(CREATE_CATEGORY_REQUEST);
   const [uploading, setUploading] = useState(false);
+
+  // Wallet balance
+  const { data: walletData, loading: walletLoading, refetch: refetchWallet } = useQuery(GET_MY_WALLET, { fetchPolicy: 'network-only' });
+  const walletBalance = walletData?.getMyWallet?.balance ?? 0;
+
+  // Sync primary category pricing into the multi-category pricing map
+  React.useEffect(() => {
+    if (pricingData?.getCategoryPricing && selectedCategory) {
+      setCategoryPricingMap(prev => ({ ...prev, [selectedCategory]: pricingData.getCategoryPricing }));
+    }
+  }, [pricingData, selectedCategory]);
+
+  // ── Save wizard state to sessionStorage (before redirect to wallet) ──
+  const saveWizardState = () => {
+    try {
+      const state = {
+        selectedCategory,
+        selectedDuration,
+        startPreference,
+        selectedStartQuarter,
+        selectedSlots,
+        slotMedia,
+        selectedCategories,
+        categoryPricingMap,
+        useSharedMedia,
+        sharedSlotMedia,
+        perCategorySlotMedia,
+        currentWizardStep,
+        showPreview,
+        showWizardModal,
+        categoryTab,
+      };
+      sessionStorage.setItem(AD_WIZARD_STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      console.warn('[Ad] Could not save wizard state:', e);
+    }
+  };
+
+  // ── Restore wizard state from sessionStorage (on mount after return from wallet) ──
+  React.useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(AD_WIZARD_STORAGE_KEY);
+      if (!saved) return;
+      sessionStorage.removeItem(AD_WIZARD_STORAGE_KEY);
+      const s = JSON.parse(saved);
+      if (s.selectedCategory) setSelectedCategory(s.selectedCategory);
+      if (s.selectedDuration) setSelectedDuration(s.selectedDuration);
+      if (s.startPreference) setStartPreference(s.startPreference);
+      if (s.selectedStartQuarter) setSelectedStartQuarter(s.selectedStartQuarter);
+      if (s.selectedSlots) setSelectedSlots(s.selectedSlots);
+      if (s.slotMedia) setSlotMedia(s.slotMedia);
+      if (s.selectedCategories) setSelectedCategories(s.selectedCategories);
+      if (s.categoryPricingMap) setCategoryPricingMap(s.categoryPricingMap);
+      if (s.useSharedMedia !== undefined) setUseSharedMedia(s.useSharedMedia);
+      if (s.sharedSlotMedia) setSharedSlotMedia(s.sharedSlotMedia);
+      if (s.perCategorySlotMedia) setPerCategorySlotMedia(s.perCategorySlotMedia);
+      if (s.categoryTab) setCategoryTab(s.categoryTab);
+      // Re-open wizard at the step where user left
+      if (s.showWizardModal) {
+        setShowWizardModal(true);
+        setCurrentWizardStep(s.currentWizardStep || 4);
+      }
+      // If they were on the preview page, show it
+      if (s.showPreview) {
+        setShowPreview(true);
+      }
+      // Refresh wallet balance
+      refetchWallet();
+      toast.info('Welcome back! Your ad selections have been restored.');
+    } catch (e) {
+      console.warn('[Ad] Could not restore wizard state:', e);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Navigate to wallet with state saved
+  const goToWalletRecharge = () => {
+    saveWizardState();
+    history.push('/seller/wallet?returnTo=/seller/ads/add');
+  };
 
   // Handle errors
   React.useEffect(() => {
@@ -209,35 +307,43 @@ const Advertisement = () => {
     setSelectedCategory(categoryId);
     setSelectedSlots([]);
     setSlotMedia({});
+    setSelectedCategories([categoryId]);
+    setCategoryPricingMap({});
+    setUseSharedMedia(true);
+    setSharedSlotMedia({});
+    setPerCategorySlotMedia({});
     setShowWizardModal(true);
     setCurrentWizardStep(1);
   };
 
-  // Save current category slots to cart and prepare for adding another
-  const handleSaveToCart = () => {
-    if (!selectedCategory || selectedSlots.length === 0) return;
-    const catData = allCategories.find(c => c.id === selectedCategory);
-    const existing = categoryCart.findIndex(c => c.categoryId === selectedCategory);
-    const entry = {
-      categoryId: selectedCategory,
-      categoryName: catData?.name || 'Unknown',
-      slots: [...selectedSlots],
-      slotMedia: { ...slotMedia },
-      pricingData: pricingData?.getCategoryPricing || null,
-    };
-    if (existing >= 0) {
-      setCategoryCart(prev => prev.map((c, i) => (i === existing ? entry : c)));
+  // Toggle a category in/out of multi-selection
+  const handleToggleCategory = async (categoryId) => {
+    if (selectedCategories.includes(categoryId)) {
+      if (categoryId === selectedCategory) {
+        toast.info('Cannot remove the primary category');
+        return;
+      }
+      setSelectedCategories(prev => prev.filter(id => id !== categoryId));
+      setCategoryPricingMap(prev => { const copy = { ...prev }; delete copy[categoryId]; return copy; });
+      setPerCategorySlotMedia(prev => { const copy = { ...prev }; delete copy[categoryId]; return copy; });
     } else {
-      setCategoryCart(prev => [...prev, entry]);
+      setSelectedCategories(prev => {
+        if (prev.includes(categoryId)) return prev;
+        return [...prev, categoryId];
+      });
+      try {
+        const { data } = await fetchCategoryPricing({ variables: { categoryId } });
+        if (data?.getCategoryPricing) {
+          setCategoryPricingMap(prev => ({ ...prev, [categoryId]: data.getCategoryPricing }));
+        }
+      } catch (e) {
+        toast.error('Failed to fetch pricing for category');
+      }
     }
   };
 
   const handleWizardNext = () => {
     if (currentWizardStep < 4) {
-      // Save current slots to cart before entering images or review step
-      if (currentWizardStep === 2 || currentWizardStep === 3) {
-        handleSaveToCart();
-      }
       setCurrentWizardStep(currentWizardStep + 1);
     }
   };
@@ -257,87 +363,39 @@ const Advertisement = () => {
     setSelectedStartQuarter(null);
     setSelectedSlots([]);
     setSlotMedia({});
-    setCategoryCart([]);
-    setShowAddCategoryPicker(false);
-    setAddCatSearchTerm('');
+    setSelectedCategories([]);
+    setCategoryPricingMap({});
+    setShowCategoryPicker(false);
+    setMultiCatSearch('');
+    setUseSharedMedia(true);
+    setSharedSlotMedia({});
+    setPerCategorySlotMedia({});
   };
 
-  // Get the slot names from the first category (cart[0] or current if cart is empty)
-  const getFirstCategorySlots = () => {
-    if (categoryCart.length > 0) return categoryCart[0].slots;
-    return selectedSlots;
+  // Get media for a specific category and slot
+  const getMediaForCategorySlot = (categoryId, slot) => {
+    if (useSharedMedia) return sharedSlotMedia[slot] || {};
+    return perCategorySlotMedia[categoryId]?.[slot] || {};
   };
 
-  // Handle adding another category from the inline picker
-  const handleAddAnotherCategory = async (categoryId) => {
-    // First save current work to cart
-    handleSaveToCart();
-
-    // Auto-select the same slots as the first category, but exclude booked ones
-    const firstSlots = getFirstCategorySlots();
-    const newCatData = allCategories.find(c => c.id === categoryId);
-    const newCatSlotMap = {};
-    (newCatData?.slotStatuses || []).forEach(s => { newCatSlotMap[s.slot] = s; });
-    const availableSlots = firstSlots.filter(slot => {
-      const status = newCatSlotMap[slot];
-      return !status || status.available;
-    });
-
-    // Now switch to the new category
-    setSelectedCategory(categoryId);
-    setSelectedSlots([...availableSlots]);
-    // Initialize empty media for each pre-selected available slot
-    const newMedia = {};
-    availableSlots.forEach(slot => {
-      newMedia[slot] = { mobileImage: '', desktopImage: '', redirectUrl: '' };
-    });
-    setSlotMedia(newMedia);
-    setShowAddCategoryPicker(false);
-    setAddCatSearchTerm('');
-
-    // Go back to Step 2 for the new category
-    setCurrentWizardStep(2);
-  };
-
-  // Remove a category from the cart
-  const handleRemoveFromCart = (categoryId) => {
-    setCategoryCart(prev => prev.filter(c => c.categoryId !== categoryId));
-  };
-
-  // Get all slots across cart + current selection (for images step)
-  const getAllCartSlots = () => {
-    const cartSlots = [];
-    categoryCart.forEach(entry => {
-      if (entry.categoryId === selectedCategory) return; // skip current, use live state
-      entry.slots.forEach(slot => {
-        cartSlots.push({ categoryId: entry.categoryId, categoryName: entry.categoryName, slot, media: entry.slotMedia[slot] || {} });
-      });
-    });
-    // Add current category's slots
-    selectedSlots.forEach(slot => {
-      const catData = allCategories.find(c => c.id === selectedCategory);
-      cartSlots.push({ categoryId: selectedCategory, categoryName: catData?.name || 'Unknown', slot, media: slotMedia[slot] || {} });
-    });
-    return cartSlots;
-  };
-
-  // Get all unique slots for image upload (grouped by category)
+  // Get all categories with their data for images/review
   const getAllCategoriesForImages = () => {
-    const cats = [];
-    categoryCart.forEach(entry => {
-      if (entry.categoryId === selectedCategory) return;
-      cats.push(entry);
+    return selectedCategories.map(catId => {
+      const catData = allCategories.find(c => c.id === catId);
+      const media = {};
+      selectedSlots.forEach(slot => {
+        media[slot] = getMediaForCategorySlot(catId, slot);
+      });
+      return {
+        categoryId: catId,
+        categoryName: catData?.name || 'Unknown',
+        slots: [...selectedSlots],
+        slotMedia: media,
+        pricingData: catId === selectedCategory
+          ? (pricingData?.getCategoryPricing || categoryPricingMap[catId] || null)
+          : (categoryPricingMap[catId] || null),
+      };
     });
-    // Current category
-    const catData = allCategories.find(c => c.id === selectedCategory);
-    cats.push({
-      categoryId: selectedCategory,
-      categoryName: catData?.name || 'Unknown',
-      slots: [...selectedSlots],
-      slotMedia: { ...slotMedia },
-      pricingData: pricingData?.getCategoryPricing || null,
-    });
-    return cats;
   };
 
   const handleDurationChange = (duration) => {
@@ -354,45 +412,27 @@ const Advertisement = () => {
     setSelectedSlots((prevSlots) => {
       if (prevSlots.includes(slotName)) {
         const updated = prevSlots.filter((slot) => slot !== slotName);
-        setSlotMedia((m) => {
-          const copy = { ...m };
-          delete copy[slotName];
+        // Clean up media across all stores
+        setSlotMedia((m) => { const copy = { ...m }; delete copy[slotName]; return copy; });
+        setSharedSlotMedia((m) => { const copy = { ...m }; delete copy[slotName]; return copy; });
+        setPerCategorySlotMedia((prev) => {
+          const copy = { ...prev };
+          Object.keys(copy).forEach(catId => {
+            if (copy[catId][slotName]) {
+              copy[catId] = { ...copy[catId] };
+              delete copy[catId][slotName];
+            }
+          });
           return copy;
         });
         return updated;
       }
-      // new slot, initialize media entry
-      setSlotMedia((m) => ({
-        ...m,
-        [slotName]: { mobileImage: '', desktopImage: '', redirectUrl: '' },
-      }));
+      // new slot, initialize media entries
+      const emptyMedia = { mobileImage: '', desktopImage: '', redirectUrl: '' };
+      setSlotMedia((m) => ({ ...m, [slotName]: { ...emptyMedia } }));
+      setSharedSlotMedia((m) => ({ ...m, [slotName]: { ...emptyMedia } }));
       return [...prevSlots, slotName];
     });
-  };
-
-  const handlePreview = () => {
-    // Save current category to cart first
-    handleSaveToCart();
-    const allCats = getAllCategoriesForImages();
-    if (allCats.length === 0 || allCats.every(c => c.slots.length === 0)) {
-      toast.error('Please select at least one slot');
-      return;
-    }
-    // Validate all entries have images
-    let missingImage = false;
-    allCats.forEach(entry => {
-      entry.slots.forEach(slot => {
-        const media = entry.slotMedia[slot] || {};
-        if (!media.mobileImage && !media.desktopImage) {
-          missingImage = true;
-        }
-      });
-    });
-    if (missingImage) {
-      toast.error('Please upload at least one image for each selected slot');
-      return;
-    }
-    setShowPreview(true);
   };
 
   // FRONTEND helper functions for pricing preview (mirrors backend logic)
@@ -549,11 +589,12 @@ const Advertisement = () => {
       const paidRate = Math.round((adCat.price / paidTotalDays) * 100) / 100;
 
       breakdown = [
-        { quarter: proRataSeg.quarter, start: proRataSeg.start, end: proRataSeg.end, days: proRataSeg.days, rate_per_day: proRataRate, subtotal: proRataCharge },
+        { quarter: proRataSeg.quarter, start: proRataSeg.start, end: proRataSeg.end, days: proRataSeg.days, rate_per_day: proRataRate, subtotal: proRataCharge, isProRata: true },
         ...paidSegs.map(s => ({
           quarter: s.quarter, start: s.start, end: s.end, days: s.days,
           rate_per_day: paidRate,
-          subtotal: Math.round((s.days / paidTotalDays) * adCat.price)
+          subtotal: Math.round((s.days / paidTotalDays) * adCat.price),
+          isProRata: false,
         }))
       ];
     } else {
@@ -562,7 +603,8 @@ const Advertisement = () => {
       breakdown = segments.map(s => ({
         quarter: s.quarter, start: s.start, end: s.end, days: s.days,
         rate_per_day: ratePerDay,
-        subtotal: Math.round(ratePerDay * s.days)
+        subtotal: Math.round(ratePerDay * s.days),
+        isProRata: false,
       }));
     }
     const startDate = segments[0]?.start || today;
@@ -612,24 +654,61 @@ const Advertisement = () => {
     return sum;
   };
 
-  // Compute grand total across all cart entries + current
+  // Compute grand total across all selected categories
   const computeGrandTotal = () => {
     let total = 0;
-    const allCats = getAllCategoriesForImages();
-    allCats.forEach(entry => {
-      if (entry.categoryId === selectedCategory) {
+    selectedCategories.forEach(catId => {
+      if (catId === selectedCategory) {
         total += computeTotalForSelectedSlots();
       } else {
+        const entry = {
+          slots: [...selectedSlots],
+          pricingData: categoryPricingMap[catId] || null,
+        };
         total += computeCartEntryPrice(entry);
       }
     });
     return total;
   };
 
+  const handlePreview = () => {
+    const allCats = getAllCategoriesForImages();
+    if (allCats.length === 0 || allCats.every(c => c.slots.length === 0)) {
+      toast.error('Please select at least one slot');
+      return;
+    }
+    // Validate all entries have images
+    let missingImage = false;
+    allCats.forEach(entry => {
+      entry.slots.forEach(slot => {
+        const media = entry.slotMedia[slot] || {};
+        if (!media.mobileImage && !media.desktopImage) {
+          missingImage = true;
+        }
+      });
+    });
+    if (missingImage) {
+      toast.error('Please upload at least one image for each selected slot');
+      return;
+    }
+    // Wallet balance guard
+    const grandTotal = computeGrandTotal();
+    if (walletBalance < grandTotal) {
+      toast.error(`Insufficient wallet balance (₹${walletBalance}). You need ₹${grandTotal}. Please recharge your wallet first.`);
+      return;
+    }
+    setShowPreview(true);
+  };
+
   const handleSubmit = async () => {
     try {
-      // Save current to cart
-      handleSaveToCart();
+      // Wallet balance safety check
+      const grandTotal = computeGrandTotal();
+      if (walletBalance < grandTotal) {
+        toast.error(`Insufficient wallet balance (₹${walletBalance}). You need ₹${grandTotal}. Please recharge your wallet first.`);
+        return;
+      }
+
       const allCats = getAllCategoriesForImages();
       if (allCats.length === 0 || allCats.every(c => c.slots.length === 0)) {
         toast.error('Please fill in all required fields');
@@ -659,13 +738,31 @@ const Advertisement = () => {
         if (!res.data?.uploadFile?.success) {
           throw new Error(res.data?.uploadFile?.message || 'File upload failed');
         }
-        return res.data.uploadFile.url; // e.g. "uploads/12345-1709123456.jpg"
+        return res.data.uploadFile.url;
       };
+
+      // In shared mode, upload files once and cache URLs to avoid duplicate uploads
+      const sharedUploadCache = {};
+      if (useSharedMedia && validEntries.length > 1) {
+        await Promise.all(selectedSlots.map(async (slot) => {
+          const media = sharedSlotMedia[slot] || {};
+          const [mobileUrl, desktopUrl] = await Promise.all([
+            media.mobileFile instanceof File ? uploadOneFile(media.mobileFile) : Promise.resolve(media.mobileImage || ''),
+            media.desktopFile instanceof File ? uploadOneFile(media.desktopFile) : Promise.resolve(media.desktopImage || ''),
+          ]);
+          sharedUploadCache[slot] = { mobileUrl, desktopUrl, redirectUrl: media.redirectUrl || '', urlType: media.urlType || 'external' };
+        }));
+      }
 
       // Build medias for all entries (upload files in parallel per entry)
       const uploadAndSubmit = validEntries.map(async (entry) => {
         const mediasWithUrls = await Promise.all(
           entry.slots.map(async (slot) => {
+            // Use cached URLs in shared mode
+            if (useSharedMedia && sharedUploadCache[slot]) {
+              const cached = sharedUploadCache[slot];
+              return { slot, media_type: 'both', mobile_image_url: cached.mobileUrl, desktop_image_url: cached.desktopUrl, redirect_url: cached.redirectUrl, url_type: cached.urlType };
+            }
             const media = entry.slotMedia[slot] || {};
             const [mobileUrl, desktopUrl] = await Promise.all([
               media.mobileFile instanceof File
@@ -717,7 +814,11 @@ const Advertisement = () => {
         setSelectedStartQuarter(null);
         setSelectedSlots([]);
         setSlotMedia({});
-        setCategoryCart([]);
+        setSelectedCategories([]);
+        setCategoryPricingMap({});
+        setUseSharedMedia(true);
+        setSharedSlotMedia({});
+        setPerCategorySlotMedia({});
       }
     } catch (error) {
       console.error('Error submitting advertisement:', error);
@@ -1134,16 +1235,8 @@ const Advertisement = () => {
       slotMap[s.slot] = s;
     });
 
-    let bannerSlots = ['banner_1', 'banner_2', 'banner_3', 'banner_4'];
-    let stampSlots = ['stamp_1', 'stamp_2', 'stamp_3', 'stamp_4'];
-
-    // For 2nd+ category: only show the same slots as the first category selected
-    const isSubsequentCategory = categoryCart.length > 0 && !categoryCart.some(c => c.categoryId === selectedCategory);
-    if (isSubsequentCategory) {
-      const firstSlots = categoryCart[0].slots;
-      bannerSlots = bannerSlots.filter(s => firstSlots.includes(s));
-      stampSlots = stampSlots.filter(s => firstSlots.includes(s));
-    }
+    const bannerSlots = ['banner_1', 'banner_2', 'banner_3', 'banner_4'];
+    const stampSlots = ['stamp_1', 'stamp_2', 'stamp_3', 'stamp_4'];
 
     const availableBanner = bannerSlots.filter((s) => slotMap[s]?.available).length;
     const availableStamp = stampSlots.filter((s) => slotMap[s]?.available).length;
@@ -1153,12 +1246,6 @@ const Advertisement = () => {
         <Alert variant='info'>
           Available Slots: {selectedCategoryData.availableSlots || 0}/{(selectedCategoryData.bookedSlots || 0) + (selectedCategoryData.availableSlots || 0)}
         </Alert>
-
-        {isSubsequentCategory && (
-          <Alert variant='warning' className='py-2' style={{ fontSize: '0.85rem' }}>
-            Showing only the slot positions matching your first category selection ({categoryCart[0].slots.map(s => getSlotDisplayName(s)).join(', ')})
-          </Alert>
-        )}
 
         {/* legend */}
         <div className='mb-2'>
@@ -1300,34 +1387,30 @@ const Advertisement = () => {
     );
   };
 
-  const renderAddCategoryPicker = () => {
+  const renderMultiCategoryPicker = () => {
     const tabOptions = [
       { key: 'category', label: 'Category' },
       { key: 'subcategory', label: 'Sub Category' },
       { key: 'subsubcategory', label: 'Sub Sub Category' },
     ];
     let list = [];
-    if (addCatTab === 'category') list = topLevelCategories;
-    else if (addCatTab === 'subcategory') list = subCategories;
+    if (multiCatTab === 'category') list = topLevelCategories;
+    else if (multiCatTab === 'subcategory') list = subCategories;
     else list = subSubCategories;
 
-    if (addCatSearchTerm) {
-      list = list.filter(cat => cat.name?.toLowerCase().includes(addCatSearchTerm.toLowerCase()));
+    if (multiCatSearch) {
+      list = list.filter(cat => cat.name?.toLowerCase().includes(multiCatSearch.toLowerCase()));
     }
-    // Exclude already-added categories
-    const addedIds = categoryCart.map(c => c.categoryId);
-    addedIds.push(selectedCategory);
-    list = list.filter(cat => !addedIds.includes(cat.id));
 
     return (
-      <div className='border rounded p-3 mt-3' style={{ backgroundColor: '#f8f9fa' }}>
+      <div className='border rounded p-3 mb-3' style={{ backgroundColor: '#f8f9fa' }}>
         <div className='d-flex justify-content-between align-items-center mb-2'>
-          <h6 className='mb-0'>Add Another Category</h6>
-          <Button size='sm' variant='outline-secondary' onClick={() => setShowAddCategoryPicker(false)}>Cancel</Button>
+          <h6 className='mb-0'>Select Additional Categories</h6>
+          <Button size='sm' variant='outline-secondary' onClick={() => setShowCategoryPicker(false)}>Done</Button>
         </div>
         <div className='d-flex gap-1 mb-2'>
           {tabOptions.map(tab => (
-            <Button key={tab.key} size='sm' variant={addCatTab === tab.key ? 'primary' : 'outline-secondary'} onClick={() => setAddCatTab(tab.key)}>
+            <Button key={tab.key} size='sm' variant={multiCatTab === tab.key ? 'primary' : 'outline-secondary'} onClick={() => setMultiCatTab(tab.key)}>
               {tab.label}
             </Button>
           ))}
@@ -1336,57 +1419,98 @@ const Advertisement = () => {
           type='text'
           className='form-control form-control-sm mb-2'
           placeholder='Search categories...'
-          value={addCatSearchTerm}
-          onChange={e => setAddCatSearchTerm(e.target.value)}
+          value={multiCatSearch}
+          onChange={e => setMultiCatSearch(e.target.value)}
         />
-        <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-          {list.length === 0 && <small className='text-muted'>No categories available</small>}
-          {list.map(cat => (
-            <div
-              key={cat.id}
-              className='d-flex justify-content-between align-items-center p-2 border-bottom'
-              style={{ cursor: 'pointer' }}
-              onClick={() => handleAddAnotherCategory(cat.id)}
-              onKeyDown={e => e.key === 'Enter' && handleAddAnotherCategory(cat.id)}
-              role='button'
-              tabIndex={0}
-            >
-              <div>
-                <strong style={{ fontSize: '0.85rem' }}>{cat.name}</strong>
-                <div className='d-flex gap-1 mt-1'>
-                  <span className='badge bg-success' style={{ fontSize: '0.65rem' }}>{cat.availableSlots || 0}/8 free</span>
-                  <span className='badge bg-info' style={{ fontSize: '0.65rem' }}>{cat.tierId?.name || 'Tier'}</span>
+        <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
+          {list.length === 0 && <small className='text-muted'>No categories found</small>}
+          {list.map(cat => {
+            const isSelected = selectedCategories.includes(cat.id);
+            const isPrimary = cat.id === selectedCategory;
+            return (
+              <div
+                key={cat.id}
+                className={`d-flex justify-content-between align-items-center p-2 border-bottom ${isSelected ? 'bg-light' : ''}`}
+                style={{ cursor: isPrimary ? 'default' : 'pointer' }}
+                onClick={() => !isPrimary && handleToggleCategory(cat.id)}
+                onKeyDown={e => e.key === 'Enter' && !isPrimary && handleToggleCategory(cat.id)}
+                role='button'
+                tabIndex={0}
+              >
+                <div className='d-flex align-items-center gap-2'>
+                  <input
+                    type='checkbox'
+                    checked={isSelected}
+                    onChange={() => !isPrimary && handleToggleCategory(cat.id)}
+                    disabled={isPrimary}
+                    style={{ width: '16px', height: '16px' }}
+                  />
+                  <div>
+                    <strong style={{ fontSize: '0.85rem' }}>{cat.name}</strong>
+                    {isPrimary && <span className='badge bg-secondary ms-1' style={{ fontSize: '0.6rem' }}>Primary</span>}
+                    <div className='d-flex gap-1 mt-1'>
+                      <span className='badge bg-success' style={{ fontSize: '0.65rem' }}>{cat.availableSlots || 0}/8 free</span>
+                      <span className='badge bg-info' style={{ fontSize: '0.65rem' }}>{cat.tierId?.name || 'Tier'}</span>
+                    </div>
+                  </div>
                 </div>
+                {isSelected && !isPrimary && (
+                  <span className='badge bg-primary' style={{ fontSize: '0.7rem' }}>✓ Selected</span>
+                )}
               </div>
-              <Button size='sm' variant='outline-primary'>+ Add</Button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
   };
 
-  const renderCartSummaryBadges = () => {
-    if (categoryCart.length === 0) return null;
+  const renderWalletCheckInStep2 = () => {
+    const grandTotal = computeGrandTotal();
+    const fmtPrice = (v) => `\u20b9${Math.round(v).toLocaleString('en-IN')}`;
+
+    if (walletLoading) {
+      return (
+        <Card className='mt-3'>
+          <Card.Body className='text-center py-2'>
+            <Spinner animation='border' size='sm' className='me-2' />
+            <small>Checking wallet balance...</small>
+          </Card.Body>
+        </Card>
+      );
+    }
+
     return (
-      <div className='mb-3'>
-        <small className='text-muted d-block mb-1'>Categories in cart:</small>
-        <div className='d-flex gap-1 flex-wrap'>
-          {categoryCart.filter(c => c.categoryId !== selectedCategory).map(entry => (
-            <span key={entry.categoryId} className='badge bg-primary d-flex align-items-center gap-1' style={{ fontSize: '0.75rem' }}>
-              {entry.categoryName} ({entry.slots.length} slots)
-              <button
-                type='button'
-                className='btn-close btn-close-white'
-                style={{ fontSize: '0.5rem', padding: '2px' }}
-                onClick={(e) => { e.stopPropagation(); handleRemoveFromCart(entry.categoryId); }}
-                aria-label='Remove'
-              />
-            </span>
-          ))}
-          <span className='badge bg-info'>{selectedCategoryData?.name || 'Current'} ({selectedSlots.length} slots)</span>
-        </div>
-      </div>
+      <Card className={`mt-3 ${walletBalance >= grandTotal ? 'border-success' : 'border-danger'}`}>
+        <Card.Body className='py-2 px-3'>
+          <div className='d-flex justify-content-between align-items-center'>
+            <div>
+              <small className='fw-bold'>
+                <span className='me-1'>💰</span>Wallet: {fmtPrice(walletBalance)}
+              </small>
+            </div>
+            <div>
+              <small className='fw-bold'>
+                Grand Total: <span style={{ color: '#0d6efd' }}>{fmtPrice(grandTotal)}</span>
+              </small>
+            </div>
+          </div>
+          {walletBalance >= grandTotal ? (
+            <small className='text-success d-block mt-1'>
+              ✓ Sufficient balance. {fmtPrice(walletBalance - grandTotal)} will remain.
+            </small>
+          ) : (
+            <div className='mt-1'>
+              <small className='text-danger d-block'>
+                ✗ Insufficient! Need {fmtPrice(grandTotal - walletBalance)} more.
+              </small>
+              <Button variant='warning' size='sm' className='mt-1' onClick={goToWalletRecharge}>
+                Recharge Wallet →
+              </Button>
+            </div>
+          )}
+        </Card.Body>
+      </Card>
     );
   };
 
@@ -1402,57 +1526,133 @@ const Advertisement = () => {
       case 2:
         return (
           <div>
-            <h5 className='mb-3'>Select Available Slots — {selectedCategoryData?.name}</h5>
-            {renderCartSummaryBadges()}
+            <h5 className='mb-3'>Select Slots & Categories</h5>
+
+            {/* Slot selection first */}
             {renderSlotSelectionStep()}
 
-            {/* Add another category option */}
-            {selectedSlots.length > 0 && !showAddCategoryPicker && (
-              <div className='text-center mt-3'>
-                <Button
-                  variant='outline-success'
-                  size='sm'
-                  onClick={() => { setShowAddCategoryPicker(true); setAddCatSearchTerm(''); }}
-                >
-                  + Add Another Category
-                </Button>
+            {/* Selected categories badges */}
+            {selectedCategories.length > 0 && (
+              <div className='mb-3 mt-4'>
+                <small className='text-muted d-block mb-1'>Selected Categories ({selectedCategories.length}):</small>
+                <div className='d-flex gap-1 flex-wrap'>
+                  {selectedCategories.map(catId => {
+                    const cat = allCategories.find(c => c.id === catId);
+                    return (
+                      <span key={catId} className='badge bg-primary d-flex align-items-center gap-1' style={{ fontSize: '0.75rem' }}>
+                        {cat?.name || 'Unknown'}
+                        {catId !== selectedCategory && (
+                          <button
+                            type='button'
+                            className='btn-close btn-close-white'
+                            style={{ fontSize: '0.5rem', padding: '2px' }}
+                            onClick={(e) => { e.stopPropagation(); handleToggleCategory(catId); }}
+                            aria-label='Remove'
+                          />
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
               </div>
             )}
-            {showAddCategoryPicker && renderAddCategoryPicker()}
+
+            {/* Add more categories toggle */}
+            {!showCategoryPicker ? (
+              <div className='text-center mb-3'>
+                <Button variant='outline-success' size='sm' onClick={() => setShowCategoryPicker(true)}>
+                  + Select More Categories
+                </Button>
+              </div>
+            ) : (
+              renderMultiCategoryPicker()
+            )}
+
+            {/* Wallet balance check */}
+            {selectedSlots.length > 0 && renderWalletCheckInStep2()}
           </div>
         );
       case 3:
         return (
           <div>
             <h5 className='mb-3'>Upload Advertisement Images</h5>
+
+            {/* Image sharing toggle (when multiple categories) */}
+            {selectedCategories.length > 1 && (
+              <Card className='mb-3' style={{ backgroundColor: '#f0f4ff', border: '1px solid #c5d5f7' }}>
+                <Card.Body className='py-2 px-3'>
+                  <div className='d-flex align-items-center gap-3'>
+                    <strong style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>Image Mode:</strong>
+                    <div className='d-flex gap-2'>
+                      <Button size='sm' variant={useSharedMedia ? 'primary' : 'outline-secondary'} onClick={() => setUseSharedMedia(true)}>
+                        Same for all
+                      </Button>
+                      <Button size='sm' variant={!useSharedMedia ? 'primary' : 'outline-secondary'} onClick={() => setUseSharedMedia(false)}>
+                        Separate per category
+                      </Button>
+                    </div>
+                  </div>
+                  <small className='text-muted d-block mt-1'>
+                    {useSharedMedia
+                      ? 'Upload one set of images \u2014 they will be used for all selected categories.'
+                      : 'Upload different images for each category separately.'}
+                  </small>
+                </Card.Body>
+              </Card>
+            )}
+
             {(() => {
-              const allCats = getAllCategoriesForImages();
-              const hasSlots = allCats.some(c => c.slots.length > 0);
-              if (!hasSlots) return <Alert variant='warning'>Please select slots first</Alert>;
-              return allCats.filter(c => c.slots.length > 0).map(entry => (
-                <div key={entry.categoryId} className='mb-4'>
-                  <h6 className='border-bottom pb-2 mb-3'>
-                    <span className='badge bg-primary me-2' style={{ fontSize: '0.75rem' }}>{entry.categoryName}</span>
-                    {entry.slots.length} slot(s)
-                  </h6>
-                  <ImageUpload
-                    categoryId={entry.categoryId}
-                    selectedSlots={entry.slots}
-                    slotMedia={entry.categoryId === selectedCategory ? slotMedia : entry.slotMedia}
-                    sellerProducts={sellerProducts}
-                    onSlotMediaChange={(slot, field, value) => {
-                      if (entry.categoryId === selectedCategory) {
-                        setSlotMedia((m) => ({ ...m, [slot]: { ...m[slot], [field]: value } }));
-                      } else {
-                        setCategoryCart(prev => prev.map(c => {
-                          if (c.categoryId !== entry.categoryId) return c;
-                          return { ...c, slotMedia: { ...c.slotMedia, [slot]: { ...c.slotMedia[slot], [field]: value } } };
+              if (selectedSlots.length === 0) return <Alert variant='warning'>Please select slots first</Alert>;
+
+              if (useSharedMedia) {
+                // Single set of images for all categories
+                return (
+                  <div className='mb-4'>
+                    <h6 className='border-bottom pb-2 mb-3'>
+                      <span className='badge bg-primary me-2' style={{ fontSize: '0.75rem' }}>All Categories</span>
+                      {selectedSlots.length} slot(s) &times; {selectedCategories.length} categories
+                    </h6>
+                    <ImageUpload
+                      categoryId='shared'
+                      selectedSlots={selectedSlots}
+                      slotMedia={sharedSlotMedia}
+                      sellerProducts={sellerProducts}
+                      onSlotMediaChange={(slot, field, value) => {
+                        setSharedSlotMedia(m => ({ ...m, [slot]: { ...(m[slot] || {}), [field]: value } }));
+                      }}
+                    />
+                  </div>
+                );
+              }
+
+              // Separate images per category
+              return selectedCategories.map(catId => {
+                const catData = allCategories.find(c => c.id === catId);
+                const catMedia = perCategorySlotMedia[catId] || {};
+                return (
+                  <div key={catId} className='mb-4'>
+                    <h6 className='border-bottom pb-2 mb-3'>
+                      <span className='badge bg-primary me-2' style={{ fontSize: '0.75rem' }}>{catData?.name || 'Unknown'}</span>
+                      {selectedSlots.length} slot(s)
+                    </h6>
+                    <ImageUpload
+                      categoryId={catId}
+                      selectedSlots={selectedSlots}
+                      slotMedia={catMedia}
+                      sellerProducts={sellerProducts}
+                      onSlotMediaChange={(slot, field, value) => {
+                        setPerCategorySlotMedia(prev => ({
+                          ...prev,
+                          [catId]: {
+                            ...(prev[catId] || {}),
+                            [slot]: { ...(prev[catId]?.[slot] || {}), [field]: value },
+                          },
                         }));
-                      }
-                    }}
-                  />
-                </div>
-              ));
+                      }}
+                    />
+                  </div>
+                );
+              });
             })()}
           </div>
         );
@@ -1480,20 +1680,54 @@ const Advertisement = () => {
                     if (pr) {
                       const adType = slot.split('_')[0];
                       const slotQPrice = pr.adCategories?.find(ac => ac.slot_name === slot && ac.duration_days === 90)?.price || 0;
-                      let proRata = 0;
+                      let proRataCharge = 0;
+                      const today = new Date();
+                      const numQ = getNumQuarters(selectedDuration);
+                      const bdSegments = [];
+
                       if (startPreference === 'today') {
-                        const now = new Date();
-                        const nowUTC = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+                        const nowUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
                         const qEnd = getQuarterEnd(nowUTC);
                         const rem = Math.floor((qEnd - nowUTC) / 86400000) + 1;
                         const qsm = Math.floor(nowUTC.getUTCMonth() / 3) * 3;
                         const qStart = new Date(Date.UTC(nowUTC.getUTCFullYear(), qsm, 1));
                         const full = Math.floor((qEnd - qStart) / 86400000) + 1;
-                        proRata = Math.round((rem / full) * slotQPrice);
+                        proRataCharge = Math.round((rem / full) * slotQPrice);
+                        bdSegments.push({ quarter: `${getQuarterLabel(nowUTC)} (Pro-rata)`, days: rem, isProRata: true });
+                        let cursor = getNextQuarterStart(nowUTC);
+                        for (let qi = 0; qi < numQ; qi += 1) {
+                          const qe = getQuarterEnd(cursor);
+                          const d = Math.floor((qe - cursor) / 86400000) + 1;
+                          bdSegments.push({ quarter: getQuarterLabel(cursor), days: d, isProRata: false });
+                          cursor = getNextQuarterStart(cursor);
+                        }
+                      } else {
+                        const sd = selectedStartQuarter ? new Date(selectedStartQuarter) : getNextQuarterStart(today);
+                        let cursor = new Date(sd);
+                        for (let qi = 0; qi < numQ; qi += 1) {
+                          const qe = getQuarterEnd(cursor);
+                          const d = Math.floor((qe - cursor) / 86400000) + 1;
+                          bdSegments.push({ quarter: getQuarterLabel(cursor), days: d, isProRata: false });
+                          cursor = getNextQuarterStart(cursor);
+                        }
                       }
+
                       let adCat = pr.adCategories?.find(ac => ac.slot_name === slot && ac.duration_days === selectedDuration);
                       if (!adCat) adCat = pr.adCategories?.find(ac => ac.ad_type === adType && ac.duration_days === selectedDuration);
-                      price = (adCat?.price || 0) + proRata;
+                      const basePrice = adCat?.price || 0;
+                      price = basePrice + proRataCharge;
+
+                      // Build breakdown
+                      const paidSegs = bdSegments.filter(s => !s.isProRata);
+                      const paidTotalDays = paidSegs.reduce((sum, s) => sum + s.days, 0);
+                      breakdown = bdSegments.map(seg => {
+                        if (seg.isProRata) {
+                          const proRataRate = Math.round((proRataCharge / seg.days) * 100) / 100;
+                          return { quarter: seg.quarter, days: seg.days, rate_per_day: proRataRate, subtotal: proRataCharge, isProRata: true };
+                        }
+                        const segPrice = paidTotalDays > 0 ? Math.round((seg.days / paidTotalDays) * basePrice) : 0;
+                        return { quarter: seg.quarter, days: seg.days, subtotal: segPrice, isProRata: false };
+                      });
                     }
                   }
                   catTotal += price;
@@ -1545,7 +1779,9 @@ const Advertisement = () => {
                                   {r.breakdown && r.breakdown.length > 0 ? (
                                     r.breakdown.map((b, idx) => (
                                       <div key={idx}>
-                                        {b.quarter}: {b.days}d &times; {`\u20b9${b.rate_per_day}`} = {fmtPrice(b.subtotal)}
+                                        {b.isProRata
+                                          ? <>{b.quarter}: {b.days}d &times; {`\u20b9${b.rate_per_day}`} = {fmtPrice(b.subtotal)}</>
+                                          : <>{b.quarter}: {fmtPrice(b.subtotal)}</>}
                                       </div>
                                     ))
                                   ) : (
@@ -1573,6 +1809,48 @@ const Advertisement = () => {
                       )}
                     </Card.Body>
                   </Card>
+
+                  {/* Wallet Balance Check */}
+                  {walletLoading ? (
+                    <Card className='mt-3'>
+                      <Card.Body className='text-center py-3'>
+                        <Spinner animation='border' size='sm' className='me-2' />
+                        Checking wallet balance...
+                      </Card.Body>
+                    </Card>
+                  ) : (
+                    <Card className={`mt-3 ${walletBalance >= grandTotal ? 'border-success' : 'border-danger'}`}>
+                      <Card.Body className='py-3'>
+                        <div className='d-flex justify-content-between align-items-center'>
+                          <span className='fw-bold'>
+                            <span className='me-2'>💰</span>Wallet Balance
+                          </span>
+                          <span className={`h5 fw-bold mb-0 ${walletBalance >= grandTotal ? 'text-success' : 'text-danger'}`}>
+                            {fmtPrice(walletBalance)}
+                          </span>
+                        </div>
+                        {walletBalance >= grandTotal ? (
+                          <small className='text-success d-block mt-1'>
+                            ✓ Sufficient balance. {fmtPrice(walletBalance - grandTotal)} will remain after deduction.
+                          </small>
+                        ) : (
+                          <div className='mt-2'>
+                            <Alert variant='danger' className='mb-2 py-2'>
+                              <strong>Insufficient balance!</strong> You need {fmtPrice(grandTotal - walletBalance)} more.
+                              Please recharge your wallet before submitting.
+                            </Alert>
+                            <Button
+                              variant='warning'
+                              size='sm'
+                              onClick={goToWalletRecharge}
+                            >
+                              Recharge Wallet →
+                            </Button>
+                          </div>
+                        )}
+                      </Card.Body>
+                    </Card>
+                  )}
                 </>
               );
             })()}
@@ -1594,9 +1872,9 @@ const Advertisement = () => {
             <Modal.Title>Advertisement Submission Wizard</Modal.Title>
             <small className='text-muted d-block mt-2'>
               {selectedCategoryData?.name || 'Selected Category'}
-              {categoryCart.filter(c => c.categoryId !== selectedCategory).length > 0 && (
+              {selectedCategories.length > 1 && (
                 <span className='ms-2 badge bg-info' style={{ fontSize: '0.7rem' }}>
-                  + {categoryCart.filter(c => c.categoryId !== selectedCategory).length} more
+                  + {selectedCategories.length - 1} more
                 </span>
               )}
             </small>
@@ -1630,7 +1908,7 @@ const Advertisement = () => {
                   </div>
                   <small style={{ fontSize: '12px', color: step <= currentWizardStep ? '#0d6efd' : '#6c757d' }}>
                     {step === 1 && 'Duration'}
-                    {step === 2 && 'Slots'}
+                    {step === 2 && 'Categories & Slots'}
                     {step === 3 && 'Images'}
                     {step === 4 && 'Review'}
                   </small>
@@ -1667,19 +1945,21 @@ const Advertisement = () => {
           {currentWizardStep < 4 ? (
             <Button
               variant='primary'
-              onClick={() => {
-                if (currentWizardStep === 2) handleSaveToCart();
-                handleWizardNext();
-              }}
+              onClick={() => handleWizardNext()}
               disabled={
                 (currentWizardStep === 1 && selectedDuration === null) ||
-                (currentWizardStep === 2 && selectedSlots.length === 0) ||
+                (currentWizardStep === 2 && (selectedSlots.length === 0 || (!walletLoading && walletBalance < computeGrandTotal()))) ||
                 (currentWizardStep === 3 && (() => {
-                  const allCats = getAllCategoriesForImages();
-                  return allCats.some(entry =>
-                    entry.slots.some(slot => {
-                      const media = entry.categoryId === selectedCategory ? slotMedia[slot] : entry.slotMedia[slot];
-                      return !(media?.mobileImage || media?.desktopImage);
+                  if (useSharedMedia) {
+                    return selectedSlots.some(slot => {
+                      const media = sharedSlotMedia[slot] || {};
+                      return !(media.mobileImage || media.desktopImage) || !media.redirectUrl;
+                    });
+                  }
+                  return selectedCategories.some(catId =>
+                    selectedSlots.some(slot => {
+                      const media = perCategorySlotMedia[catId]?.[slot] || {};
+                      return !(media.mobileImage || media.desktopImage) || !media.redirectUrl;
                     })
                   );
                 })())
@@ -1690,13 +1970,13 @@ const Advertisement = () => {
           ) : (
             <Button
               variant='success'
-              onClick={() => {
-                handlePreview();
+              onClick={async () => {
+                await handleSubmit();
                 setShowWizardModal(false);
               }}
-              disabled={submitLoading}
+              disabled={submitLoading || uploading || walletLoading || walletBalance < computeGrandTotal()}
             >
-              {submitLoading ? 'Submitting...' : 'Submit Advertisement'}
+              {(submitLoading || uploading) ? 'Submitting...' : 'Submit Advertisement'}
             </Button>
           )}
         </Modal.Footer>
@@ -1729,6 +2009,9 @@ const Advertisement = () => {
             onEdit={() => setShowPreview(false)}
             onSubmit={handleSubmit}
             submitting={submitLoading}
+            walletBalance={walletBalance}
+            walletLoading={walletLoading}
+            onRechargeWallet={goToWalletRecharge}
           />
         ) : (
           <div>

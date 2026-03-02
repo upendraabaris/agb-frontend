@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Button, Table, Badge, Spinner, Modal, Form, Alert } from 'react-bootstrap';
 import { gql, useQuery, useMutation } from '@apollo/client';
 import { toast } from 'react-toastify';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useHistory } from 'react-router-dom';
 import HtmlHead from 'components/html-head/HtmlHead';
 
 // ─── GraphQL ─────────────────────────────────────────────────────────────────
@@ -80,8 +80,10 @@ const SellerWallet = () => {
     const description = 'View wallet balance and add money via PayU';
 
     const location = useLocation();
+    const history = useHistory();
     const searchParams = new URLSearchParams(location.search);
     const paymentStatus = searchParams.get('status');
+    const returnTo = searchParams.get('returnTo');
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [amountInput, setAmountInput] = useState('');
@@ -176,6 +178,24 @@ const SellerWallet = () => {
     return (
         <>
             <HtmlHead title={title} description={description} />
+
+            {/* Return-to-ad banner when redirected from ad wizard */}
+            {returnTo && (
+                <Alert variant='info' className='d-flex align-items-center justify-content-between mb-4' style={{ borderRadius: 12 }}>
+                    <div>
+                        <strong>You were redirected here from Ad Submission.</strong>
+                        <br />
+                        <small className='text-muted'>Recharge your wallet, then go back to continue your ad submission. Your selections are saved.</small>
+                    </div>
+                    <Button
+                        variant='primary'
+                        className='ms-3 fw-semibold flex-shrink-0'
+                        onClick={() => history.push(returnTo)}
+                    >
+                        ← Back to Ad Submission
+                    </Button>
+                </Alert>
+            )}
 
             {/* ── Balance Card ── */}
             <Card className="mb-4 shadow-sm border-0" style={{ borderRadius: 16 }}>

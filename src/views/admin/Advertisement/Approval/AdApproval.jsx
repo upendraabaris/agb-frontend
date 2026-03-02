@@ -143,21 +143,29 @@ function AdApproval() {
     }
   }, [selectedRequest, checkAvailability]);
 
-  // compute projected total price if breakdown exists, otherwise estimate from first duration
+  // compute projected total price across ALL durations/slots
   const computeProjectedTotal = () => {
     if (!selectedRequest?.durations || selectedRequest.durations.length === 0) return 0;
-    const durFirst = selectedRequest.durations[0];
-    if (durFirst.pricing_breakdown && durFirst.pricing_breakdown.length > 0) {
-      return durFirst.pricing_breakdown.reduce((sum, b) => sum + (b.subtotal || 0), 0);
-    }
-    // fallback: estimate if no breakdown yet (shouldn't happen for pending requests)
-    return durFirst.total_price || 0;
+    return selectedRequest.durations.reduce((total, dur) => {
+      if (dur.pricing_breakdown && dur.pricing_breakdown.length > 0) {
+        return total + dur.pricing_breakdown.reduce((sum, b) => sum + (b.subtotal || 0), 0);
+      }
+      return total + (dur.total_price || 0);
+    }, 0);
+  };
+
+  // human-readable slot label
+  const slotLabel = (slot) => {
+    if (!slot) return 'Unknown Slot';
+    const match = slot.match(/^(banner|stamp)(\d+)$/i);
+    if (match) return `${match[1].charAt(0).toUpperCase() + match[1].slice(1)} ${match[2]}`;
+    return slot;
   };
 
   const [approveAd, { loading: approveLoading }] = useMutation(APPROVE_AD, {
     onCompleted: (response) => {
       if (response.approveAdRequest.success) {
-        toast.success('Ad approved successfully!');
+        toast.success(response.approveAdRequest.message || 'Ad approved successfully!');
         setShowApprovalModal(false);
         setSelectedRequest(null);
         refetch();
@@ -456,41 +464,53 @@ function AdApproval() {
 
               <hr />
 
-              <h6 className="mb-3">Duration</h6>
-              {selectedRequest.durations && selectedRequest.durations.length > 0 && (
-                <div className="mb-3">
-                  <small className="text-muted">Duration Days</small>
-                  <div className="fw-bold">{selectedRequest.durations[0].duration_days} days</div>
-                </div>
-              )}
+              <h6 className="mb-3">Duration & Pricing</h6>
               {selectedRequest.durations && selectedRequest.durations.length > 0 && (
                 <>
-                  <div className="mb-3">
-                    <small className="text-muted">Total Price</small>
-                    <div className="fw-bold">₹{selectedRequest.durations[0].total_price || computeProjectedTotal()}</div>
+                  {/* Per-slot breakdown */}
+                  {selectedRequest.durations.map((dur) => (
+                    <Card key={dur.id} className="mb-3 border">
+                      <Card.Body className="p-3">
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <strong>{slotLabel(dur.slot)}</strong>
+                          <Badge bg="outline-primary" className="text-primary border">{dur.duration_days} days</Badge>
+                        </div>
+
+                        {dur.quarters_covered && dur.quarters_covered.length > 0 && (
+                          <div className="mb-2">
+                            <small className="text-muted">Quarters:</small>{' '}
+                            <span className="fw-bold">{dur.quarters_covered.join(', ')}</span>
+                          </div>
+                        )}
+
+                        {dur.pricing_breakdown && dur.pricing_breakdown.length > 0 && (
+                          <div className="mb-2">
+                            <small className="text-muted d-block mb-1">Pricing Breakdown</small>
+                            <ul className="mb-0 ps-3">
+                              {dur.pricing_breakdown.map((b, i) => (
+                                <li key={i}>
+                                  <strong>{b.quarter}</strong>
+                                  {b.start && b.end && ` (${new Date(b.start).toLocaleDateString()} – ${new Date(b.end).toLocaleDateString()})`}
+                                  : {b.days}d × ₹{b.rate_per_day}/d = ₹{b.subtotal}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        <div className="text-end">
+                          <small className="text-muted">Slot Total: </small>
+                          <strong>₹{dur.total_price || (dur.pricing_breakdown ? dur.pricing_breakdown.reduce((s, b) => s + (b.subtotal || 0), 0) : 0)}</strong>
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  ))}
+
+                  {/* Grand total */}
+                  <div className="mb-3 p-3 bg-light rounded d-flex justify-content-between align-items-center">
+                    <h6 className="mb-0">Grand Total ({selectedRequest.durations.length} slot{selectedRequest.durations.length > 1 ? 's' : ''})</h6>
+                    <h5 className="mb-0 text-primary">₹{computeProjectedTotal()}</h5>
                   </div>
-                  {selectedRequest.durations[0].quarters_covered && selectedRequest.durations[0].quarters_covered.length > 0 && (
-                    <div className="mb-3">
-                      <small className="text-muted">Quarters Covered</small>
-                      <div className="fw-bold">
-                        {selectedRequest.durations[0].quarters_covered.join(', ')}
-                      </div>
-                    </div>
-                  )}
-                  {selectedRequest.durations[0].pricing_breakdown && selectedRequest.durations[0].pricing_breakdown.length > 0 && (
-                    <div className="mb-3">
-                      <small className="text-muted">Pricing Breakdown</small>
-                      <ul className="mb-0">
-                        {selectedRequest.durations[0].pricing_breakdown.map((b, i) => (
-                          <li key={i}>
-                            <strong>{b.quarter}</strong>
-                            {b.start && b.end && ` (${new Date(b.start).toLocaleDateString()} - ${new Date(b.end).toLocaleDateString()})`}
-                            : {b.days}d @ ₹{b.rate_per_day}/d = ₹{b.subtotal}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
                 </>
               )}
 

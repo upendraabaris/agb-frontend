@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Row, Col, Button, Badge } from 'react-bootstrap';
+import { Card, Row, Col, Button, Badge, Alert, Spinner } from 'react-bootstrap';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
 
 const PreviewSection = ({
@@ -18,6 +18,9 @@ const PreviewSection = ({
   onEdit,
   onSubmit,
   submitting,
+  walletBalance = 0,
+  walletLoading = false,
+  onRechargeWallet,
 }) => {
   const fmtPrice = (v) => `\u20b9${Math.round(v).toLocaleString('en-IN')}`;
 
@@ -207,6 +210,46 @@ const PreviewSection = ({
         </Card.Body>
       </Card>
 
+      {/* Wallet Balance Check */}
+      {walletLoading ? (
+        <Card className='mb-4'>
+          <Card.Body className='text-center py-3'>
+            <Spinner animation='border' size='sm' className='me-2' />
+            Checking wallet balance...
+          </Card.Body>
+        </Card>
+      ) : (
+        <Card className={`mb-4 ${walletBalance >= grandTotal ? 'border-success' : 'border-danger'}`}>
+          <Card.Body className='py-3'>
+            <div className='d-flex justify-content-between align-items-center'>
+              <span className='fw-bold'>
+                <span className='me-2'>💰</span>Wallet Balance
+              </span>
+              <span className={`h5 fw-bold mb-0 ${walletBalance >= grandTotal ? 'text-success' : 'text-danger'}`}>
+                {fmtPrice(walletBalance)}
+              </span>
+            </div>
+            {walletBalance >= grandTotal ? (
+              <small className='text-success d-block mt-1'>
+                ✓ Sufficient balance. {fmtPrice(walletBalance - grandTotal)} will remain after deduction.
+              </small>
+            ) : (
+              <div className='mt-2'>
+                <Alert variant='danger' className='mb-2 py-2'>
+                  <strong>Insufficient balance!</strong> You need {fmtPrice(grandTotal - walletBalance)} more.
+                  Please recharge your wallet before submitting.
+                </Alert>
+                {onRechargeWallet && (
+                  <Button variant='warning' size='sm' onClick={onRechargeWallet}>
+                    Recharge Wallet →
+                  </Button>
+                )}
+              </div>
+            )}
+          </Card.Body>
+        </Card>
+      )}
+
       {/* Terms Notice */}
       <Card className='mb-4 border-warning'>
         <Card.Body>
@@ -219,6 +262,7 @@ const PreviewSection = ({
               <li>You understand this request will be reviewed by our admin team</li>
               <li>Once approved, your advertisement will run for the selected duration and slots</li>
               <li>The pricing shown is for each selected ad slot based on position and duration</li>
+              <li>On approval, the total amount will be deducted from your wallet balance</li>
             </ul>
           </div>
         </Card.Body>
@@ -239,7 +283,7 @@ const PreviewSection = ({
           <Button
             variant='success'
             onClick={onSubmit}
-            disabled={submitting}
+            disabled={submitting || walletLoading || walletBalance < grandTotal}
           >
             {submitting ? (
               <>
