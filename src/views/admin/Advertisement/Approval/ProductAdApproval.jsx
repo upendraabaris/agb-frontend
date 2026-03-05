@@ -70,6 +70,8 @@ const REJECT_PRODUCT_AD = gql`
   }
 `;
 
+
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const getStatusBadge = (status) => {
@@ -107,12 +109,15 @@ function ProductAdApproval() {
     const [approvalDate, setApprovalDate] = useState('');
     const [rejectionReason, setRejectionReason] = useState('');
 
+
     const { loading, error, data, refetch } = useQuery(GET_PRODUCT_AD_REQUESTS, {
         variables: { status: currentFilter },
         fetchPolicy: 'network-only',
     });
 
     const requests = data?.getProductAdRequestsForApproval || [];
+
+
 
     // ─── Mutations ────────────────────────────────────────────────────────────
 
@@ -327,9 +332,11 @@ function ProductAdApproval() {
                                                             </Button>
                                                         </div>
                                                     ) : (
-                                                        <Button variant="outline-primary" size="sm" onClick={() => openApproval(req)}>
-                                                            <CsLineIcons icon="eye" className="me-1" />View
-                                                        </Button>
+                                                        <div className="d-flex gap-2">
+                                                            <Button variant="outline-primary" size="sm" onClick={() => openApproval(req)}>
+                                                                <CsLineIcons icon="eye" className="me-1" />View
+                                                            </Button>
+                                                        </div>
                                                     )}
                                                 </td>
                                             </tr>
@@ -507,6 +514,7 @@ function ProductAdApproval() {
                     </Button>
                 </Modal.Footer>
             </Modal>
+
         </>
     );
 }

@@ -280,16 +280,38 @@ const SingleDetail = ({ product }) => {
   const activeMedias = approvedAds.flatMap((adReq) =>
     adReq.medias.filter((media) => {
       const dur = adReq.durations.find((d) => d.slot === media.slot);
-      if (!dur || dur.status !== 'approved') return false;
-      const start = dur.start_date ? new Date(dur.start_date) : null;
+      // Show if duration is approved; only hide if explicitly expired
+      if (!dur) return false;
+      if (dur.status !== 'approved') return false;
       const end = dur.end_date ? new Date(dur.end_date) : null;
-      if (start && end) return now >= start && now <= end;
-      return true; // no dates set but approved — show it
+      if (end && now > end) return false; // expired — hide it
+      return true; // approved + not expired → show
     })
   );
   const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
   const bannerMedias = activeMedias.filter((m) => m.slot.startsWith('banner_'));
   const stampMedias = activeMedias.filter((m) => m.slot.startsWith('stamp_'));
+
+  // Init Bootstrap carousel for product banner ads
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!bannerMedias || bannerMedias.length < 2) return;
+    const bs = window.bootstrap;
+    if (!bs) return;
+    const timer = setTimeout(() => {
+      const el = document.getElementById('productAdBannerCarousel');
+      if (!el) return;
+      const items = el.querySelectorAll('.carousel-item');
+      items.forEach((it, idx) => it.classList.toggle('active', idx === 0));
+      try {
+        const existing = bs.Carousel.getInstance(el);
+        if (existing) existing.dispose();
+        // eslint-disable-next-line no-new
+        new bs.Carousel(el, { interval: 5000, ride: 'carousel' });
+      } catch (e) { /* ignore */ }
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [bannerMedias.length]);
 
   useEffect(() => {
     window.scrollTo({
@@ -384,7 +406,8 @@ const SingleDetail = ({ product }) => {
   const [price, setPrice] = useState(totalPrice);
   const gst = product?.variant[variantIndex]?.location[location]?.gstType;
   const [tempVarName, setTempVarName] = useState(product?.variant[variantIndex]?.variantName);
-  const [sellerId, setSellerId] = useState(product?.variant[variantIndex]?.location[location]?.sellerId);
+  const rawSellerId = product?.variant[variantIndex]?.location[location]?.sellerId;
+  const [sellerId, setSellerId] = useState(rawSellerId?.id || rawSellerId);
   const oos = product?.variant[variantIndex]?.location[location]?.mainStock < product?.variant[variantIndex]?.moq ? true : false;
   const changeColor = (id) => {
     setSelectedId(id);
@@ -709,25 +732,69 @@ const SingleDetail = ({ product }) => {
                   {productDetailsPageSlider && productDetailsPageSlider.getAds && (
                     <img src={productDetailsPageSlider.getAds.images} className="d-block w-100 rounded" alt={productDetailsPageSlider.getAds.key} />
                   )}
-                  {/* ── Approved Product Banner Ads ── */}
+                  {/* ── Approved Product Banner Ads — Bootstrap Carousel ── */}
                   {bannerMedias.length > 0 && (
-                    <div className="mb-2">
-                      {bannerMedias.map((media, i) => {
-                        const imgUrl = isMobileDevice
-                          ? media.mobile_image_url || media.desktop_image_url
-                          : media.desktop_image_url || media.mobile_image_url;
-                        const redirectUrl = isMobileDevice
-                          ? media.mobile_redirect_url || media.desktop_redirect_url
-                          : media.desktop_redirect_url || media.mobile_redirect_url;
-                        if (!imgUrl) return null;
-                        return redirectUrl ? (
-                          <a key={i} href={redirectUrl} target="_blank" rel="noopener noreferrer">
-                            <img src={imgUrl} className="d-block w-100 rounded mb-1" alt={`Ad Banner ${i + 1}`} style={{ objectFit: 'cover', maxHeight: '180px' }} />
-                          </a>
-                        ) : (
-                          <img key={i} src={imgUrl} className="d-block w-100 rounded mb-1" alt={`Ad Banner ${i + 1}`} style={{ objectFit: 'cover', maxHeight: '180px' }} />
-                        );
-                      })}
+                    <div
+                      id="productAdBannerCarousel"
+                      className="carousel slide mb-2 rounded border"
+                      data-bs-ride="carousel"
+                    >
+                      <div className="carousel-inner rounded">
+                        {bannerMedias.map((media, i) => {
+                          const BASE = 'http://localhost:4000/';
+                          const toAbs = (url) => url && !url.startsWith('http') ? BASE + url : url;
+                          const imgUrl = isMobileDevice
+                            ? toAbs(media.mobile_image_url) || toAbs(media.desktop_image_url)
+                            : toAbs(media.desktop_image_url) || toAbs(media.mobile_image_url);
+                          const redirectUrl = isMobileDevice
+                            ? media.mobile_redirect_url || media.desktop_redirect_url
+                            : media.desktop_redirect_url || media.mobile_redirect_url;
+                          if (!imgUrl) return null;
+                          return (
+                            <div key={i} className={`carousel-item ${i === 0 ? 'active' : ''}`}>
+                              {redirectUrl ? (
+                                <a href={redirectUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'block' }}>
+                                  <img
+                                    src={imgUrl}
+                                    className="d-block w-100 rounded"
+                                    alt={`Ad Banner ${i + 1}`}
+                                    style={{ objectFit: 'cover', height: '220px' }}
+                                  />
+                                </a>
+                              ) : (
+                                <img
+                                  src={imgUrl}
+                                  className="d-block w-100 rounded"
+                                  alt={`Ad Banner ${i + 1}`}
+                                  style={{ objectFit: 'cover', height: '220px' }}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {bannerMedias.length > 1 && (
+                        <>
+                          <button
+                            className="carousel-control-prev"
+                            type="button"
+                            data-bs-target="#productAdBannerCarousel"
+                            data-bs-slide="prev"
+                          >
+                            <span className="carousel-control-prev-icon" aria-hidden="true" />
+                            <span className="visually-hidden">Previous</span>
+                          </button>
+                          <button
+                            className="carousel-control-next"
+                            type="button"
+                            data-bs-target="#productAdBannerCarousel"
+                            data-bs-slide="next"
+                          >
+                            <span className="carousel-control-next-icon" aria-hidden="true" />
+                            <span className="visually-hidden">Next</span>
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </>
@@ -1216,8 +1283,14 @@ const SingleDetail = ({ product }) => {
       {stampMedias.length > 0 && (
         <Row className="mb-3 g-2">
           {stampMedias.map((media, i) => {
-            const imgUrl = isMobileDevice ? (media.mobile_image_url || media.desktop_image_url) : (media.desktop_image_url || media.mobile_image_url);
-            const redirectUrl = isMobileDevice ? (media.mobile_redirect_url || media.desktop_redirect_url) : (media.desktop_redirect_url || media.mobile_redirect_url);
+            const BASE = 'http://localhost:4000/';
+            const toAbsolute = (url) => url && !url.startsWith('http') ? BASE + url : url;
+            const imgUrl = isMobileDevice
+              ? toAbsolute(media.mobile_image_url) || toAbsolute(media.desktop_image_url)
+              : toAbsolute(media.desktop_image_url) || toAbsolute(media.mobile_image_url);
+            const redirectUrl = isMobileDevice
+              ? media.mobile_redirect_url || media.desktop_redirect_url
+              : media.desktop_redirect_url || media.mobile_redirect_url;
             if (!imgUrl) return null;
             return (
               <Col key={i} xs={6} sm={4} md={3}>
