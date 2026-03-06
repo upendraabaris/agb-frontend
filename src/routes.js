@@ -6,7 +6,6 @@ import MyAds from 'views/seller/Advertisement/MyAds';
 import SellerWallet from 'views/seller/Advertisement/Wallet/SellerWallet';
 import SellerReports from 'views/seller/Advertisement/SellerReports';
 import ProductAdvertisement from 'views/seller/Advertisement/ProductAdvertisement';
-import MyProductAds from 'views/seller/Advertisement/MyProductAds';
 import ProductAdApproval from 'views/admin/Advertisement/Approval/ProductAdApproval';
 
 /* ------------------------------------------------------------------ */
@@ -1618,11 +1617,10 @@ const routesAndMenuItems = {
       roles: [USER_ROLE.Seller],
       hidden: true,
       subs: [
-        { path: '/list', label: 'My Ad List', component: MyAds },
-        { path: '/add', label: 'Ad at Categories', component: Advertisement },
+        { path: '/list', label: 'My Ads', component: MyAds },
+        { path: '/add', label: 'Book Ad at Categories', component: Advertisement },
+        { path: '/ads-product', label: 'Book Ad at Products', component: ProductAdvertisement },
         { path: '/reporting', label: 'Reporting', component: SellerReports },
-        { path: '/product-list', label: 'My Product Ads', component: MyProductAds },
-        { path: '/ads-product', label: 'Advertise a Product', component: ProductAdvertisement },
       ],
     },
     {
