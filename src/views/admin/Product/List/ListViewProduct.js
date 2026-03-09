@@ -6,12 +6,30 @@ import CsLineIcons from 'cs-line-icons/CsLineIcons';
 import { toast } from 'react-toastify';
 import { useDispatch } from 'react-redux';
 import { menuChangeUseSidebar } from 'layout/nav/main-menu/menuSlice';
-import { gql, useMutation, useLazyQuery } from '@apollo/client';
+import { useQuery, gql, useMutation, useLazyQuery } from '@apollo/client';
 
 const ACTIVE_PRODUCT = gql`
   mutation ActiveProduct($activeProductId: ID, $active: Boolean) {
     activeProduct(id: $activeProductId, active: $active) {
       id
+    }
+  }
+`;
+
+const SET_PRODUCT_TIER = gql`
+  mutation SetProductAdTier($productId: ID!, $tierId: ID!) {
+    setProductAdTier(productId: $productId, tierId: $tierId) {
+      success
+      message
+    }
+  }
+`;
+
+const GET_TIERS = gql`
+  query AdTierMasters {
+    adTierMasters {
+      id
+      name
     }
   }
 `;
@@ -46,6 +64,10 @@ const ListViewProduct = () => {
         images
         active
         previewName
+        adTierId {
+          id
+          name
+        }
         variant {
           location {
             sellerId {
@@ -131,6 +153,37 @@ const ListViewProduct = () => {
   const [deleteModalView, setDeleteModalView] = useState(false);
   const [deleteProductName, setDeleteProductName] = useState('');
   const [deleteIndividualProductId, setDeleteIndividualProductId] = useState('');
+
+  // Tier assignment state
+  const [showTierModal, setShowTierModal] = useState(false);
+  const [tierTarget, setTierTarget] = useState(null); // { productId, productName }
+  const [selectedTierId, setSelectedTierId] = useState('');
+
+  const { data: tiersData } = useQuery(GET_TIERS);
+  const tiers = tiersData?.adTierMasters || [];
+
+  const [setProductAdTier, { loading: tierLoading }] = useMutation(SET_PRODUCT_TIER, {
+    onCompleted: (res) => {
+      if (res.setProductAdTier.success) {
+        toast.success(res.setProductAdTier.message || 'Ad tier assigned!');
+        setShowTierModal(false);
+      } else {
+        toast.error(res.setProductAdTier.message);
+      }
+    },
+    onError: (err) => toast.error(err.message || 'Failed to assign tier'),
+  });
+
+  const openTierModal = (product) => {
+    setTierTarget({ productId: product.id, productName: product.previewName || product.fullName });
+    setSelectedTierId('');
+    setShowTierModal(true);
+  };
+
+  const handleSetTier = () => {
+    if (!selectedTierId) { toast.error('Please select a tier'); return; }
+    setProductAdTier({ variables: { productId: tierTarget.productId, tierId: selectedTierId } });
+  };
 
   const [DeleteProduct] = useMutation(DELETE_INDIVIDUAL_PRODUCT, {
     onCompleted: () => {
@@ -237,6 +290,7 @@ const ListViewProduct = () => {
             <th className="cursor-pointer" onClick={() => handleSort('brand_name')}>
               Brand <CsLineIcons icon="sort" className="text-muted" size="12" />
             </th>
+            <th>Ad Tier</th>
             <th>Action</th>
             <th>Status</th>
           </tr>
@@ -289,12 +343,46 @@ const ListViewProduct = () => {
                 {/* BRAND */}
                 <td className="fw-bold">{product.brand_name}</td>
 
+                {/* AD TIER */}
+                <td>
+                  {product.adTierId ? (
+                    <span
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        background: '#d1fae5', color: '#065f46',
+                        borderRadius: 6, padding: '2px 8px', fontSize: '0.78rem', fontWeight: 600,
+                      }}
+                    >
+                      <CsLineIcons icon="tag" size="12" />
+                      {product.adTierId.name}
+                    </span>
+                  ) : (
+                    <span
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        background: '#f3f4f6', color: '#9ca3af',
+                        borderRadius: 6, padding: '2px 8px', fontSize: '0.78rem',
+                        border: '1px dashed #d1d5db',
+                      }}
+                    >
+                      <CsLineIcons icon="close" size="12" />
+                      No Tier
+                    </span>
+                  )}
+                </td>
+
                 {/* ACTION BUTTONS */}
                 <td>
                   <OverlayTrigger placement="top" overlay={<Tooltip>View Product</Tooltip>}>
                     <NavLink className="btn btn-sm btn-light shadow me-2" to={`details/${product.identifier.replace(/\s/g, '_').toLowerCase()}`}>
                       <CsLineIcons icon="info-hexagon" className="text-primary" size="17" />
                     </NavLink>
+                  </OverlayTrigger>
+
+                  <OverlayTrigger placement="top" overlay={<Tooltip>Set Ad Tier</Tooltip>}>
+                    <Button variant="light" className="btn-sm shadow me-2" onClick={() => openTierModal(product)}>
+                      <CsLineIcons icon="tag" className="text-success" size="17" />
+                    </Button>
                   </OverlayTrigger>
 
                   <OverlayTrigger placement="top" overlay={<Tooltip>Delete Product</Tooltip>}>
@@ -348,6 +436,44 @@ const ListViewProduct = () => {
           </Button>
           <Button variant="primary" onClick={() => deleteProductEntry()}>
             Yes, I want
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* ── Set Ad Tier Modal ─────────────────────────────────────────── */}
+      <Modal show={showTierModal} onHide={() => setShowTierModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>Assign Ad Tier</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {tierTarget && (
+            <div>
+              <p className="mb-3">
+                <strong>Product:</strong> {tierTarget.productName}
+              </p>
+              <Form.Group>
+                <Form.Label className="fw-bold">Select Tier</Form.Label>
+                <Form.Select
+                  value={selectedTierId}
+                  onChange={(e) => setSelectedTierId(e.target.value)}
+                >
+                  <option value="">— Select an ad tier —</option>
+                  {tiers.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </Form.Select>
+                <Form.Text className="text-muted">
+                  Sellers can only see pricing and book ads for this product after a tier is assigned.
+                </Form.Text>
+              </Form.Group>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowTierModal(false)}>Cancel</Button>
+          <Button variant="primary" onClick={handleSetTier} disabled={tierLoading || !selectedTierId}>
+            {tierLoading && <Spinner animation="border" size="sm" className="me-2" />}
+            Assign Tier
           </Button>
         </Modal.Footer>
       </Modal>

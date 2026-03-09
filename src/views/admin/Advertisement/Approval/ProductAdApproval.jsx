@@ -70,6 +70,8 @@ const REJECT_PRODUCT_AD = gql`
   }
 `;
 
+
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const getStatusBadge = (status) => {
@@ -107,12 +109,15 @@ function ProductAdApproval() {
     const [approvalDate, setApprovalDate] = useState('');
     const [rejectionReason, setRejectionReason] = useState('');
 
+
     const { loading, error, data, refetch } = useQuery(GET_PRODUCT_AD_REQUESTS, {
         variables: { status: currentFilter },
         fetchPolicy: 'network-only',
     });
 
     const requests = data?.getProductAdRequestsForApproval || [];
+
+
 
     // ─── Mutations ────────────────────────────────────────────────────────────
 
@@ -289,7 +294,7 @@ function ProductAdApproval() {
                                                             <div>{firstDuration.duration_days} days</div>
                                                             {firstDuration.start_date && (
                                                                 <small className="text-muted">
-                                                                    {moment(firstDuration.start_date).format('DD MMM YY')} → {moment(firstDuration.end_date).format('DD MMM YY')}
+                                                                    {moment.utc(firstDuration.start_date).format('DD MMM YY')} → {moment.utc(firstDuration.end_date).format('DD MMM YY')}
                                                                 </small>
                                                             )}
                                                         </div>
@@ -327,9 +332,11 @@ function ProductAdApproval() {
                                                             </Button>
                                                         </div>
                                                     ) : (
-                                                        <Button variant="outline-primary" size="sm" onClick={() => openApproval(req)}>
-                                                            <CsLineIcons icon="eye" className="me-1" />View
-                                                        </Button>
+                                                        <div className="d-flex gap-2">
+                                                            <Button variant="outline-primary" size="sm" onClick={() => openApproval(req)}>
+                                                                <CsLineIcons icon="eye" className="me-1" />View
+                                                            </Button>
+                                                        </div>
                                                     )}
                                                 </td>
                                             </tr>
@@ -388,7 +395,7 @@ function ProductAdApproval() {
                                         {d.start_date && (
                                             <div>
                                                 <small className="text-success d-block">
-                                                    {moment(d.start_date).format('DD MMM')} → {moment(d.end_date).format('DD MMM YY')}
+                                                    {moment.utc(d.start_date).format('DD MMM')} → {moment.utc(d.end_date).format('DD MMM YY')}
                                                 </small>
                                             </div>
                                         )}
@@ -455,7 +462,7 @@ function ProductAdApproval() {
                                             min={moment().format('YYYY-MM-DD')}
                                         />
                                         <Form.Text className="text-muted">
-                                            End date: start date + {selectedRequest.durations?.[0]?.duration_days || 30} days
+                                            Ad will run from selected start date to the last day of the seller's chosen quarter.
                                         </Form.Text>
                                     </Form.Group>
                                 </>
@@ -507,6 +514,7 @@ function ProductAdApproval() {
                     </Button>
                 </Modal.Footer>
             </Modal>
+
         </>
     );
 }

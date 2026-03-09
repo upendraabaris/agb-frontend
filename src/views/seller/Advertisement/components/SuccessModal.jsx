@@ -3,7 +3,7 @@ import { Modal, Button } from 'react-bootstrap';
 import { useHistory } from 'react-router-dom';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
 
-const SuccessModal = ({ show, categoryName, onClose }) => {
+const SuccessModal = ({ show, categoryName, onClose, viewAdsPath }) => {
   const history = useHistory();
 
   const handleClose = () => {
@@ -12,8 +12,7 @@ const SuccessModal = ({ show, categoryName, onClose }) => {
 
   const handleViewStatus = () => {
     handleClose();
-    // Navigate to ads list
-    history.push('/seller/advertisement/list');
+    history.push(viewAdsPath || '/seller/advertisement/list');
   };
 
   return (
