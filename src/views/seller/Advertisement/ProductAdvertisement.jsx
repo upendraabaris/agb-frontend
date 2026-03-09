@@ -527,7 +527,7 @@ const ProductAdvertisement = () => {
           input: {
             product_id: selectedProduct.id,
             duration_days: selectedDuration,
-            start_preference: selectedStartQuarter && selectedStartQuarter !== getQuarters(1)[0].isoDate ? 'select_quarter' : 'today',
+            start_preference: selectedStartQuarter ? 'select_quarter' : 'today',
             // Derive quarter label directly from the isoDate string (YYYY-MM-DD) to avoid timezone issues
             selected_quarter: (() => {
               if (!selectedStartQuarter) return null;

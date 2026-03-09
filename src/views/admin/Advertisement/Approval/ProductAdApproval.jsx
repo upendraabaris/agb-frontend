@@ -294,7 +294,7 @@ function ProductAdApproval() {
                                                             <div>{firstDuration.duration_days} days</div>
                                                             {firstDuration.start_date && (
                                                                 <small className="text-muted">
-                                                                    {moment(firstDuration.start_date).format('DD MMM YY')} → {moment(firstDuration.end_date).format('DD MMM YY')}
+                                                                    {moment.utc(firstDuration.start_date).format('DD MMM YY')} → {moment.utc(firstDuration.end_date).format('DD MMM YY')}
                                                                 </small>
                                                             )}
                                                         </div>
@@ -395,7 +395,7 @@ function ProductAdApproval() {
                                         {d.start_date && (
                                             <div>
                                                 <small className="text-success d-block">
-                                                    {moment(d.start_date).format('DD MMM')} → {moment(d.end_date).format('DD MMM YY')}
+                                                    {moment.utc(d.start_date).format('DD MMM')} → {moment.utc(d.end_date).format('DD MMM YY')}
                                                 </small>
                                             </div>
                                         )}
@@ -462,7 +462,7 @@ function ProductAdApproval() {
                                             min={moment().format('YYYY-MM-DD')}
                                         />
                                         <Form.Text className="text-muted">
-                                            End date: start date + {selectedRequest.durations?.[0]?.duration_days || 30} days
+                                            Ad will run from selected start date to the last day of the seller's chosen quarter.
                                         </Form.Text>
                                     </Form.Group>
                                 </>
