@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { useHistory } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useHistory, useLocation } from 'react-router-dom';
 import { useQuery, useLazyQuery, useMutation, gql } from '@apollo/client';
 import { Card, Button, Row, Col, Alert, Spinner, Modal, ProgressBar } from 'react-bootstrap';
 import { toast } from 'react-toastify';
+import { useDispatch, useSelector } from 'react-redux';
 import HtmlHead from 'components/html-head/HtmlHead';
+import { menuChangeUseSidebar } from 'layout/nav/main-menu/menuSlice';
 import ImageUpload from './components/ImageUpload';
 import PreviewSection from './components/PreviewSection';
 import SuccessModal from './components/SuccessModal';
@@ -118,8 +120,36 @@ const GET_MY_WALLET = gql`
   }
 `;
 
+// Validate ad coupon
+const VALIDATE_AD_COUPON = gql`
+  query ValidateAdCoupon($code: String!, $userId: ID!, $orderAmount: Float!) {
+    validateAdCoupon(code: $code, userId: $userId, orderAmount: $orderAmount) {
+      valid
+      message
+      discountAmount
+      finalAmount
+      coupon {
+        id
+        couponName
+        couponCode
+        discount
+        discountType
+      }
+    }
+  }
+`;
+
 const Advertisement = () => {
   const history = useHistory();
+  const location = useLocation();
+  const dispatch = useDispatch();
+  const { currentUser } = useSelector((state) => state.auth);
+  const isAdManager = location.pathname.startsWith('/adManager');
+  const basePath = isAdManager ? '/adManager' : '/seller';
+
+  useEffect(() => {
+    dispatch(menuChangeUseSidebar(true));
+  }, [dispatch]);
   
   // Tab state for category selection
   const [categoryTab, setCategoryTab] = useState('category'); // 'category', 'subcategory', 'subsubcategory'
@@ -186,6 +216,12 @@ const Advertisement = () => {
   const [useSharedMedia, setUseSharedMedia] = useState(true);
   const [sharedSlotMedia, setSharedSlotMedia] = useState({});
   const [perCategorySlotMedia, setPerCategorySlotMedia] = useState({});
+
+  // Coupon state
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null); // { valid, message, discountAmount, finalAmount, coupon }
+  const [couponError, setCouponError] = useState('');
+  const [validateAdCoupon, { loading: couponLoading }] = useLazyQuery(VALIDATE_AD_COUPON, { fetchPolicy: 'network-only' });
 
   const { data: pricingData, loading: pricingLoading, error: pricingError } = useQuery(
     GET_CATEGORY_PRICING,
@@ -279,7 +315,7 @@ const Advertisement = () => {
   // Navigate to wallet with state saved
   const goToWalletRecharge = () => {
     saveWizardState();
-    history.push('/seller/wallet?returnTo=/seller/ads/add');
+    history.push(`${basePath}/wallet?returnTo=${basePath}/advertisement/add`);
   };
 
   // Handle errors
@@ -370,6 +406,9 @@ const Advertisement = () => {
     setUseSharedMedia(true);
     setSharedSlotMedia({});
     setPerCategorySlotMedia({});
+    setCouponInput('');
+    setAppliedCoupon(null);
+    setCouponError('');
   };
 
   // Get media for a specific category and slot
@@ -402,11 +441,113 @@ const Advertisement = () => {
     setSelectedDuration(duration);
   };
 
+  // Duration helpers to avoid nested ternaries
+  const QUARTER_MAP = { 360: 4, 180: 2, 90: 1 };
+  const DURATION_LABEL_MAP = { 360: 'Yearly', 180: 'Half-Yearly', 90: 'Quarterly' };
+  const getNumQuarters = (dur) => QUARTER_MAP[dur] || 1;
+  const getDurationLabel = (dur) => DURATION_LABEL_MAP[dur] || 'Quarterly';
+
+  // FRONTEND helper functions for pricing preview (mirrors backend logic)
+  const getNextQuarterStart = (date) => {
+    const m = date.getMonth();
+    const year = date.getFullYear();
+    if (m <= 2) return new Date(Date.UTC(year, 3, 1));
+    if (m <= 5) return new Date(Date.UTC(year, 6, 1));
+    if (m <= 8) return new Date(Date.UTC(year, 9, 1));
+    return new Date(Date.UTC(year + 1, 0, 1));
+  };
+
+  const getQuarterLabel = (date) => {
+    const m = date.getUTCMonth() + 1;
+    const year = date.getUTCFullYear();
+    if (m >= 1 && m <= 3) return `Q1 ${year}`;
+    if (m >= 4 && m <= 6) return `Q2 ${year}`;
+    if (m >= 7 && m <= 9) return `Q3 ${year}`;
+    return `Q4 ${year}`;
+  };
+
+  // Generate selectable quarter options (current + next 4)
+  const getSelectableQuarters = () => {
+    const today = new Date();
+    const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+    const currentQStartMonth = Math.floor(todayUTC.getUTCMonth() / 3) * 3;
+    let cursor = new Date(Date.UTC(todayUTC.getUTCFullYear(), currentQStartMonth, 1));
+    const quarters = [];
+    for (let i = 0; i < 5; i += 1) {
+      quarters.push({
+        label: getQuarterLabel(cursor),
+        startDate: cursor.toISOString().split('T')[0],
+        isCurrent: i === 0,
+      });
+      cursor = getNextQuarterStart(cursor);
+    }
+    return quarters;
+  };
+
+  // Helper: determine if a slot is available for the user's selected time window
+  const isSlotAvailableForSelection = (slotName) => {
+    const qa = selectedCategoryData?.quarterAvailability;
+    if (!qa || qa.length === 0) {
+      // fallback to slotStatuses if no quarterAvailability
+      const slotStatus = selectedCategoryData?.slotStatuses?.find(s => s.slot === slotName);
+      return slotStatus ? slotStatus.available : true;
+    }
+    // Determine which quarters the user's selection covers
+    const numQ = getNumQuarters(selectedDuration);
+    let coveredQuarters = [];
+    if (startPreference === 'today') {
+      // "Today" means current quarter + (numQ - 0) full quarters (current partial + numQ full)
+      // Actually: today mode covers current quarter remaining + numQ full quarters
+      // So it spans current quarter + next numQ quarters
+      // For availability check, we need current + next numQ-1 quarters to be considered
+      // But the pricing logic shows today covers current quarter + numQ full quarters after
+      // So we need current quarter + numQ more = numQ+1 quarters total for overlap
+      // Simplify: current quarter is partially used, then numQ full quarters
+      // The booking overlaps current + next numQ quarters
+      const selectableQ = getSelectableQuarters();
+      coveredQuarters = selectableQ.slice(0, numQ + 1); // current + numQ full
+    } else if (selectedStartQuarter) {
+      // "Select quarter" mode: starts at selectedStartQuarter, covers numQ quarters
+      const selectableQ = getSelectableQuarters();
+      const startIdx = selectableQ.findIndex(q => q.startDate === selectedStartQuarter);
+      if (startIdx >= 0) {
+        coveredQuarters = selectableQ.slice(startIdx, startIdx + numQ);
+      } else {
+        coveredQuarters = selectableQ.slice(0, numQ);
+      }
+    } else {
+      // fallback: just use first numQ quarters
+      coveredQuarters = getSelectableQuarters().slice(0, numQ);
+    }
+    // Check if the slot is available in ALL covered quarters
+    const isBookedInAny = coveredQuarters.some(cq => {
+      const qaEntry = qa.find(q => q.quarter === cq.label);
+      if (qaEntry) {
+        const slotEntry = qaEntry.slots?.find(s => s.slot === slotName);
+        return slotEntry && !slotEntry.available;
+      }
+      return false;
+    });
+    return !isBookedInAny;
+  };
+
+  // Helper: get which quarters a slot is booked in (for display)
+  const getSlotBookedQuarters = (slotName) => {
+    const qa = selectedCategoryData?.quarterAvailability;
+    if (!qa) return [];
+    return qa
+      .filter(q => {
+        const slotEntry = q.slots?.find(s => s.slot === slotName);
+        return slotEntry && !slotEntry.available;
+      })
+      .map(q => q.quarter);
+  };
+
   const handleSlotToggle = (slotName) => {
-    // prevent selecting a slot that's already booked for this category
-    const slotStatus = selectedCategoryData?.slotStatuses?.find(s => s.slot === slotName);
-    if (slotStatus && !slotStatus.available) {
-      toast.error('This slot is already booked');
+    // prevent selecting a slot that's not available for the selected time window
+    if (!isSlotAvailableForSelection(slotName)) {
+      const bookedIn = getSlotBookedQuarters(slotName);
+      toast.error(`This slot is booked in ${bookedIn.join(', ')}`);
       return;
     }
     setSelectedSlots((prevSlots) => {
@@ -435,29 +576,10 @@ const Advertisement = () => {
     });
   };
 
-  // FRONTEND helper functions for pricing preview (mirrors backend logic)
-  const getNextQuarterStart = (date) => {
-    const m = date.getMonth();
-    const year = date.getFullYear();
-    if (m <= 2) return new Date(Date.UTC(year, 3, 1));
-    if (m <= 5) return new Date(Date.UTC(year, 6, 1));
-    if (m <= 8) return new Date(Date.UTC(year, 9, 1));
-    return new Date(Date.UTC(year + 1, 0, 1));
-  };
-
   const addDays = (date, days) => {
     const d = new Date(date);
     d.setUTCDate(d.getUTCDate() + days);
     return d;
-  };
-
-  const getQuarterLabel = (date) => {
-    const m = date.getUTCMonth() + 1;
-    const year = date.getUTCFullYear();
-    if (m >= 1 && m <= 3) return `Q1 ${year}`;
-    if (m >= 4 && m <= 6) return `Q2 ${year}`;
-    if (m >= 7 && m <= 9) return `Q3 ${year}`;
-    return `Q4 ${year}`;
   };
 
   const getQuarterEnd = (date) => {
@@ -490,30 +612,6 @@ const Advertisement = () => {
       remaining -= take;
     }
     return segments;
-  };
-
-  // Duration helpers to avoid nested ternaries
-  const QUARTER_MAP = { 360: 4, 180: 2, 90: 1 };
-  const DURATION_LABEL_MAP = { 360: 'Yearly', 180: 'Half-Yearly', 90: 'Quarterly' };
-  const getNumQuarters = (dur) => QUARTER_MAP[dur] || 1;
-  const getDurationLabel = (dur) => DURATION_LABEL_MAP[dur] || 'Quarterly';
-
-  // Generate selectable quarter options (current + next 4)
-  const getSelectableQuarters = () => {
-    const today = new Date();
-    const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
-    const currentQStartMonth = Math.floor(todayUTC.getUTCMonth() / 3) * 3;
-    let cursor = new Date(Date.UTC(todayUTC.getUTCFullYear(), currentQStartMonth, 1));
-    const quarters = [];
-    for (let i = 0; i < 5; i += 1) {
-      quarters.push({
-        label: getQuarterLabel(cursor),
-        startDate: cursor.toISOString().split('T')[0],
-        isCurrent: i === 0,
-      });
-      cursor = getNextQuarterStart(cursor);
-    }
-    return quarters;
   };
 
   // compute pricing preview for a specific slot (e.g. 'banner_1', 'stamp_2')
@@ -702,10 +800,11 @@ const Advertisement = () => {
 
   const handleSubmit = async () => {
     try {
-      // Wallet balance safety check
+      // Wallet balance safety check (use discounted total if coupon applied)
       const grandTotal = computeGrandTotal();
-      if (walletBalance < grandTotal) {
-        toast.error(`Insufficient wallet balance (₹${walletBalance}). You need ₹${grandTotal}. Please recharge your wallet first.`);
+      const effectiveTotal = appliedCoupon?.valid ? appliedCoupon.finalAmount : grandTotal;
+      if (walletBalance < effectiveTotal) {
+        toast.error(`Insufficient wallet balance (₹${walletBalance}). You need ₹${effectiveTotal}. Please recharge your wallet first.`);
         return;
       }
 
@@ -792,6 +891,7 @@ const Advertisement = () => {
               duration_type: durationTypeMap[selectedDuration] || 'quarterly',
               start_preference: startPreference === 'today' ? 'today' : 'select_quarter',
               start_quarter: selectedStartQuarter || undefined,
+              coupon_code: appliedCoupon?.valid ? appliedCoupon.coupon.couponCode : undefined,
             },
           },
         });
@@ -819,6 +919,10 @@ const Advertisement = () => {
         setUseSharedMedia(true);
         setSharedSlotMedia({});
         setPerCategorySlotMedia({});
+        // Reset coupon state
+        setCouponInput('');
+        setAppliedCoupon(null);
+        setCouponError('');
       }
     } catch (error) {
       console.error('Error submitting advertisement:', error);
@@ -1229,22 +1333,28 @@ const Advertisement = () => {
       );
     }
 
-    // map slots to their status for easy lookup
-    const slotMap = {};
-    (selectedCategoryData.slotStatuses || []).forEach((s) => {
-      slotMap[s.slot] = s;
-    });
-
+    // Build quarter-aware slot availability map
     const bannerSlots = ['banner_1', 'banner_2', 'banner_3', 'banner_4'];
     const stampSlots = ['stamp_1', 'stamp_2', 'stamp_3', 'stamp_4'];
+    const allSlots = [...bannerSlots, ...stampSlots];
 
-    const availableBanner = bannerSlots.filter((s) => slotMap[s]?.available).length;
-    const availableStamp = stampSlots.filter((s) => slotMap[s]?.available).length;
+    // For each slot, determine if it's available for the user's selected time window
+    const slotAvailMap = {};
+    allSlots.forEach((slot) => {
+      slotAvailMap[slot] = {
+        available: isSlotAvailableForSelection(slot),
+        bookedQuarters: getSlotBookedQuarters(slot),
+      };
+    });
+
+    const availableBanner = bannerSlots.filter((s) => slotAvailMap[s]?.available).length;
+    const availableStamp = stampSlots.filter((s) => slotAvailMap[s]?.available).length;
+    const totalAvailable = availableBanner + availableStamp;
 
     return (
       <div>
         <Alert variant='info'>
-          Available Slots: {selectedCategoryData.availableSlots || 0}/{(selectedCategoryData.bookedSlots || 0) + (selectedCategoryData.availableSlots || 0)}
+          Available Slots for selected period: {totalAvailable}/8
         </Alert>
 
         {/* legend */}
@@ -1256,12 +1366,12 @@ const Advertisement = () => {
         </div>
         {/* visual summary grid */}
         <div className='d-flex flex-wrap mb-3'>
-          {[...bannerSlots, ...stampSlots].map((slot) => {
-            const s = slotMap[slot] || { available: true };
+          {allSlots.map((slot) => {
+            const info = slotAvailMap[slot];
             return (
               <span
                 key={slot}
-                className={`badge me-1 mb-1 ${s.available ? 'bg-success' : 'bg-danger'}`}
+                className={`badge me-1 mb-1 ${info.available ? 'bg-success' : 'bg-danger'}`}
                 style={{ fontSize: '0.75rem' }}
               >
                 {getSlotDisplayName(slot)}
@@ -1274,10 +1384,10 @@ const Advertisement = () => {
           <h6 className='mb-3'>Banner Slots (Available: {availableBanner})</h6>
           <Row className='g-2'>
             {bannerSlots.map((slot) => {
-              const status = slotMap[slot] || { available: true, freeDate: null };
-              const disabled = !status.available;
+              const info = slotAvailMap[slot];
+              const disabled = !info.available;
               let variant;
-              if (!status.available) {
+              if (!info.available) {
                 variant = 'outline-danger';
               } else if (selectedSlots.includes(slot)) {
                 variant = 'primary';
@@ -1307,7 +1417,7 @@ const Advertisement = () => {
                     <span className='fw-bold'>{getSlotDisplayName(slot)}</span>
                     {disabled ? (
                       <small style={{ fontSize: '0.65rem' }}>
-                        Booked till {status.freeDate ? new Date(status.freeDate).toLocaleDateString('en-IN') : 'N/A'}
+                        Booked in {info.bookedQuarters.join(', ') || 'N/A'}
                       </small>
                     ) : (
                       priceLabel && <small>{priceLabel}</small>
@@ -1323,10 +1433,10 @@ const Advertisement = () => {
           <h6 className='mb-3'>Stamp Slots (Available: {availableStamp})</h6>
           <Row className='g-2'>
             {stampSlots.map((slot) => {
-              const status = slotMap[slot] || { available: true, freeDate: null };
-              const disabled = !status.available;
+              const info = slotAvailMap[slot];
+              const disabled = !info.available;
               let variant;
-              if (!status.available) {
+              if (!info.available) {
                 variant = 'outline-danger';
               } else if (selectedSlots.includes(slot)) {
                 variant = 'primary';
@@ -1356,7 +1466,7 @@ const Advertisement = () => {
                     <span className='fw-bold'>{getSlotDisplayName(slot)}</span>
                     {disabled ? (
                       <small style={{ fontSize: '0.65rem' }}>
-                        Booked till {status.freeDate ? new Date(status.freeDate).toLocaleDateString('en-IN') : 'N/A'}
+                        Booked in {info.bookedQuarters.join(', ') || 'N/A'}
                       </small>
                     ) : (
                       priceLabel && <small>{priceLabel}</small>
@@ -1802,55 +1912,152 @@ const Advertisement = () => {
                     <Card.Body className='py-3'>
                       <div className='d-flex justify-content-between align-items-center'>
                         <span className='fw-bold' style={{ fontSize: '1rem' }}>Grand Total</span>
-                        <span className='h4 fw-bold mb-0' style={{ color: '#0d6efd' }}>{fmtPrice(grandTotal)}</span>
+                        <span className='h4 fw-bold mb-0' style={{ color: '#0d6efd' }}>
+                          {appliedCoupon?.valid ? (
+                            <>
+                              <span style={{ textDecoration: 'line-through', color: '#999', fontSize: '0.85rem', marginRight: '8px' }}>{fmtPrice(grandTotal)}</span>
+                              {fmtPrice(appliedCoupon.finalAmount)}
+                            </>
+                          ) : fmtPrice(grandTotal)}
+                        </span>
                       </div>
                       {startPreference === 'today' && (
                         <small className='text-muted d-block mt-1'>* Includes pro-rata charges for current quarter remaining days</small>
+                      )}
+                      {appliedCoupon?.valid && (
+                        <small className='text-success d-block mt-1'>
+                          Coupon "{appliedCoupon.coupon.couponCode}" applied — You save {fmtPrice(appliedCoupon.discountAmount)}!
+                        </small>
+                      )}
+                    </Card.Body>
+                  </Card>
+
+                  {/* Coupon Code Section */}
+                  <Card className='mt-3'>
+                    <Card.Body className='py-3'>
+                      <div className='fw-bold mb-2'>
+                        <span className='me-2'>🏷️</span>Have a Coupon Code?
+                      </div>
+                      {appliedCoupon?.valid ? (
+                        <div className='d-flex align-items-center justify-content-between'>
+                          <div>
+                            <span className='badge bg-success me-2' style={{ fontSize: '0.85rem' }}>
+                              {appliedCoupon.coupon.couponCode}
+                            </span>
+                            <span className='text-success' style={{ fontSize: '0.85rem' }}>
+                              {appliedCoupon.coupon.discountType === 'flat'
+                                ? `\u20b9${appliedCoupon.coupon.discount} off`
+                                : `${appliedCoupon.coupon.discount}% off`}
+                            </span>
+                          </div>
+                          <Button
+                            variant='outline-danger'
+                            size='sm'
+                            onClick={() => {
+                              setAppliedCoupon(null);
+                              setCouponInput('');
+                              setCouponError('');
+                            }}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className='d-flex gap-2'>
+                            <input
+                              type='text'
+                              className='form-control form-control-sm'
+                              placeholder='Enter coupon code'
+                              value={couponInput}
+                              onChange={(e) => {
+                                setCouponInput(e.target.value.toUpperCase());
+                                setCouponError('');
+                              }}
+                              style={{ maxWidth: '250px' }}
+                            />
+                            <Button
+                              variant='outline-primary'
+                              size='sm'
+                              disabled={!couponInput.trim() || couponLoading}
+                              onClick={async () => {
+                                setCouponError('');
+                                setAppliedCoupon(null);
+                                try {
+                                  const { data } = await validateAdCoupon({
+                                    variables: {
+                                      code: couponInput.trim(),
+                                      userId: currentUser?.id || '',
+                                      orderAmount: grandTotal,
+                                    },
+                                  });
+                                  const result = data?.validateAdCoupon;
+                                  if (result?.valid) {
+                                    setAppliedCoupon(result);
+                                    setCouponError('');
+                                  } else {
+                                    setCouponError(result?.message || 'Invalid coupon');
+                                  }
+                                } catch (err) {
+                                  setCouponError(err.message || 'Failed to validate coupon');
+                                }
+                              }}
+                            >
+                              {couponLoading ? <Spinner animation='border' size='sm' /> : 'Apply'}
+                            </Button>
+                          </div>
+                          {couponError && (
+                            <small className='text-danger d-block mt-1'>{couponError}</small>
+                          )}
+                        </div>
                       )}
                     </Card.Body>
                   </Card>
 
                   {/* Wallet Balance Check */}
-                  {walletLoading ? (
-                    <Card className='mt-3'>
-                      <Card.Body className='text-center py-3'>
-                        <Spinner animation='border' size='sm' className='me-2' />
-                        Checking wallet balance...
-                      </Card.Body>
-                    </Card>
-                  ) : (
-                    <Card className={`mt-3 ${walletBalance >= grandTotal ? 'border-success' : 'border-danger'}`}>
-                      <Card.Body className='py-3'>
-                        <div className='d-flex justify-content-between align-items-center'>
-                          <span className='fw-bold'>
-                            <span className='me-2'>💰</span>Wallet Balance
-                          </span>
-                          <span className={`h5 fw-bold mb-0 ${walletBalance >= grandTotal ? 'text-success' : 'text-danger'}`}>
-                            {fmtPrice(walletBalance)}
-                          </span>
-                        </div>
-                        {walletBalance >= grandTotal ? (
-                          <small className='text-success d-block mt-1'>
-                            ✓ Sufficient balance. {fmtPrice(walletBalance - grandTotal)} will remain after deduction.
-                          </small>
-                        ) : (
-                          <div className='mt-2'>
-                            <Alert variant='danger' className='mb-2 py-2'>
-                              <strong>Insufficient balance!</strong> You need {fmtPrice(grandTotal - walletBalance)} more.
-                              Please recharge your wallet before submitting.
-                            </Alert>
-                            <Button
-                              variant='warning'
-                              size='sm'
-                              onClick={goToWalletRecharge}
-                            >
-                              Recharge Wallet →
-                            </Button>
+                  {(() => {
+                    const effectiveTotal = appliedCoupon?.valid ? appliedCoupon.finalAmount : grandTotal;
+                    return walletLoading ? (
+                      <Card className='mt-3'>
+                        <Card.Body className='text-center py-3'>
+                          <Spinner animation='border' size='sm' className='me-2' />
+                          Checking wallet balance...
+                        </Card.Body>
+                      </Card>
+                    ) : (
+                      <Card className={`mt-3 ${walletBalance >= effectiveTotal ? 'border-success' : 'border-danger'}`}>
+                        <Card.Body className='py-3'>
+                          <div className='d-flex justify-content-between align-items-center'>
+                            <span className='fw-bold'>
+                              <span className='me-2'>💰</span>Wallet Balance
+                            </span>
+                            <span className={`h5 fw-bold mb-0 ${walletBalance >= effectiveTotal ? 'text-success' : 'text-danger'}`}>
+                              {fmtPrice(walletBalance)}
+                            </span>
                           </div>
-                        )}
-                      </Card.Body>
-                    </Card>
-                  )}
+                          {walletBalance >= effectiveTotal ? (
+                            <small className='text-success d-block mt-1'>
+                              ✓ Sufficient balance. {fmtPrice(walletBalance - effectiveTotal)} will remain after deduction.
+                            </small>
+                          ) : (
+                            <div className='mt-2'>
+                              <Alert variant='danger' className='mb-2 py-2'>
+                                <strong>Insufficient balance!</strong> You need {fmtPrice(effectiveTotal - walletBalance)} more.
+                                Please recharge your wallet before submitting.
+                              </Alert>
+                              <Button
+                                variant='warning'
+                                size='sm'
+                                onClick={goToWalletRecharge}
+                              >
+                                Recharge Wallet →
+                              </Button>
+                            </div>
+                          )}
+                        </Card.Body>
+                      </Card>
+                    );
+                  })()}
                 </>
               );
             })()}
@@ -1974,7 +2181,7 @@ const Advertisement = () => {
                 await handleSubmit();
                 setShowWizardModal(false);
               }}
-              disabled={submitLoading || uploading || walletLoading || walletBalance < computeGrandTotal()}
+              disabled={submitLoading || uploading || walletLoading || walletBalance < (appliedCoupon?.valid ? appliedCoupon.finalAmount : computeGrandTotal())}
             >
               {(submitLoading || uploading) ? 'Submitting...' : 'Submit Advertisement'}
             </Button>

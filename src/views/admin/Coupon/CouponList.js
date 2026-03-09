@@ -17,6 +17,12 @@ const GET_ALL_COUPON = gql`
       start
       end
       active
+      couponType
+      discountType
+      maxUses
+      usedCount
+      perUserLimit
+      minOrderAmount
     }
   }
 `;
@@ -122,9 +128,12 @@ function CouponList() {
           <tr>
             <th>Coupon Name</th>
             <th>Coupon Code</th>
+            <th>Type</th>
             <th>Discount</th>
             <th>Start Date</th>
             <th>End Date</th>
+            <th className="text-center">Used / Max</th>
+            <th className="text-center">Per User</th>
             <th className="text-center">Status</th>
             <th className="text-center">Action</th>
           </tr>
@@ -136,9 +145,16 @@ function CouponList() {
               <tr key={coupon.id}>
                 <td>{coupon.couponName}</td>
                 <td className="fw-bold">{coupon.couponCode}</td>
-                <td>{coupon.discount}%</td>
+                <td>
+                  <span className={`badge ${coupon.couponType === 'ad' ? 'bg-info' : 'bg-secondary'}`}>
+                    {coupon.couponType === 'ad' ? 'Ad' : 'Product'}
+                  </span>
+                </td>
+                <td>{coupon.discountType === 'flat' ? `\u20b9${coupon.discount}` : `${coupon.discount}%`}</td>
                 <td>{formatDate(coupon.start)}</td>
                 <td>{formatDate(coupon.end)}</td>
+                <td className="text-center">{coupon.usedCount || 0} / {coupon.maxUses || '\u221E'}</td>
+                <td className="text-center">{coupon.perUserLimit || 1}</td>
 
                 <td className="text-center">
                   {coupon.active ? <CsLineIcons icon="check" className="text-success" /> : <CsLineIcons icon="close-circle" className="text-danger" />}

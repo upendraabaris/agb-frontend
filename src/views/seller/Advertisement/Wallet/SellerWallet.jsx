@@ -3,7 +3,9 @@ import { Card, Button, Table, Badge, Spinner, Modal, Form, Alert } from 'react-b
 import { gql, useQuery, useMutation } from '@apollo/client';
 import { toast } from 'react-toastify';
 import { useLocation, useHistory } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
 import HtmlHead from 'components/html-head/HtmlHead';
+import { menuChangeUseSidebar } from 'layout/nav/main-menu/menuSlice';
 
 // ─── GraphQL ─────────────────────────────────────────────────────────────────
 
@@ -76,11 +78,17 @@ function statusBadgeBg(status) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const SellerWallet = () => {
+    const dispatch = useDispatch();
     const title = 'My Wallet';
     const description = 'View wallet balance and add money via PayU';
 
     const location = useLocation();
     const history = useHistory();
+
+    useEffect(() => {
+        dispatch(menuChangeUseSidebar(true));
+    }, [dispatch]);
+
     const searchParams = new URLSearchParams(location.search);
     const paymentStatus = searchParams.get('status');
     const returnTo = searchParams.get('returnTo');
