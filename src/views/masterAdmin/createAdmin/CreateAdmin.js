@@ -117,6 +117,20 @@ function CreateAdmin() {
       }
     }
   `;
+  const ADD_AD_MANAGER_ROLE = gql`
+    mutation AddAdManagerRole($userId: ID) {
+      addAdManagerRole(userID: $userId) {
+        message
+      }
+    }
+  `;
+  const REMOVE_AD_MANAGER_ROLE = gql`
+    mutation RemoveAdManagerRole($userId: ID) {
+      removeAdManagerRole(userID: $userId) {
+        message
+      }
+    }
+  `;
   const [modalView, setModalView] = useState(false);
   const [admin, setAdmin] = useState(null);
 
@@ -148,6 +162,34 @@ function CreateAdmin() {
       }
     },
   });
+  const [AddAdManagerRole] = useMutation(ADD_AD_MANAGER_ROLE, {
+    onCompleted: (res) => {
+      toast.success(res.addAdManagerRole.message || 'User updated !');
+      setModalView(false);
+      setAdmin(null);
+      refetch();
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Something Went Wrong !');
+      if (err.message === 'Authorization header is missing' || err.message === 'jwt expired') {
+        history.push('/login');
+      }
+    },
+  });
+  const [RemoveAdManagerRole] = useMutation(REMOVE_AD_MANAGER_ROLE, {
+    onCompleted: (res) => {
+      toast.success(res.removeAdManagerRole.message || 'User updated !');
+      setModalView(false);
+      setAdmin(null);
+      refetch();
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Something Went Wrong !');
+      if (err.message === 'Authorization header is missing' || err.message === 'jwt expired') {
+        history.push('/login');
+      }
+    },
+  });
 
   const getUserDetail = (uservalue) => {
     setAdmin(uservalue);
@@ -163,6 +205,20 @@ function CreateAdmin() {
   };
   const removeadminrole = async () => {
     await RemoveAdminRole({
+      variables: {
+        userId: admin.id,
+      },
+    });
+  };
+  const addAdManager = async () => {
+    await AddAdManagerRole({
+      variables: {
+        userId: admin.id,
+      },
+    });
+  };
+  const removeAdManager = async () => {
+    await RemoveAdManagerRole({
       variables: {
         userId: admin.id,
       },
@@ -326,7 +382,7 @@ function CreateAdmin() {
 
       <Modal size="sm" aria-labelledby="contained-modal-title-vcenter" centered show={modalView} onHide={() => setModalView(!modalView)}>
         <Modal.Header closeButton>
-          <Modal.Title id="contained-modal-title-vcenter">Create an Portal Admin!</Modal.Title>
+          <Modal.Title id="contained-modal-title-vcenter">Manage User Roles</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <div className="mb-3 filled form-group tooltip-end-top">
@@ -338,14 +394,25 @@ function CreateAdmin() {
             <CsLineIcons icon="email" />
             <Form.Control type="email" name="email" readOnly defaultValue={admin?.email || ''} />
           </div>
+          <div className="mb-2">
+            <small className="text-muted fw-bold">Portal Admin</small>
+          </div>
           <div className="mb-3 d-flex justify-content-around">
-            <Button onClick={addAdmin}>Add</Button>
-            <Button onClick={removeadminrole} variant="danger">
-              Remove
+            <Button size="sm" onClick={addAdmin} disabled={admin?.role?.includes('admin')}>Add Admin</Button>
+            <Button size="sm" onClick={removeadminrole} variant="danger" disabled={!admin?.role?.includes('admin')}>
+              Remove Admin
+            </Button>
+          </div>
+          <div className="mb-2">
+            <small className="text-muted fw-bold">Ad Manager</small>
+          </div>
+          <div className="mb-3 d-flex justify-content-around">
+            <Button size="sm" variant="info" onClick={addAdManager} disabled={admin?.role?.includes('adManager')}>Add Ad Manager</Button>
+            <Button size="sm" onClick={removeAdManager} variant="danger" disabled={!admin?.role?.includes('adManager')}>
+              Remove Ad Manager
             </Button>
           </div>
         </Modal.Body>
-        {/* <Modal.Footer></Modal.Footer> */}
       </Modal>
     </>
   );

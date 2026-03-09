@@ -89,6 +89,7 @@ function ListViewUser() {
         accounts: 'AC',
         enquiry: 'EA',
         service: 'SPA',
+        adManager: 'AdMgr',
       };
       return role.map((r) => roleMap[r] || r).join(', ');
     }
@@ -150,8 +151,8 @@ function ListViewUser() {
                   placement="top"
                   overlay={
                     <Tooltip id="tooltip-role">
-                      Cust: Customer, EA: Enquiry Associate, SPA: Service Provider Associate, SA: Seller Associate, BA: Business Associate, Dealer: D, PS:
-                      Portal Admin, MA: Master Admin
+                      Cust: Customer, EA: Enquiry Associate, SPA: Service Provider Associate, SA: Seller Associate, BA: Business Associate, Dealer: D, PA:
+                      Portal Admin, MA: Master Admin, AdMgr: Ad Manager
                     </Tooltip>
                   }
                 >

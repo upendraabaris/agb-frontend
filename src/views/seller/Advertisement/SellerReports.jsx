@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, gql } from '@apollo/client';
+import { useDispatch } from 'react-redux';
 import { toast } from 'react-toastify';
 import { Spinner, Table, Nav, Tab, Button } from 'react-bootstrap';
 import { ArrowDownTrayIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import HtmlHead from 'components/html-head/HtmlHead';
 import BreadcrumbList from 'components/breadcrumb-list/BreadcrumbList';
+import { menuChangeUseSidebar } from 'layout/nav/main-menu/menuSlice';
 
 // ==========================================
 // GraphQL Queries
@@ -74,6 +76,7 @@ const GET_MY_AD_VALIDITY = gql`
 // ==========================================
 
 const SellerReports = () => {
+    const dispatch = useDispatch();
     const title = 'My Advertisement Reports';
     const description = 'Track your advertisement campaigns and performance';
     const breadcrumbs = [
@@ -83,6 +86,10 @@ const SellerReports = () => {
     ];
 
     const [activeTab, setActiveTab] = useState('active');
+
+    useEffect(() => {
+        dispatch(menuChangeUseSidebar(true));
+    }, [dispatch]);
 
     // GraphQL Queries
     const activeAdsQuery = useQuery(GET_MY_ACTIVE_ADS, {

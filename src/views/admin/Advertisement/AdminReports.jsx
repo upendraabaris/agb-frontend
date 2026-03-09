@@ -14,6 +14,8 @@ const GET_ADMIN_REVENUE_REPORT = gql`
   query GetAdminRevenueReport($period: String!, $year: Int!, $month: Int, $quarter: Int) {
     getAdminRevenueReport(period: $period, year: $year, month: $month, quarter: $quarter) {
       totalRevenue
+      totalCouponDiscount
+      totalNetRevenue
       period
       year
       month
@@ -23,6 +25,10 @@ const GET_ADMIN_REVENUE_REPORT = gql`
         tierName
         revenue
         adCount
+        bannerCount
+        stampCount
+        couponDiscount
+        netRevenue
       }
     }
   }
@@ -37,6 +43,8 @@ const GET_ADMIN_TIER_SALES_REPORT = gql`
       bannerCount
       stampCount
       revenue
+      couponDiscount
+      netRevenue
     }
   }
 `;
@@ -55,6 +63,16 @@ const GET_ADMIN_SLOT_UTILIZATION = gql`
         occupiedSlots
         availableSlots
         utilizationPercentage
+      }
+      quarterSlotDetails {
+        quarter
+        slot
+        sellerName
+        categoryName
+        tierName
+        status
+        startDate
+        endDate
       }
     }
   }
@@ -96,6 +114,11 @@ const GET_ADMIN_EXPIRY_UPCOMING = gql`
       startDate
       endDate
       remainingDays
+      quartersCovered
+      totalPrice
+      couponCode
+      couponDiscountAmount
+      finalPrice
     }
   }
 `;
@@ -110,6 +133,7 @@ const GET_ADMIN_ADVERTISER_SPENDING = gql`
       adCount
       activeAdsCount
       completedAdsCount
+      totalCouponDiscount
     }
   }
 `;
@@ -315,32 +339,60 @@ const AdminReports = () => {
                             )}
                             {!revenueQuery.loading && !revenueQuery.error && (
                                 <>
-                                    <div className="p-3 bg-light rounded border mb-3">
-                                        <span className="d-block text-muted small text-uppercase">Total Revenue</span>
-                                        <span className="d-block h3 fw-bold text-dark mb-0">
-                                            ₹{revenueQuery.data?.getAdminRevenueReport?.totalRevenue?.toLocaleString() || 0}
-                                        </span>
-                                        <small className="text-muted">
-                                            {revenuePeriod === 'monthly' && `${revenueMonth}/${revenueYear}`}
-                                            {revenuePeriod === 'quarterly' && `Q${revenueQuarter} ${revenueYear}`}
-                                            {revenuePeriod === 'annual' && `${revenueYear}`}
-                                        </small>
+                                    <div className="row g-3 mb-3">
+                                        <div className="col-md-4">
+                                            <div className="p-3 bg-light rounded border">
+                                                <span className="d-block text-muted small text-uppercase">Gross Revenue</span>
+                                                <span className="d-block h3 fw-bold text-dark mb-0">
+                                                    ₹{revenueQuery.data?.getAdminRevenueReport?.totalRevenue?.toLocaleString() || 0}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="col-md-4">
+                                            <div className="p-3 bg-light rounded border">
+                                                <span className="d-block text-muted small text-uppercase">Coupon Discounts</span>
+                                                <span className="d-block h3 fw-bold text-danger mb-0">
+                                                    -₹{revenueQuery.data?.getAdminRevenueReport?.totalCouponDiscount?.toLocaleString() || 0}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="col-md-4">
+                                            <div className="p-3 bg-light rounded border">
+                                                <span className="d-block text-muted small text-uppercase">Net Revenue (After Coupon)</span>
+                                                <span className="d-block h3 fw-bold text-success mb-0">
+                                                    ₹{revenueQuery.data?.getAdminRevenueReport?.totalNetRevenue?.toLocaleString() || 0}
+                                                </span>
+                                            </div>
+                                        </div>
                                     </div>
+                                    <small className="text-muted d-block mb-3">
+                                        {revenuePeriod === 'monthly' && `${revenueMonth}/${revenueYear}`}
+                                        {revenuePeriod === 'quarterly' && `Q${revenueQuarter} ${revenueYear}`}
+                                        {revenuePeriod === 'annual' && `${revenueYear}`}
+                                    </small>
 
                                     <Table bordered hover responsive size="sm">
                                         <thead className="table-light">
                                             <tr>
                                                 <th>Tier Name</th>
-                                                <th className="text-end">Revenue (₹)</th>
-                                                <th className="text-center">Ad Count</th>
+                                                <th className="text-center">Banners</th>
+                                                <th className="text-center">Stamps</th>
+                                                <th className="text-end">Gross Revenue (₹)</th>
+                                                <th className="text-end">Coupon Discount (₹)</th>
+                                                <th className="text-end">Net Revenue (₹)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {revenueQuery.data?.getAdminRevenueReport?.breakdown?.map((item, idx) => (
                                                 <tr key={idx}>
                                                     <td>{item.tierName}</td>
-                                                    <td className="text-end fw-bold">₹{item.revenue?.toLocaleString()}</td>
-                                                    <td className="text-center">{item.adCount}</td>
+                                                    <td className="text-center">{item.bannerCount}</td>
+                                                    <td className="text-center">{item.stampCount}</td>
+                                                    <td className="text-end">₹{item.revenue?.toLocaleString()}</td>
+                                                    <td className="text-end text-danger">
+                                                        {item.couponDiscount > 0 ? `-₹${item.couponDiscount?.toLocaleString()}` : '—'}
+                                                    </td>
+                                                    <td className="text-end fw-bold">₹{item.netRevenue?.toLocaleString()}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -405,7 +457,9 @@ const AdminReports = () => {
                                                 <th className="text-center">Total Ads Sold</th>
                                                 <th className="text-center">Banners</th>
                                                 <th className="text-center">Stamps</th>
-                                                <th className="text-end">Revenue (₹)</th>
+                                                <th className="text-end">Gross Revenue (₹)</th>
+                                                <th className="text-end">Coupon Discount (₹)</th>
+                                                <th className="text-end">Net Revenue (₹)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -416,6 +470,10 @@ const AdminReports = () => {
                                                     <td className="text-center">{item.bannerCount}</td>
                                                     <td className="text-center">{item.stampCount}</td>
                                                     <td className="text-end">₹{item.revenue?.toLocaleString()}</td>
+                                                    <td className="text-end text-danger">
+                                                        {item.couponDiscount > 0 ? `-₹${item.couponDiscount?.toLocaleString()}` : '—'}
+                                                    </td>
+                                                    <td className="text-end fw-bold">₹{item.netRevenue?.toLocaleString()}</td>
                                                 </tr>
                                             ))}
                                         </tbody>

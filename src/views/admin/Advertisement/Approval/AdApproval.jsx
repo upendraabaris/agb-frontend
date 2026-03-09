@@ -44,6 +44,11 @@ const GET_AD_REQUESTS = gql`
           subtotal
         }
         total_price
+        coupon_code
+        coupon_discount_type
+        coupon_discount_value
+        coupon_discount_amount
+        final_price
       }
       createdAt
       updatedAt
@@ -152,6 +157,19 @@ function AdApproval() {
       }
       return total + (dur.total_price || 0);
     }, 0);
+  };
+
+  // Compute total after coupon discount
+  const computeDiscountedTotal = () => {
+    if (!selectedRequest?.durations || selectedRequest.durations.length === 0) return 0;
+    return selectedRequest.durations.reduce((total, dur) => {
+      return total + (dur.final_price != null && dur.final_price > 0 ? dur.final_price : dur.total_price || 0);
+    }, 0);
+  };
+
+  // Check if any duration has a coupon applied
+  const hasCouponApplied = () => {
+    return selectedRequest?.durations?.some((d) => d.coupon_code) || false;
   };
 
   // human-readable slot label
@@ -502,6 +520,23 @@ function AdApproval() {
                           <small className="text-muted">Slot Total: </small>
                           <strong>₹{dur.total_price || (dur.pricing_breakdown ? dur.pricing_breakdown.reduce((s, b) => s + (b.subtotal || 0), 0) : 0)}</strong>
                         </div>
+
+                        {dur.coupon_code && (
+                          <div className="mt-2 p-2 rounded" style={{ backgroundColor: '#f0fff4', border: '1px solid #c6f6d5' }}>
+                            <div className="d-flex justify-content-between align-items-center">
+                              <div>
+                                <span className="badge bg-success me-2">🏷️ {dur.coupon_code}</span>
+                                <small className="text-muted">
+                                  {dur.coupon_discount_type === 'flat' ? `₹${dur.coupon_discount_value} flat` : `${dur.coupon_discount_value}% off`}
+                                </small>
+                              </div>
+                              <div>
+                                <small className="text-danger me-2">-₹{dur.coupon_discount_amount}</small>
+                                <strong className="text-success">₹{dur.final_price}</strong>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </Card.Body>
                     </Card>
                   ))}
@@ -509,7 +544,19 @@ function AdApproval() {
                   {/* Grand total */}
                   <div className="mb-3 p-3 bg-light rounded d-flex justify-content-between align-items-center">
                     <h6 className="mb-0">Grand Total ({selectedRequest.durations.length} slot{selectedRequest.durations.length > 1 ? 's' : ''})</h6>
-                    <h5 className="mb-0 text-primary">₹{computeProjectedTotal()}</h5>
+                    <div className="text-end">
+                      {hasCouponApplied() ? (
+                        <>
+                          <span style={{ textDecoration: 'line-through', color: '#999', fontSize: '0.9rem', marginRight: '8px' }}>₹{computeProjectedTotal()}</span>
+                          <span className="h5 mb-0 text-success fw-bold">₹{computeDiscountedTotal()}</span>
+                          <div>
+                            <small className="text-success">Coupon discount: -₹{computeProjectedTotal() - computeDiscountedTotal()}</small>
+                          </div>
+                        </>
+                      ) : (
+                        <h5 className="mb-0 text-primary">₹{computeProjectedTotal()}</h5>
+                      )}
+                    </div>
                   </div>
                 </>
               )}

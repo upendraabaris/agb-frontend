@@ -467,6 +467,7 @@ const appEnquiry = `${appRoot}/enquiry`;
 const appService = `${appRoot}/service`;
 const appSubBusiness = `${appRoot}/subBusiness`;
 const appAccounts = `${appRoot}/accounts`;
+const appAdManager = `${appRoot}/adManager`;
 
 const routesAndMenuItems = {
   mainMenuItems: [
@@ -1632,6 +1633,47 @@ const routesAndMenuItems = {
       icon: 'money',
       roles: [USER_ROLE.Seller],
       hidden: true,
+    },
+
+    /* ------------------------------------------------------------------ */
+    /* ----------------------  Ad Manager Dashboard  -------------------- */
+    /* ------------------------------------------------------------------ */
+
+    {
+      path: '/adManager',
+      exact: true,
+      redirect: true,
+      to: `${appAdManager}/dashboard`,
+    },
+    {
+      path: `${appAdManager}/dashboard`,
+      component: SellerReports,
+      label: <span className="badge blockquote mb-0 bg-primary">Ad Manager Dashboard</span>,
+      roles: [USER_ROLE.AdManager],
+    },
+    {
+      path: `${appAdManager}/advertisement`,
+      exact: true,
+      redirect: true,
+      to: `${appAdManager}/advertisement/add`,
+      label: 'Advertisement',
+      icon: 'radio',
+      roles: [USER_ROLE.AdManager],
+      subs: [
+        { path: '/add', label: 'Ad at Categories', component: Advertisement },
+        { path: '/list', label: 'My Ad List', component: MyAds },
+        { path: '/reporting', label: 'Reporting', component: SellerReports },
+        { path: '/ads-product', label: 'Advertise a Product', component: ProductAdvertisement },
+        { path: '/product-list', label: 'My Product Ads', component: MyProductAds },
+        { path: '/approval', label: 'Ad Approvals', component: ad.approval },
+      ],
+    },
+    {
+      path: `${appAdManager}/wallet`,
+      component: SellerWallet,
+      label: 'Wallet',
+      icon: 'money',
+      roles: [USER_ROLE.AdManager],
     },
 
     /* ------------------------------------------------------------------ */
