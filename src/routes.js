@@ -7,6 +7,7 @@ import SellerWallet from 'views/seller/Advertisement/Wallet/SellerWallet';
 import SellerReports from 'views/seller/Advertisement/SellerReports';
 import ProductAdvertisement from 'views/seller/Advertisement/ProductAdvertisement';
 import ProductAdApproval from 'views/admin/Advertisement/Approval/ProductAdApproval';
+import MyProductAds from 'views/seller/Advertisement/MyProductAds';
 
 /* ------------------------------------------------------------------ */
 /* -------------------------  Master Panel   ------------------------ */
