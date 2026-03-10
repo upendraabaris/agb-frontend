@@ -29,6 +29,8 @@ const GET_PRODUCT_AD_REQUESTS = gql`
         mobile_image_url
         desktop_image_url
         redirect_url
+        mobile_redirect_url
+        desktop_redirect_url
       }
       durations {
         id
