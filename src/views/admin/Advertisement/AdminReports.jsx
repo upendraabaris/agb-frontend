@@ -580,6 +580,58 @@ const AdminReports = () => {
                                         <ArrowDownTrayIcon style={{ width: '14px', height: '14px' }} className="me-1" />
                                         Export CSV
                                     </Button>
+
+                                    {/* Quarter-wise Slot Booking Details */}
+                                    {slotUtilizationQuery.data?.getAdminSlotUtilization?.quarterSlotDetails?.length > 0 && (
+                                        <>
+                                            <h6 className="fw-bold mt-4 mb-3">Quarter-wise Slot Booking Details</h6>
+                                            <Table bordered hover responsive size="sm">
+                                                <thead className="table-light">
+                                                    <tr>
+                                                        <th>Quarter</th>
+                                                        <th>Slot</th>
+                                                        <th>Category</th>
+                                                        <th>Tier</th>
+                                                        <th>Seller</th>
+                                                        <th>Status</th>
+                                                        <th>Start Date</th>
+                                                        <th>End Date</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {slotUtilizationQuery.data.getAdminSlotUtilization.quarterSlotDetails.map((item, idx) => (
+                                                        <tr key={idx}>
+                                                            <td>
+                                                                <span className="badge bg-info text-dark">{item.quarter}</span>
+                                                            </td>
+                                                            <td><code>{item.slot}</code></td>
+                                                            <td>{item.categoryName}</td>
+                                                            <td>{item.tierName}</td>
+                                                            <td>{item.sellerName}</td>
+                                                            <td>
+                                                                <span className="badge bg-success">{item.status}</span>
+                                                            </td>
+                                                            <td>{item.startDate ? new Date(item.startDate).toLocaleDateString() : '—'}</td>
+                                                            <td>{item.endDate ? new Date(item.endDate).toLocaleDateString() : '—'}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </Table>
+
+                                            <Button
+                                                variant="link"
+                                                size="sm"
+                                                className="d-print-none"
+                                                onClick={() => exportToCSV(
+                                                    slotUtilizationQuery.data.getAdminSlotUtilization.quarterSlotDetails,
+                                                    'quarter_slot_details'
+                                                )}
+                                            >
+                                                <ArrowDownTrayIcon style={{ width: '14px', height: '14px' }} className="me-1" />
+                                                Export Quarter Details CSV
+                                            </Button>
+                                        </>
+                                    )}
                                 </>
                             )}
                         </div>
@@ -678,8 +730,11 @@ const AdminReports = () => {
                                                 <th>Category</th>
                                                 <th>Tier</th>
                                                 <th>Slot</th>
+                                                <th>Quarter(s)</th>
                                                 <th>End Date</th>
                                                 <th className="text-center">Days Remaining</th>
+                                                <th className="text-end">Price (₹)</th>
+                                                <th>Coupon</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -688,12 +743,38 @@ const AdminReports = () => {
                                                     <td className="fw-bold">{item.sellerName}</td>
                                                     <td>{item.categoryName}</td>
                                                     <td>{item.tierName}</td>
-                                                    <td>{item.slot}</td>
+                                                    <td><code>{item.slot}</code></td>
+                                                    <td>
+                                                        {item.quartersCovered && item.quartersCovered.length > 0
+                                                            ? item.quartersCovered.map((q, qi) => (
+                                                                <span key={qi} className="badge bg-info text-dark me-1">{q}</span>
+                                                            ))
+                                                            : <span className="text-muted">—</span>
+                                                        }
+                                                    </td>
                                                     <td>{new Date(item.endDate).toLocaleDateString()}</td>
                                                     <td className="text-center">
                                                         <span className={`badge ${item.remainingDays <= 7 ? 'bg-danger' : 'bg-warning text-dark'}`}>
                                                             {item.remainingDays} days
                                                         </span>
+                                                    </td>
+                                                    <td className="text-end">
+                                                        {item.couponDiscountAmount > 0 ? (
+                                                            <>
+                                                                <span className="text-decoration-line-through text-muted small">₹{item.totalPrice?.toLocaleString()}</span>
+                                                                {' '}
+                                                                <span className="fw-bold">₹{item.finalPrice?.toLocaleString()}</span>
+                                                            </>
+                                                        ) : (
+                                                            <span>₹{item.finalPrice?.toLocaleString()}</span>
+                                                        )}
+                                                    </td>
+                                                    <td>
+                                                        {item.couponCode ? (
+                                                            <span className="badge bg-success">{item.couponCode} (-₹{item.couponDiscountAmount?.toLocaleString()})</span>
+                                                        ) : (
+                                                            <span className="text-muted">—</span>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             ))}
@@ -762,6 +843,7 @@ const AdminReports = () => {
                                                 <th>Seller Name</th>
                                                 <th>Email</th>
                                                 <th className="text-end">Total Spent (₹)</th>
+                                                <th className="text-end">Coupon Discount (₹)</th>
                                                 <th className="text-center">Total Ads</th>
                                                 <th className="text-center">Active Ads</th>
                                                 <th className="text-center">Completed Ads</th>
@@ -773,6 +855,9 @@ const AdminReports = () => {
                                                     <td className="fw-bold">{item.sellerName}</td>
                                                     <td>{item.sellerEmail}</td>
                                                     <td className="text-end fw-bold">₹{item.totalSpent?.toLocaleString()}</td>
+                                                    <td className="text-end text-danger">
+                                                        {item.totalCouponDiscount > 0 ? `-₹${item.totalCouponDiscount?.toLocaleString()}` : '—'}
+                                                    </td>
                                                     <td className="text-center">{item.adCount}</td>
                                                     <td className="text-center">{item.activeAdsCount}</td>
                                                     <td className="text-center">{item.completedAdsCount}</td>

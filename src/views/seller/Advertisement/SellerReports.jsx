@@ -27,6 +27,11 @@ const GET_MY_ACTIVE_ADS = gql`
       endDate
       remainingDays
       durationDays
+      quartersCovered
+      totalPrice
+      couponCode
+      couponDiscountAmount
+      finalPrice
       media {
         slot
         mobileImageUrl
@@ -52,6 +57,11 @@ const GET_MY_PAST_ADS = gql`
       endDate
       durationDays
       completedDate
+      quartersCovered
+      totalPrice
+      couponCode
+      couponDiscountAmount
+      finalPrice
     }
   }
 `;
@@ -67,6 +77,7 @@ const GET_MY_AD_VALIDITY = gql`
       remainingDays
       status
       isExpiringSoon
+      quartersCovered
     }
   }
 `;
@@ -206,10 +217,12 @@ const SellerReports = () => {
                                                         <th>Category</th>
                                                         <th>Tier</th>
                                                         <th>Slot</th>
+                                                        <th>Quarter(s)</th>
                                                         <th>Start Date</th>
                                                         <th>End Date</th>
-                                                        <th className="text-center">Duration (Days)</th>
-                                                        <th className="text-center">Remaining Days</th>
+                                                        <th className="text-center">Remaining</th>
+                                                        <th className="text-end">Price (₹)</th>
+                                                        <th>Coupon</th>
                                                         <th>Status</th>
                                                     </tr>
                                                 </thead>
@@ -219,13 +232,38 @@ const SellerReports = () => {
                                                             <td className="fw-bold">{ad.categoryName}</td>
                                                             <td>{ad.tierName}</td>
                                                             <td><code>{ad.slot}</code></td>
+                                                            <td>
+                                                                {ad.quartersCovered && ad.quartersCovered.length > 0
+                                                                    ? ad.quartersCovered.map((q, qi) => (
+                                                                        <span key={qi} className="badge bg-info text-dark me-1">{q}</span>
+                                                                    ))
+                                                                    : <span className="text-muted">—</span>
+                                                                }
+                                                            </td>
                                                             <td>{new Date(ad.startDate).toLocaleDateString()}</td>
                                                             <td>{new Date(ad.endDate).toLocaleDateString()}</td>
-                                                            <td className="text-center">{ad.durationDays}</td>
                                                             <td className="text-center">
                                                                 <span className={`badge ${ad.remainingDays <= 7 ? 'bg-warning text-dark' : 'bg-success'}`}>
                                                                     {ad.remainingDays} days
                                                                 </span>
+                                                            </td>
+                                                            <td className="text-end">
+                                                                {ad.couponDiscountAmount > 0 ? (
+                                                                    <>
+                                                                        <span className="text-decoration-line-through text-muted small">₹{ad.totalPrice?.toLocaleString()}</span>
+                                                                        {' '}
+                                                                        <span className="fw-bold">₹{ad.finalPrice?.toLocaleString()}</span>
+                                                                    </>
+                                                                ) : (
+                                                                    <span>₹{ad.finalPrice?.toLocaleString()}</span>
+                                                                )}
+                                                            </td>
+                                                            <td>
+                                                                {ad.couponCode ? (
+                                                                    <span className="badge bg-success">{ad.couponCode}</span>
+                                                                ) : (
+                                                                    <span className="text-muted">—</span>
+                                                                )}
                                                             </td>
                                                             <td>
                                                                 <span className="badge bg-success">{ad.status}</span>
@@ -321,11 +359,13 @@ const SellerReports = () => {
                                                         <th>Category</th>
                                                         <th>Tier</th>
                                                         <th>Slot</th>
+                                                        <th>Quarter(s)</th>
                                                         <th>Start Date</th>
                                                         <th>End Date</th>
-                                                        <th className="text-center">Duration (Days)</th>
+                                                        <th className="text-end">Price (₹)</th>
+                                                        <th>Coupon</th>
                                                         <th>Status</th>
-                                                        <th>Completed Date</th>
+                                                        <th>Completed</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -334,9 +374,34 @@ const SellerReports = () => {
                                                             <td className="fw-bold">{ad.categoryName}</td>
                                                             <td>{ad.tierName}</td>
                                                             <td><code>{ad.slot}</code></td>
+                                                            <td>
+                                                                {ad.quartersCovered && ad.quartersCovered.length > 0
+                                                                    ? ad.quartersCovered.map((q, qi) => (
+                                                                        <span key={qi} className="badge bg-info text-dark me-1">{q}</span>
+                                                                    ))
+                                                                    : <span className="text-muted">—</span>
+                                                                }
+                                                            </td>
                                                             <td>{ad.startDate ? new Date(ad.startDate).toLocaleDateString() : 'N/A'}</td>
                                                             <td>{ad.endDate ? new Date(ad.endDate).toLocaleDateString() : 'N/A'}</td>
-                                                            <td className="text-center">{ad.durationDays}</td>
+                                                            <td className="text-end">
+                                                                {ad.couponDiscountAmount > 0 ? (
+                                                                    <>
+                                                                        <span className="text-decoration-line-through text-muted small">₹{ad.totalPrice?.toLocaleString()}</span>
+                                                                        {' '}
+                                                                        <span className="fw-bold">₹{ad.finalPrice?.toLocaleString()}</span>
+                                                                    </>
+                                                                ) : (
+                                                                    <span>₹{ad.finalPrice?.toLocaleString()}</span>
+                                                                )}
+                                                            </td>
+                                                            <td>
+                                                                {ad.couponCode ? (
+                                                                    <span className="badge bg-success">{ad.couponCode}</span>
+                                                                ) : (
+                                                                    <span className="text-muted">—</span>
+                                                                )}
+                                                            </td>
                                                             <td>
                                                                 <span className={`badge ${ad.status === 'completed' ? 'bg-secondary' : 'bg-danger'}`}>
                                                                     {ad.status}
@@ -398,6 +463,7 @@ const SellerReports = () => {
                                                     <tr>
                                                         <th>Category</th>
                                                         <th>Slot</th>
+                                                        <th>Quarter(s)</th>
                                                         <th>End Date</th>
                                                         <th className="text-center">Remaining Days</th>
                                                         <th>Status</th>
@@ -413,6 +479,14 @@ const SellerReports = () => {
                                                             <tr key={ad.adId} className={ad.isExpiringSoon ? 'table-warning' : ''}>
                                                                 <td className="fw-bold">{ad.categoryName}</td>
                                                                 <td><code>{ad.slot}</code></td>
+                                                                <td>
+                                                                    {ad.quartersCovered && ad.quartersCovered.length > 0
+                                                                        ? ad.quartersCovered.map((q, qi) => (
+                                                                            <span key={qi} className="badge bg-info text-dark me-1">{q}</span>
+                                                                        ))
+                                                                        : <span className="text-muted">—</span>
+                                                                    }
+                                                                </td>
                                                                 <td>{new Date(ad.endDate).toLocaleDateString()}</td>
                                                                 <td className="text-center">
                                                                     <span className={`badge ${badgeClass}`}>
