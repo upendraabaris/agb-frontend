@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { gql, useMutation, useLazyQuery, useQuery } from '@apollo/client';
 import { useSelector } from 'react-redux';
 import { NavLink, useHistory } from 'react-router-dom';
@@ -56,22 +56,6 @@ const GET_APPROVED_ADS_BY_PRODUCT = gql`
         start_date
         end_date
       }
-    }
-  }
-`;
-
-const GET_ALL_DEFAULT_ADS = gql`
-  query GetAllDefaultAds {
-    getAllDefaultAds {
-      id
-      ad_type
-      slot_position
-      slot_name
-      mobile_image_url
-      desktop_image_url
-      redirect_url
-      title
-      is_active
     }
   }
 `;
@@ -284,25 +268,6 @@ const SingleDetail = ({ product }) => {
     fetchPolicy: 'network-only',
   });
 
-  // Default ads state
-  const [defaultAds, setDefaultAds] = useState([]);
-  const [defaultAdsLoaded, setDefaultAdsLoaded] = useState(false);
-  const [getDefaultAds] = useLazyQuery(GET_ALL_DEFAULT_ADS, {
-    fetchPolicy: 'network-only',
-    onCompleted(res) {
-      setDefaultAds((res?.getAllDefaultAds || []).filter(ad => ad.is_active));
-      setDefaultAdsLoaded(true);
-    },
-    onError() {
-      setDefaultAdsLoaded(true);
-    },
-  });
-
-  useEffect(() => {
-    getDefaultAds();
-    // eslint-disable-next-line
-  }, []);
-
   useEffect(() => {
     if (product?.id) {
       getApprovedProductAds({ variables: { productId: product.id } });
@@ -324,66 +289,12 @@ const SingleDetail = ({ product }) => {
     })
   );
   const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-  // Merge paid ads with default ad fallback (same pattern as category page)
-  const bannerMedias = useMemo(() => {
-    const paidBanners = {};
-    activeMedias.filter((m) => m.slot.startsWith('banner_')).forEach((m) => {
-      paidBanners[m.slot] = m;
-    });
-    const result = [];
-    [1, 2, 3, 4].forEach((pos) => {
-      const slotName = `banner_${pos}`;
-      if (paidBanners[slotName]) {
-        result.push(paidBanners[slotName]);
-      } else {
-        const fallback = defaultAds.find((d) => d.ad_type === 'banner' && d.slot_position === pos);
-        if (fallback) {
-          result.push({
-            slot: slotName,
-            mobile_image_url: fallback.mobile_image_url,
-            desktop_image_url: fallback.desktop_image_url,
-            mobile_redirect_url: fallback.redirect_url || '',
-            desktop_redirect_url: fallback.redirect_url || '',
-            source: 'default',
-          });
-        }
-      }
-    });
-    return result;
-  }, [activeMedias, defaultAds]);
-
-  const stampMedias = useMemo(() => {
-    const paidStamps = {};
-    activeMedias.filter((m) => m.slot.startsWith('stamp_')).forEach((m) => {
-      paidStamps[m.slot] = m;
-    });
-    const result = [];
-    [1, 2, 3, 4].forEach((pos) => {
-      const slotName = `stamp_${pos}`;
-      if (paidStamps[slotName]) {
-        result.push(paidStamps[slotName]);
-      } else {
-        const fallback = defaultAds.find((d) => d.ad_type === 'stamp' && d.slot_position === pos);
-        if (fallback) {
-          result.push({
-            slot: slotName,
-            mobile_image_url: fallback.mobile_image_url,
-            desktop_image_url: fallback.desktop_image_url,
-            mobile_redirect_url: fallback.redirect_url || '',
-            desktop_redirect_url: fallback.redirect_url || '',
-            source: 'default',
-          });
-        }
-      }
-    });
-    return result;
-  }, [activeMedias, defaultAds]);
+  const bannerMedias = activeMedias.filter((m) => m.slot.startsWith('banner_'));
+  const stampMedias = activeMedias.filter((m) => m.slot.startsWith('stamp_'));
 
   // Init Bootstrap carousel for product banner ads
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (!defaultAdsLoaded) return;
     if (!bannerMedias || bannerMedias.length < 2) return;
     const bs = window.bootstrap;
     if (!bs) return;
@@ -400,7 +311,7 @@ const SingleDetail = ({ product }) => {
       } catch (e) { /* ignore */ }
     }, 100);
     return () => clearTimeout(timer);
-  }, [bannerMedias, defaultAdsLoaded]);
+  }, [bannerMedias.length]);
 
   useEffect(() => {
     window.scrollTo({
@@ -821,8 +732,8 @@ const SingleDetail = ({ product }) => {
                   {productDetailsPageSlider && productDetailsPageSlider.getAds && (
                     <img src={productDetailsPageSlider.getAds.images} className="d-block w-100 rounded" alt={productDetailsPageSlider.getAds.key} />
                   )}
-                  {/* ── Product Banner Ads (Paid + Default Fallback) — Bootstrap Carousel ── */}
-                  {defaultAdsLoaded && bannerMedias.length > 0 && (
+                  {/* ── Approved Product Banner Ads — Bootstrap Carousel ── */}
+                  {bannerMedias.length > 0 && (
                     <div
                       id="productAdBannerCarousel"
                       className="carousel slide mb-2 rounded border"
@@ -1368,8 +1279,8 @@ const SingleDetail = ({ product }) => {
         </div>
       </Card>
 
-      {/* ── Product Stamp Ads (Paid + Default Fallback) ── */}
-      {defaultAdsLoaded && stampMedias.length > 0 && (
+      {/* ── Approved Product Stamp Ads ── */}
+      {stampMedias.length > 0 && (
         <Row className="mb-3 g-2">
           {stampMedias.map((media, i) => {
             const BASE = (process.env.REACT_APP_API_URL || 'http://localhost:4000') + '/';
