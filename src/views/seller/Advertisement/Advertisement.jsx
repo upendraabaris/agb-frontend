@@ -1028,35 +1028,85 @@ const Advertisement = () => {
                     </div>
                   )}
                 </div>
-                {/* slot statuses - 2 column layout (banners left, stamps right) */}
-                {category.slotStatuses && category.slotStatuses.length > 0 && (
-                  <div style={{ borderTop: '1px solid #e0e0e0', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
-                    <div className='row g-0'>
-                      <div className='col-6' style={{ paddingRight: '0.25rem' }}>
-                        <strong style={{ fontSize: '0.7rem', color: '#555' }}>Banners</strong>
-                        <ul className='list-unstyled mb-0' style={{ margin: 0, fontSize: '0.7rem' }}>
-                          {category.slotStatuses.filter(s => s.slot.startsWith('banner')).map((s) => (
-                            <li key={s.slot} style={{ color: s.available ? '#28a745' : '#dc3545', fontWeight: '500', lineHeight: '1.2', paddingBottom: '1px' }}>
-                              <span style={{ marginRight: '2px' }}>{s.available ? '✓' : '✕'}</span>
-                              {getSlotCompactName(s.slot)}: {s.available ? 'Available' : `Aft ${new Date(s.freeDate).toLocaleDateString('en-IN')}`}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div className='col-6' style={{ paddingLeft: '0.25rem' }}>
-                        <strong style={{ fontSize: '0.7rem', color: '#555' }}>Stamps</strong>
-                        <ul className='list-unstyled mb-0' style={{ margin: 0, fontSize: '0.7rem' }}>
-                          {category.slotStatuses.filter(s => s.slot.startsWith('stamp')).map((s) => (
-                            <li key={s.slot} style={{ color: s.available ? '#28a745' : '#dc3545', fontWeight: '500', lineHeight: '1.2', paddingBottom: '1px' }}>
-                              <span style={{ marginRight: '2px' }}>{s.available ? '✓' : '✕'}</span>
-                              {getSlotCompactName(s.slot)}: {s.available ? 'Available' : `Aft ${new Date(s.freeDate).toLocaleDateString('en-IN')}`}
-                            </li>
-                          ))}
-                        </ul>
+                {/* slot statuses - 2 column layout (banners left, stamps right) using first available quarter */}
+                {(() => {
+                  // Determine current quarter label
+                  const now = new Date();
+                  const curMonth = now.getMonth() + 1;
+                  const curYear = now.getFullYear();
+                  let currentQuarterLabel = `Q4 ${curYear}`;
+                  if (curMonth <= 3) currentQuarterLabel = `Q1 ${curYear}`;
+                  else if (curMonth <= 6) currentQuarterLabel = `Q2 ${curYear}`;
+                  else if (curMonth <= 9) currentQuarterLabel = `Q3 ${curYear}`;
+
+                  // Find first quarter (from current onward) that has at least one available slot
+                  const qa = category.quarterAvailability;
+                  let activeQData = null;
+                  let activeQuarterLabel = currentQuarterLabel;
+                  if (qa && qa.length > 0) {
+                    // Sort quarters chronologically, starting from current quarter
+                    const currentIdx = qa.findIndex(q => q.quarter === currentQuarterLabel);
+                    const ordered = currentIdx >= 0 ? [...qa.slice(currentIdx), ...qa.slice(0, currentIdx)] : qa;
+                    // Pick first quarter that has any available slot
+                    const firstAvail = ordered.find(q => q.slots?.some(s => s.available));
+                    if (firstAvail) {
+                      activeQData = firstAvail;
+                      activeQuarterLabel = firstAvail.quarter;
+                    } else {
+                      // All quarters fully booked — show current quarter anyway
+                      activeQData = qa.find(q => q.quarter === currentQuarterLabel) || qa[0];
+                      activeQuarterLabel = activeQData?.quarter || currentQuarterLabel;
+                    }
+                  }
+                  const slotsToRender = activeQData?.slots || null;
+
+                  // Fallback to slotStatuses if quarterAvailability not available
+                  if (!slotsToRender && (!category.slotStatuses || category.slotStatuses.length === 0)) return null;
+
+                  const bannerSlots = slotsToRender
+                    ? slotsToRender.filter(s => s.slot.startsWith('banner'))
+                    : category.slotStatuses?.filter(s => s.slot.startsWith('banner')) || [];
+                  const stampSlots = slotsToRender
+                    ? slotsToRender.filter(s => s.slot.startsWith('stamp'))
+                    : category.slotStatuses?.filter(s => s.slot.startsWith('stamp')) || [];
+
+                  if (bannerSlots.length === 0 && stampSlots.length === 0) return null;
+
+                  const quarterHeader = slotsToRender ? ` (${activeQuarterLabel})` : '';
+                  const getBookedLabel = (s) => {
+                    if (slotsToRender) return 'Booked';
+                    return `Aft ${new Date(s.freeDate).toLocaleDateString('en-IN')}`;
+                  };
+
+                  return (
+                    <div style={{ borderTop: '1px solid #e0e0e0', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
+                      <div className='row g-0'>
+                        <div className='col-6' style={{ paddingRight: '0.25rem' }}>
+                          <strong style={{ fontSize: '0.7rem', color: '#555' }}>Banners{quarterHeader}</strong>
+                          <ul className='list-unstyled mb-0' style={{ margin: 0, fontSize: '0.7rem' }}>
+                            {bannerSlots.map((s) => (
+                              <li key={s.slot} style={{ color: s.available ? '#28a745' : '#dc3545', fontWeight: '500', lineHeight: '1.2', paddingBottom: '1px' }}>
+                                <span style={{ marginRight: '2px' }}>{s.available ? '✓' : '✕'}</span>
+                                {getSlotCompactName(s.slot)}: {s.available ? 'Available' : getBookedLabel(s)}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className='col-6' style={{ paddingLeft: '0.25rem' }}>
+                          <strong style={{ fontSize: '0.7rem', color: '#555' }}>Stamps{quarterHeader}</strong>
+                          <ul className='list-unstyled mb-0' style={{ margin: 0, fontSize: '0.7rem' }}>
+                            {stampSlots.map((s) => (
+                              <li key={s.slot} style={{ color: s.available ? '#28a745' : '#dc3545', fontWeight: '500', lineHeight: '1.2', paddingBottom: '1px' }}>
+                                <span style={{ marginRight: '2px' }}>{s.available ? '✓' : '✕'}</span>
+                                {getSlotCompactName(s.slot)}: {s.available ? 'Available' : getBookedLabel(s)}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
                 {/* Quarter Availability */}
                 {category.quarterAvailability && category.quarterAvailability.length > 0 && (
                   <div style={{ borderTop: '1px solid #e0e0e0', paddingTop: '0.5rem', marginTop: '0.5rem' }}>

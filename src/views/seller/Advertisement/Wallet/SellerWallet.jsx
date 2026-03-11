@@ -49,6 +49,18 @@ const GENERATE_WALLET_INVOICE = gql`
       companyPan
       companyGstin
       companyWebsite
+      baseAmount
+      gstRate
+      gstType
+      cgstRate
+      cgstAmount
+      sgstRate
+      sgstAmount
+      igstRate
+      igstAmount
+      totalAmount
+      buyerState
+      companyState
       createdAt
     }
   }
@@ -60,6 +72,10 @@ const INITIATE_WALLET_PAYMENT = gql`
       success
       transactionId
       amount
+      baseAmount
+      gstAmount
+      totalAmount
+      gstType
       hash
       key
       productinfo
@@ -189,28 +205,38 @@ const SellerWallet = () => {
           <tr style="background:#1a237e;color:#fff">
             <th style="padding:10px 12px;border:1px solid #1a237e;font-size:13px;text-align:center;width:50px">Sr. No.</th>
             <th style="padding:10px 12px;border:1px solid #1a237e;font-size:13px;text-align:left">Category of Service</th>
-            <th style="padding:10px 12px;border:1px solid #1a237e;font-size:13px;text-align:left">Description of Service</th>
-            <th style="padding:10px 12px;border:1px solid #1a237e;font-size:13px;text-align:center">Tax Rate</th>
-            <th style="padding:10px 12px;border:1px solid #1a237e;font-size:13px;text-align:right">Amount</th>
+            <th style="padding:10px 12px;border:1px solid #1a237e;font-size:13px;text-align:left">Description</th>
+            <th style="padding:10px 12px;border:1px solid #1a237e;font-size:13px;text-align:right">Taxable Amt</th>
+            <th style="padding:10px 12px;border:1px solid #1a237e;font-size:13px;text-align:right">CGST</th>
+            <th style="padding:10px 12px;border:1px solid #1a237e;font-size:13px;text-align:right">SGST</th>
+            <th style="padding:10px 12px;border:1px solid #1a237e;font-size:13px;text-align:right">IGST</th>
+            <th style="padding:10px 12px;border:1px solid #1a237e;font-size:13px;text-align:right">Total</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td style="padding:10px 12px;border:1px solid #ddd;font-size:13px;text-align:center">1</td>
             <td style="padding:10px 12px;border:1px solid #ddd;font-size:13px">Digital Wallet Services</td>
-            <td style="padding:10px 12px;border:1px solid #ddd;font-size:13px">${
-              inv.description || 'Wallet Recharge / Top-up'
-            } via <span style="text-transform:capitalize">${inv.paymentGateway || ''}</span>${
-      inv.paymentMode ? ` (${inv.paymentMode.toUpperCase()})` : ''
-    }</td>
-            <td style="padding:10px 12px;border:1px solid #ddd;font-size:13px;text-align:center">—</td>
-            <td style="padding:10px 12px;border:1px solid #ddd;font-size:13px;text-align:right;font-weight:600">${inr(inv.amount)}</td>
+            <td style="padding:10px 12px;border:1px solid #ddd;font-size:13px">${inv.description || 'Wallet Recharge / Top-up'} via <span style="text-transform:capitalize">${inv.paymentGateway || ''}</span>${inv.paymentMode ? ` (${inv.paymentMode.toUpperCase()})` : ''}</td>
+            <td style="padding:10px 12px;border:1px solid #ddd;font-size:13px;text-align:right;font-weight:600">${inr(inv.baseAmount ?? inv.amount)}</td>
+            <td style="padding:10px 12px;border:1px solid #ddd;font-size:13px;text-align:right">${inv.cgstAmount ? inr(inv.cgstAmount) : '—'}</td>
+            <td style="padding:10px 12px;border:1px solid #ddd;font-size:13px;text-align:right">${inv.sgstAmount ? inr(inv.sgstAmount) : '—'}</td>
+            <td style="padding:10px 12px;border:1px solid #ddd;font-size:13px;text-align:right">${inv.igstAmount ? inr(inv.igstAmount) : '—'}</td>
+            <td style="padding:10px 12px;border:1px solid #ddd;font-size:13px;text-align:right;font-weight:600">${inr(inv.totalAmount ?? inv.amount)}</td>
           </tr>
+          ${inv.gstRate ? `<tr style="font-size:11px;color:#666;font-style:italic">
+            <td colspan="3" style="padding:4px 12px;border:1px solid #ddd;text-align:right">GST Rate @ ${inv.gstRate}%</td>
+            <td style="padding:4px 12px;border:1px solid #ddd;text-align:right">${inr(inv.baseAmount ?? inv.amount)}</td>
+            <td style="padding:4px 12px;border:1px solid #ddd;text-align:right">${inv.cgstRate ? `${inv.cgstRate}%` : '—'}</td>
+            <td style="padding:4px 12px;border:1px solid #ddd;text-align:right">${inv.sgstRate ? `${inv.sgstRate}%` : '—'}</td>
+            <td style="padding:4px 12px;border:1px solid #ddd;text-align:right">${inv.igstRate ? `${inv.igstRate}%` : '—'}</td>
+            <td style="padding:4px 12px;border:1px solid #ddd"></td>
+          </tr>` : ''}
         </tbody>
         <tfoot>
           <tr style="background:#f5f5f5">
-            <td colspan="4" style="padding:10px 12px;border:1px solid #ddd;font-size:14px;font-weight:700;text-align:right">Gross Total</td>
-            <td style="padding:10px 12px;border:1px solid #ddd;font-size:14px;font-weight:700;text-align:right;color:#1a237e">${inr(inv.amount)}</td>
+            <td colspan="7" style="padding:10px 12px;border:1px solid #ddd;font-size:14px;font-weight:700;text-align:right">Grand Total</td>
+            <td style="padding:10px 12px;border:1px solid #ddd;font-size:14px;font-weight:700;text-align:right;color:#1a237e">${inr(inv.totalAmount ?? inv.amount)}</td>
           </tr>
         </tfoot>
       </table>`;
@@ -285,11 +311,11 @@ const SellerWallet = () => {
         return;
       }
 
-      const { transactionId, hash, key, productinfo, firstname, email, phone } = res.data.initiateWalletPayment;
+      const { transactionId, amount: totalCharged, hash, key, productinfo, firstname, email, phone } = res.data.initiateWalletPayment;
 
       const backendBase = process.env.REACT_APP_API_URL || 'http://localhost:4000';
 
-      // Build PayU form and submit — browser navigates to PayU payment page
+      // Build PayU form — use totalCharged (base + GST) as amount sent to PayU
       const form = document.createElement('form');
       form.method = 'POST';
       form.action = PAYU_ENDPOINT;
@@ -297,7 +323,7 @@ const SellerWallet = () => {
       const fields = {
         key,
         txnid: transactionId,
-        amount: amount.toFixed(2),
+        amount: totalCharged.toFixed(2), // totalCharged = base + 18% GST
         productinfo,
         firstname,
         email,
@@ -561,33 +587,58 @@ const SellerWallet = () => {
                   <tr style={{ background: '#1a237e', color: '#fff' }}>
                     <th style={{ padding: '9px 10px', border: '1px solid #1a237e', fontSize: 12, textAlign: 'center', width: 44 }}>Sr. No.</th>
                     <th style={{ padding: '9px 10px', border: '1px solid #1a237e', fontSize: 12, textAlign: 'left' }}>Category of Service</th>
-                    <th style={{ padding: '9px 10px', border: '1px solid #1a237e', fontSize: 12, textAlign: 'left' }}>Description of Service</th>
-                    <th style={{ padding: '9px 10px', border: '1px solid #1a237e', fontSize: 12, textAlign: 'center', width: 72 }}>Tax Rate</th>
-                    <th style={{ padding: '9px 10px', border: '1px solid #1a237e', fontSize: 12, textAlign: 'right', width: 100 }}>Amount</th>
+                    <th style={{ padding: '9px 10px', border: '1px solid #1a237e', fontSize: 12, textAlign: 'left' }}>Description</th>
+                    <th style={{ padding: '9px 10px', border: '1px solid #1a237e', fontSize: 12, textAlign: 'right', width: 90 }}>Taxable Amt</th>
+                    <th style={{ padding: '9px 10px', border: '1px solid #1a237e', fontSize: 12, textAlign: 'right', width: 72 }}>CGST</th>
+                    <th style={{ padding: '9px 10px', border: '1px solid #1a237e', fontSize: 12, textAlign: 'right', width: 72 }}>SGST</th>
+                    <th style={{ padding: '9px 10px', border: '1px solid #1a237e', fontSize: 12, textAlign: 'right', width: 72 }}>IGST</th>
+                    <th style={{ padding: '9px 10px', border: '1px solid #1a237e', fontSize: 12, textAlign: 'right', width: 100 }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <td style={{ padding: '9px 10px', border: '1px solid #ddd', fontSize: 13, textAlign: 'center' }}>1</td>
-                    <td style={{ padding: '9px 10px', border: '1px solid #ddd', fontSize: 13 }}>Digital Wallet Services</td>
-                    <td style={{ padding: '9px 10px', border: '1px solid #ddd', fontSize: 13 }}>
-                      {invoiceModal.invoice.description || 'Wallet Recharge / Top-up'} via{' '}
-                      <span style={{ textTransform: 'capitalize' }}>{invoiceModal.invoice.paymentGateway}</span>
-                      {invoiceModal.invoice.paymentMode ? ` (${invoiceModal.invoice.paymentMode.toUpperCase()})` : ''}
-                    </td>
-                    <td style={{ padding: '9px 10px', border: '1px solid #ddd', fontSize: 13, textAlign: 'center' }}>—</td>
-                    <td style={{ padding: '9px 10px', border: '1px solid #ddd', fontSize: 13, textAlign: 'right', fontWeight: 600 }}>
-                      {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(invoiceModal.invoice.amount)}
-                    </td>
-                  </tr>
+                  {(() => {
+                    const inv = invoiceModal.invoice;
+                    const baseAmt  = inv.baseAmount  ?? inv.amount;
+                    const totalAmt = inv.totalAmount ?? inv.amount;
+                    const inrFmt = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(v || 0);
+                    const hasGst = inv.gstType != null;
+                    return (
+                      <>
+                        <tr>
+                          <td style={{ padding: '9px 10px', border: '1px solid #ddd', fontSize: 13, textAlign: 'center' }}>1</td>
+                          <td style={{ padding: '9px 10px', border: '1px solid #ddd', fontSize: 13 }}>Digital Wallet Services</td>
+                          <td style={{ padding: '9px 10px', border: '1px solid #ddd', fontSize: 13 }}>
+                            {inv.description || 'Wallet Recharge / Top-up'} via{' '}
+                            <span style={{ textTransform: 'capitalize' }}>{inv.paymentGateway}</span>
+                            {inv.paymentMode ? ` (${inv.paymentMode.toUpperCase()})` : ''}
+                          </td>
+                          <td style={{ padding: '9px 10px', border: '1px solid #ddd', fontSize: 13, textAlign: 'right', fontWeight: 600 }}>{inrFmt(baseAmt)}</td>
+                          <td style={{ padding: '9px 10px', border: '1px solid #ddd', fontSize: 13, textAlign: 'right' }}>{hasGst && inv.cgstAmount ? inrFmt(inv.cgstAmount) : '—'}</td>
+                          <td style={{ padding: '9px 10px', border: '1px solid #ddd', fontSize: 13, textAlign: 'right' }}>{hasGst && inv.sgstAmount ? inrFmt(inv.sgstAmount) : '—'}</td>
+                          <td style={{ padding: '9px 10px', border: '1px solid #ddd', fontSize: 13, textAlign: 'right' }}>{hasGst && inv.igstAmount ? inrFmt(inv.igstAmount) : '—'}</td>
+                          <td style={{ padding: '9px 10px', border: '1px solid #ddd', fontSize: 13, textAlign: 'right', fontWeight: 600 }}>{inrFmt(totalAmt)}</td>
+                        </tr>
+                        {hasGst && (
+                          <tr style={{ fontSize: 11, color: '#666', fontStyle: 'italic' }}>
+                            <td colSpan={3} style={{ padding: '4px 10px', border: '1px solid #ddd', textAlign: 'right' }}>GST Rate @ {inv.gstRate}%</td>
+                            <td style={{ padding: '4px 10px', border: '1px solid #ddd', textAlign: 'right' }}>{inrFmt(baseAmt)}</td>
+                            <td style={{ padding: '4px 10px', border: '1px solid #ddd', textAlign: 'right' }}>{inv.cgstRate ? `${inv.cgstRate}%` : '—'}</td>
+                            <td style={{ padding: '4px 10px', border: '1px solid #ddd', textAlign: 'right' }}>{inv.sgstRate ? `${inv.sgstRate}%` : '—'}</td>
+                            <td style={{ padding: '4px 10px', border: '1px solid #ddd', textAlign: 'right' }}>{inv.igstRate ? `${inv.igstRate}%` : '—'}</td>
+                            <td style={{ padding: '4px 10px', border: '1px solid #ddd' }} />
+                          </tr>
+                        )}
+                      </>
+                    );
+                  })()}
                 </tbody>
                 <tfoot>
                   <tr style={{ background: '#f5f5f5' }}>
-                    <td colSpan={4} style={{ padding: '9px 10px', border: '1px solid #ddd', fontSize: 14, fontWeight: 700, textAlign: 'right' }}>
-                      Gross Total
+                    <td colSpan={7} style={{ padding: '9px 10px', border: '1px solid #ddd', fontSize: 14, fontWeight: 700, textAlign: 'right' }}>
+                      Grand Total
                     </td>
                     <td style={{ padding: '9px 10px', border: '1px solid #ddd', fontSize: 14, fontWeight: 700, textAlign: 'right', color: '#1a237e' }}>
-                      {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(invoiceModal.invoice.amount)}
+                      {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(invoiceModal.invoice.totalAmount ?? invoiceModal.invoice.amount)}
                     </td>
                   </tr>
                 </tfoot>
@@ -623,7 +674,7 @@ const SellerWallet = () => {
         <Modal.Body className="px-4 pt-2 pb-4">
           <p className="text-muted small mb-3">You will be redirected to the PayU secure payment page.</p>
           <Form.Group>
-            <Form.Label className="fw-semibold">Amount (₹)</Form.Label>
+            <Form.Label className="fw-semibold">Amount (₹) — Wallet Credit</Form.Label>
             <Form.Control
               type="number"
               placeholder="e.g. 500"
@@ -638,6 +689,30 @@ const SellerWallet = () => {
             />
             {amountError && <div className="text-danger small mt-1">{amountError}</div>}
           </Form.Group>
+          {/* GST Preview */}
+          {amountInput && parseFloat(amountInput) > 0 && (() => {
+            const base = parseFloat(amountInput);
+            const gst = Math.round(base * 0.18);
+            const total = base + gst;
+            return (
+              <div className="mt-3 p-3" style={{ background: '#f0f4ff', borderRadius: 8, border: '1px solid #c7d2fe' }}>
+                <div className="d-flex justify-content-between" style={{ fontSize: '0.88rem' }}>
+                  <span className="text-muted">Wallet Credit (base):</span>
+                  <span className="fw-semibold">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(base)}</span>
+                </div>
+                <div className="d-flex justify-content-between" style={{ fontSize: '0.88rem' }}>
+                  <span className="text-muted">GST @ 18%:</span>
+                  <span className="fw-semibold">+ {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(gst)}</span>
+                </div>
+                <hr className="my-1" />
+                <div className="d-flex justify-content-between" style={{ fontSize: '0.95rem' }}>
+                  <span className="fw-bold">Total Charged to PayU:</span>
+                  <span className="fw-bold" style={{ color: '#1a237e' }}>{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(total)}</span>
+                </div>
+                <div className="mt-1" style={{ fontSize: '0.7rem', color: '#888' }}>* Your wallet will be credited {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(base)} (GST is a government tax, not added to wallet balance)</div>
+              </div>
+            );
+          })()}
           <div className="d-grid mt-4">
             <Button
               onClick={handleAddMoney}
