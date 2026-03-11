@@ -155,7 +155,7 @@ const Advertisement = () => {
   const [categoryTab, setCategoryTab] = useState('category'); // 'category', 'subcategory', 'subsubcategory'
 
   // Queries
-  const { data: categoriesData, loading: categoriesLoading, error: categoriesError } = useQuery(GET_CATEGORIES_WITH_SLOTS);
+  const { data: categoriesData, loading: categoriesLoading, error: categoriesError, refetch: refetchCategories } = useQuery(GET_CATEGORIES_WITH_SLOTS);
   
   // Get seller's products for internal URL dropdown
   const { data: sellerProductsData } = useQuery(GET_SELLER_PRODUCTS);
@@ -176,12 +176,12 @@ const Advertisement = () => {
   // - SubSubCategory: parent exists and parent's parent also exists
   const topLevelCategories = allCategories.filter(cat => !cat.parent);
   const subCategories = allCategories.filter(cat => {
-    if (!cat.parent) return false;
+    if (!cat.parent  || !cat.tierId) return false;
     const parentCat = categoryMap[cat.parent];
     return parentCat && !parentCat.parent;
   });
   const subSubCategories = allCategories.filter(cat => {
-    if (!cat.parent) return false;
+    if (!cat.parent  || !cat.tierId) return false;
     const parentCat = categoryMap[cat.parent];
     return parentCat && parentCat.parent;
   });
@@ -854,7 +854,7 @@ const Advertisement = () => {
       }
 
       // Build medias for all entries (upload files in parallel per entry)
-      const uploadAndSubmit = validEntries.map(async (entry) => {
+      const uploadAndSubmit = validEntries.map(async (entry, entryIndex) => {
         const mediasWithUrls = await Promise.all(
           entry.slots.map(async (slot) => {
             // Use cached URLs in shared mode
@@ -891,7 +891,7 @@ const Advertisement = () => {
               duration_type: durationTypeMap[selectedDuration] || 'quarterly',
               start_preference: startPreference === 'today' ? 'today' : 'select_quarter',
               start_quarter: selectedStartQuarter || undefined,
-              coupon_code: appliedCoupon?.valid ? appliedCoupon.coupon.couponCode : undefined,
+              coupon_code: (entryIndex === 0 && appliedCoupon?.valid) ? appliedCoupon.coupon.couponCode : undefined,
             },
           },
         });
@@ -923,6 +923,8 @@ const Advertisement = () => {
         setCouponInput('');
         setAppliedCoupon(null);
         setCouponError('');
+        // Refresh categories to show updated slot availability
+        refetchCategories();
       }
     } catch (error) {
       console.error('Error submitting advertisement:', error);
@@ -934,7 +936,7 @@ const Advertisement = () => {
       }
     }
   };
-
+  
   
 
   const getSlotDisplayName = (slot) => {
@@ -972,7 +974,7 @@ const Advertisement = () => {
         {categories && categories.filter(cat => cat && cat.id).map((category) => (
           <Col key={category?.id} md={6} lg={4}>
             <Card
-              className={`cursor-pointer transition-all ${selectedCategory === category?.id ? 'border-primary shadow-sm' : 'border-light shadow-xs'}`}
+              className={`cursor-pointer transition-all h-100 ${selectedCategory === category?.id ? 'border-primary shadow-sm' : 'border-light shadow-xs'}`}
               onClick={() => handleCategoryChange(category?.id)}
               style={{
                 cursor: 'pointer',
@@ -1003,21 +1005,10 @@ const Advertisement = () => {
                       : categoryMap[category.parent].name}
                   </small>
                 )}
-                <Card.Title className='fw-bold mb-2' style={{ fontSize: '0.95rem', color: '#333', marginBottom: '0.5rem !important' }}>
-                  {category?.name || 'Unnamed'}
-                </Card.Title>
-                  <div className='d-flex ml-auto gap-1' style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
-                  <span
-                    className='badge'
-                    style={{
-                      backgroundColor: '#28a745',
-                      fontSize: '0.75rem',
-                      padding: '0.25rem 0.5rem',
-                      borderRadius: '4px',
-                    }}
-                  >
-                    ✓ {category?.availableSlots || 0}/8
-                  </span>
+                <div className='d-flex justify-content-between align-items-center w-100'>
+                  <Card.Title className='fw-bold mb-0' style={{ fontSize: '0.95rem', color: '#333' }}>
+                    {category?.name || 'Unnamed'}
+                  </Card.Title>
                   <span
                     className='badge'
                     style={{
@@ -1025,11 +1016,12 @@ const Advertisement = () => {
                       fontSize: '0.75rem',
                       padding: '0.25rem 0.5rem',
                       borderRadius: '4px',
+                      whiteSpace: 'nowrap',
                     }}
                   >
                     {category?.tierId?.name || 'Tier'}
                   </span>
-                  </div>
+                </div>
                   {category.pricing90 && category.pricing90.length > 0 && (
                     <div style={{ fontSize: '0.8rem', color: '#555', marginTop: '4px' }}>
                       {category.pricing90.map(p => `${p.ad_type.charAt(0).toUpperCase() + p.ad_type.slice(1)} ₹${p.price}/Qtr`).join(' | ')}

@@ -143,7 +143,7 @@ const SellerWallet = () => {
 
   const handlePrintInvoice = () => {
     const inv = invoiceModal.invoice;
-    const logoUrl = window.location.origin + '/img/logo/20211213174625apnagharbanao_logo.png';
+    const logoUrl = `${window.location.origin}/img/logo/20211213174625apnagharbanao_logo.png`;
     const inr = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(v || 0);
     const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }) : '—');
 
@@ -201,7 +201,7 @@ const SellerWallet = () => {
             <td style="padding:10px 12px;border:1px solid #ddd;font-size:13px">${
               inv.description || 'Wallet Recharge / Top-up'
             } via <span style="text-transform:capitalize">${inv.paymentGateway || ''}</span>${
-      inv.paymentMode ? ' (' + inv.paymentMode.toUpperCase() + ')' : ''
+      inv.paymentMode ? ` (${inv.paymentMode.toUpperCase()})` : ''
     }</td>
             <td style="padding:10px 12px;border:1px solid #ddd;font-size:13px;text-align:center">—</td>
             <td style="padding:10px 12px;border:1px solid #ddd;font-size:13px;text-align:right;font-weight:600">${inr(inv.amount)}</td>
