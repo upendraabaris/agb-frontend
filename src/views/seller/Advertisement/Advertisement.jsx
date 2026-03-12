@@ -155,7 +155,7 @@ const Advertisement = () => {
   const [categoryTab, setCategoryTab] = useState('category'); // 'category', 'subcategory', 'subsubcategory'
 
   // Queries
-  const { data: categoriesData, loading: categoriesLoading, error: categoriesError } = useQuery(GET_CATEGORIES_WITH_SLOTS);
+  const { data: categoriesData, loading: categoriesLoading, error: categoriesError, refetch: refetchCategories } = useQuery(GET_CATEGORIES_WITH_SLOTS);
   
   // Get seller's products for internal URL dropdown
   const { data: sellerProductsData } = useQuery(GET_SELLER_PRODUCTS);
@@ -176,12 +176,12 @@ const Advertisement = () => {
   // - SubSubCategory: parent exists and parent's parent also exists
   const topLevelCategories = allCategories.filter(cat => !cat.parent);
   const subCategories = allCategories.filter(cat => {
-    if (!cat.parent) return false;
+    if (!cat.parent  || !cat.tierId) return false;
     const parentCat = categoryMap[cat.parent];
     return parentCat && !parentCat.parent;
   });
   const subSubCategories = allCategories.filter(cat => {
-    if (!cat.parent) return false;
+    if (!cat.parent  || !cat.tierId) return false;
     const parentCat = categoryMap[cat.parent];
     return parentCat && parentCat.parent;
   });
@@ -854,7 +854,7 @@ const Advertisement = () => {
       }
 
       // Build medias for all entries (upload files in parallel per entry)
-      const uploadAndSubmit = validEntries.map(async (entry) => {
+      const uploadAndSubmit = validEntries.map(async (entry, entryIndex) => {
         const mediasWithUrls = await Promise.all(
           entry.slots.map(async (slot) => {
             // Use cached URLs in shared mode
@@ -891,7 +891,7 @@ const Advertisement = () => {
               duration_type: durationTypeMap[selectedDuration] || 'quarterly',
               start_preference: startPreference === 'today' ? 'today' : 'select_quarter',
               start_quarter: selectedStartQuarter || undefined,
-              coupon_code: appliedCoupon?.valid ? appliedCoupon.coupon.couponCode : undefined,
+              coupon_code: (entryIndex === 0 && appliedCoupon?.valid) ? appliedCoupon.coupon.couponCode : undefined,
             },
           },
         });
@@ -923,6 +923,8 @@ const Advertisement = () => {
         setCouponInput('');
         setAppliedCoupon(null);
         setCouponError('');
+        // Refresh categories to show updated slot availability
+        refetchCategories();
       }
     } catch (error) {
       console.error('Error submitting advertisement:', error);
@@ -934,7 +936,7 @@ const Advertisement = () => {
       }
     }
   };
-
+  
   
 
   const getSlotDisplayName = (slot) => {
@@ -972,7 +974,7 @@ const Advertisement = () => {
         {categories && categories.filter(cat => cat && cat.id).map((category) => (
           <Col key={category?.id} md={6} lg={4}>
             <Card
-              className={`cursor-pointer transition-all ${selectedCategory === category?.id ? 'border-primary shadow-sm' : 'border-light shadow-xs'}`}
+              className={`cursor-pointer transition-all h-100 ${selectedCategory === category?.id ? 'border-primary shadow-sm' : 'border-light shadow-xs'}`}
               onClick={() => handleCategoryChange(category?.id)}
               style={{
                 cursor: 'pointer',
@@ -1003,21 +1005,10 @@ const Advertisement = () => {
                       : categoryMap[category.parent].name}
                   </small>
                 )}
-                <Card.Title className='fw-bold mb-2' style={{ fontSize: '0.95rem', color: '#333', marginBottom: '0.5rem !important' }}>
-                  {category?.name || 'Unnamed'}
-                </Card.Title>
-                  <div className='d-flex ml-auto gap-1' style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
-                  <span
-                    className='badge'
-                    style={{
-                      backgroundColor: '#28a745',
-                      fontSize: '0.75rem',
-                      padding: '0.25rem 0.5rem',
-                      borderRadius: '4px',
-                    }}
-                  >
-                    ✓ {category?.availableSlots || 0}/8
-                  </span>
+                <div className='d-flex justify-content-between align-items-center w-100'>
+                  <Card.Title className='fw-bold mb-0' style={{ fontSize: '0.95rem', color: '#333' }}>
+                    {category?.name || 'Unnamed'}
+                  </Card.Title>
                   <span
                     className='badge'
                     style={{
@@ -1025,46 +1016,97 @@ const Advertisement = () => {
                       fontSize: '0.75rem',
                       padding: '0.25rem 0.5rem',
                       borderRadius: '4px',
+                      whiteSpace: 'nowrap',
                     }}
                   >
                     {category?.tierId?.name || 'Tier'}
                   </span>
-                  </div>
+                </div>
                   {category.pricing90 && category.pricing90.length > 0 && (
                     <div style={{ fontSize: '0.8rem', color: '#555', marginTop: '4px' }}>
                       {category.pricing90.map(p => `${p.ad_type.charAt(0).toUpperCase() + p.ad_type.slice(1)} ₹${p.price}/Qtr`).join(' | ')}
                     </div>
                   )}
                 </div>
-                {/* slot statuses - 2 column layout (banners left, stamps right) */}
-                {category.slotStatuses && category.slotStatuses.length > 0 && (
-                  <div style={{ borderTop: '1px solid #e0e0e0', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
-                    <div className='row g-0'>
-                      <div className='col-6' style={{ paddingRight: '0.25rem' }}>
-                        <strong style={{ fontSize: '0.7rem', color: '#555' }}>Banners</strong>
-                        <ul className='list-unstyled mb-0' style={{ margin: 0, fontSize: '0.7rem' }}>
-                          {category.slotStatuses.filter(s => s.slot.startsWith('banner')).map((s) => (
-                            <li key={s.slot} style={{ color: s.available ? '#28a745' : '#dc3545', fontWeight: '500', lineHeight: '1.2', paddingBottom: '1px' }}>
-                              <span style={{ marginRight: '2px' }}>{s.available ? '✓' : '✕'}</span>
-                              {getSlotCompactName(s.slot)}: {s.available ? 'Available' : `Aft ${new Date(s.freeDate).toLocaleDateString('en-IN')}`}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div className='col-6' style={{ paddingLeft: '0.25rem' }}>
-                        <strong style={{ fontSize: '0.7rem', color: '#555' }}>Stamps</strong>
-                        <ul className='list-unstyled mb-0' style={{ margin: 0, fontSize: '0.7rem' }}>
-                          {category.slotStatuses.filter(s => s.slot.startsWith('stamp')).map((s) => (
-                            <li key={s.slot} style={{ color: s.available ? '#28a745' : '#dc3545', fontWeight: '500', lineHeight: '1.2', paddingBottom: '1px' }}>
-                              <span style={{ marginRight: '2px' }}>{s.available ? '✓' : '✕'}</span>
-                              {getSlotCompactName(s.slot)}: {s.available ? 'Available' : `Aft ${new Date(s.freeDate).toLocaleDateString('en-IN')}`}
-                            </li>
-                          ))}
-                        </ul>
+                {/* slot statuses - 2 column layout (banners left, stamps right) using first available quarter */}
+                {(() => {
+                  // Determine current quarter label
+                  const now = new Date();
+                  const curMonth = now.getMonth() + 1;
+                  const curYear = now.getFullYear();
+                  let currentQuarterLabel = `Q4 ${curYear}`;
+                  if (curMonth <= 3) currentQuarterLabel = `Q1 ${curYear}`;
+                  else if (curMonth <= 6) currentQuarterLabel = `Q2 ${curYear}`;
+                  else if (curMonth <= 9) currentQuarterLabel = `Q3 ${curYear}`;
+
+                  // Find first quarter (from current onward) that has at least one available slot
+                  const qa = category.quarterAvailability;
+                  let activeQData = null;
+                  let activeQuarterLabel = currentQuarterLabel;
+                  if (qa && qa.length > 0) {
+                    // Sort quarters chronologically, starting from current quarter
+                    const currentIdx = qa.findIndex(q => q.quarter === currentQuarterLabel);
+                    const ordered = currentIdx >= 0 ? [...qa.slice(currentIdx), ...qa.slice(0, currentIdx)] : qa;
+                    // Pick first quarter that has any available slot
+                    const firstAvail = ordered.find(q => q.slots?.some(s => s.available));
+                    if (firstAvail) {
+                      activeQData = firstAvail;
+                      activeQuarterLabel = firstAvail.quarter;
+                    } else {
+                      // All quarters fully booked — show current quarter anyway
+                      activeQData = qa.find(q => q.quarter === currentQuarterLabel) || qa[0];
+                      activeQuarterLabel = activeQData?.quarter || currentQuarterLabel;
+                    }
+                  }
+                  const slotsToRender = activeQData?.slots || null;
+
+                  // Fallback to slotStatuses if quarterAvailability not available
+                  if (!slotsToRender && (!category.slotStatuses || category.slotStatuses.length === 0)) return null;
+
+                  const bannerSlots = slotsToRender
+                    ? slotsToRender.filter(s => s.slot.startsWith('banner'))
+                    : category.slotStatuses?.filter(s => s.slot.startsWith('banner')) || [];
+                  const stampSlots = slotsToRender
+                    ? slotsToRender.filter(s => s.slot.startsWith('stamp'))
+                    : category.slotStatuses?.filter(s => s.slot.startsWith('stamp')) || [];
+
+                  if (bannerSlots.length === 0 && stampSlots.length === 0) return null;
+
+                  const quarterHeader = slotsToRender ? ` (${activeQuarterLabel})` : '';
+                  const getBookedLabel = (s) => {
+                    if (slotsToRender) return 'Booked';
+                    return `Aft ${new Date(s.freeDate).toLocaleDateString('en-IN')}`;
+                  };
+
+                  return (
+                    <div style={{ borderTop: '1px solid #e0e0e0', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
+                      <div className='row g-0'>
+                        <div className='col-6' style={{ paddingRight: '0.25rem' }}>
+                          <strong style={{ fontSize: '0.7rem', color: '#555' }}>Banners{quarterHeader}</strong>
+                          <ul className='list-unstyled mb-0' style={{ margin: 0, fontSize: '0.7rem' }}>
+                            {bannerSlots.map((s) => (
+                              <li key={s.slot} style={{ color: s.available ? '#28a745' : '#dc3545', fontWeight: '500', lineHeight: '1.2', paddingBottom: '1px' }}>
+                                <span style={{ marginRight: '2px' }}>{s.available ? '✓' : '✕'}</span>
+                                {getSlotCompactName(s.slot)}: {s.available ? 'Available' : getBookedLabel(s)}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className='col-6' style={{ paddingLeft: '0.25rem' }}>
+                          <strong style={{ fontSize: '0.7rem', color: '#555' }}>Stamps{quarterHeader}</strong>
+                          <ul className='list-unstyled mb-0' style={{ margin: 0, fontSize: '0.7rem' }}>
+                            {stampSlots.map((s) => (
+                              <li key={s.slot} style={{ color: s.available ? '#28a745' : '#dc3545', fontWeight: '500', lineHeight: '1.2', paddingBottom: '1px' }}>
+                                <span style={{ marginRight: '2px' }}>{s.available ? '✓' : '✕'}</span>
+                                {getSlotCompactName(s.slot)}: {s.available ? 'Available' : getBookedLabel(s)}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
                 {/* Quarter Availability */}
                 {category.quarterAvailability && category.quarterAvailability.length > 0 && (
                   <div style={{ borderTop: '1px solid #e0e0e0', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
