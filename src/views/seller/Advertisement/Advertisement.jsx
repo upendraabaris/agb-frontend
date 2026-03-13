@@ -59,6 +59,7 @@ const GET_CATEGORY_PRICING = gql`
       categoryId
       tierId
       tierName
+      external_url_extra_cost
       adCategories {
         id
         ad_type
@@ -144,7 +145,6 @@ const GET_AD_SETTINGS = gql`
     getAdSettings {
       allow_external_url_for_sellers
       allow_internal_url_for_ad_managers
-      external_url_extra_cost
     }
   }
 `;
@@ -161,6 +161,10 @@ const Advertisement = () => {
   // Ad settings (controls which URL types are available per role)
   const { data: adSettingsData } = useQuery(GET_AD_SETTINGS);
   const adSettings = adSettingsData?.getAdSettings || {};
+  // Role-based URL type defaults (mirrors ImageUpload logic)
+  const isAdminRole = userRoles.includes('admin') || userRoles.includes('masterAdmin');
+  const isAdMgrRole = !isAdminRole && userRoles.includes('adManager');
+  const defaultUrlType = isAdMgrRole ? 'external' : 'internal';
 
   useEffect(() => {
     dispatch(menuChangeUseSidebar(true));
@@ -631,7 +635,7 @@ const Advertisement = () => {
 
   // compute pricing preview for a specific slot (e.g. 'banner_1', 'stamp_2')
   // Falls back to adType-level if slotName not provided
-  const computePricingPreview = (slotName = 'banner_1') => {
+  const computePricingPreview = (slotName = 'banner_1', urlType = 'internal') => {
     const pricing = pricingData?.getCategoryPricing;
     if (!pricing) return null;
 
@@ -687,8 +691,9 @@ const Advertisement = () => {
     if (!adCat) adCat = pricing.adCategories?.find(ac => ac.ad_type === adType && ac.duration_days === selectedDuration);
     if (!adCat) return null;
 
-    // Total = full duration price for this slot + pro-rata for current quarter (0 for next_quarter)
-    const totalPrice = adCat.price + proRataCharge;
+    // Total = full duration price + pro-rata + external URL surcharge (flat fee from pricing config)
+    const externalSurcharge = urlType === 'external' ? (pricing.external_url_extra_cost || 0) : 0;
+    const totalPrice = adCat.price + proRataCharge + externalSurcharge;
     const totalDays = segments.reduce((sum, s) => sum + s.days, 0);
 
     // Build breakdown with accurate per-segment subtotals
@@ -711,14 +716,19 @@ const Advertisement = () => {
         }))
       ];
     } else {
-      // Next quarter mode: uniform rate across all segments
-      const ratePerDay = Math.round((totalPrice / totalDays) * 100) / 100;
+      // Next quarter mode: uniform rate across all segments (base price only, surcharge is a flat fee)
+      const basePriceForRate = adCat.price + proRataCharge;
+      const ratePerDay = Math.round((basePriceForRate / totalDays) * 100) / 100;
       breakdown = segments.map(s => ({
         quarter: s.quarter, start: s.start, end: s.end, days: s.days,
         rate_per_day: ratePerDay,
         subtotal: Math.round(ratePerDay * s.days),
         isProRata: false,
       }));
+    }
+    // Append external URL surcharge as a separate line item
+    if (externalSurcharge > 0) {
+      breakdown.push({ isExternalSurcharge: true, subtotal: externalSurcharge });
     }
     const startDate = segments[0]?.start || today;
     const endDate = segments[segments.length - 1]?.end || today;
@@ -1784,7 +1794,7 @@ const Advertisement = () => {
                       selectedSlots={selectedSlots}
                       slotMedia={sharedSlotMedia}
                       sellerProducts={sellerProducts}
-                      adSettings={adSettings}
+                      adSettings={{ ...adSettings, external_url_extra_cost: pricingData?.getCategoryPricing?.external_url_extra_cost || 0 }}
                       userRoles={userRoles}
                       onSlotMediaChange={(slot, field, value) => {
                         setSharedSlotMedia(m => ({ ...m, [slot]: { ...(m[slot] || {}), [field]: value } }));
@@ -1809,7 +1819,7 @@ const Advertisement = () => {
                       selectedSlots={selectedSlots}
                       slotMedia={catMedia}
                       sellerProducts={sellerProducts}
-                      adSettings={adSettings}
+                      adSettings={{ ...adSettings, external_url_extra_cost: (catId === selectedCategory ? pricingData?.getCategoryPricing?.external_url_extra_cost : categoryPricingMap[catId]?.external_url_extra_cost) || 0 }}
                       userRoles={userRoles}
                       onSlotMediaChange={(slot, field, value) => {
                         setPerCategorySlotMedia(prev => ({
@@ -1843,7 +1853,8 @@ const Advertisement = () => {
                   let price = 0;
                   let breakdown = null;
                   if (entry.categoryId === selectedCategory) {
-                    const preview = computePricingPreview(slot);
+                    const slotUrlType = entry.slotMedia[slot]?.urlType || defaultUrlType;
+                    const preview = computePricingPreview(slot, slotUrlType);
                     price = preview?.total || 0;
                     breakdown = preview?.breakdown || null;
                   } else {
@@ -1886,7 +1897,9 @@ const Advertisement = () => {
                       let adCat = pr.adCategories?.find(ac => ac.slot_name === slot && ac.duration_days === selectedDuration);
                       if (!adCat) adCat = pr.adCategories?.find(ac => ac.ad_type === adType && ac.duration_days === selectedDuration);
                       const basePrice = adCat?.price || 0;
-                      price = basePrice + proRataCharge;
+                      const slotUrlType = entry.slotMedia[slot]?.urlType || defaultUrlType;
+                      const slotExtSurcharge = slotUrlType === 'external' ? (entry.pricingData?.external_url_extra_cost || 0) : 0;
+                      price = basePrice + proRataCharge + slotExtSurcharge;
 
                       // Build breakdown
                       const paidSegs = bdSegments.filter(s => !s.isProRata);
@@ -1899,6 +1912,10 @@ const Advertisement = () => {
                         const segPrice = paidTotalDays > 0 ? Math.round((seg.days / paidTotalDays) * basePrice) : 0;
                         return { quarter: seg.quarter, days: seg.days, subtotal: segPrice, isProRata: false };
                       });
+                      // Append external surcharge line
+                      if (slotExtSurcharge > 0) {
+                        breakdown.push({ isExternalSurcharge: true, subtotal: slotExtSurcharge });
+                      }
                     }
                   }
                   catTotal += price;
@@ -1948,13 +1965,17 @@ const Advertisement = () => {
                                 <td style={{ padding: '6px 8px', fontWeight: 600, whiteSpace: 'nowrap', verticalAlign: 'top' }}>{r.displayName}</td>
                                 <td style={{ padding: '6px 8px', fontSize: '0.8rem', color: '#555' }}>
                                   {r.breakdown && r.breakdown.length > 0 ? (
-                                    r.breakdown.map((b, idx) => (
-                                      <div key={idx}>
-                                        {b.isProRata
-                                          ? <>{b.quarter}: {b.days}d &times; {`\u20b9${b.rate_per_day}`} = {fmtPrice(b.subtotal)}</>
-                                          : <>{b.quarter}: {fmtPrice(b.subtotal)}</>}
-                                      </div>
-                                    ))
+                                    r.breakdown.map((b, idx) => {
+                                      let lineContent;
+                                      if (b.isExternalSurcharge) {
+                                        lineContent = <span style={{ color: '#d97706', fontWeight: 600 }}>&#9888; External URL surcharge: +{fmtPrice(b.subtotal)}</span>;
+                                      } else if (b.isProRata) {
+                                        lineContent = <>{b.quarter}: {b.days}d &times; {`\u20b9${b.rate_per_day}`} = {fmtPrice(b.subtotal)}</>;
+                                      } else {
+                                        lineContent = <>{b.quarter}: {fmtPrice(b.subtotal)}</>;
+                                      }
+                                      return <div key={idx}>{lineContent}</div>;
+                                    })
                                   ) : (
                                     <span>{getDurationLabel(selectedDuration)}</span>
                                   )}
@@ -2341,7 +2362,7 @@ const Advertisement = () => {
                     selectedSlots={selectedSlots}
                     slotMedia={slotMedia}
                     sellerProducts={sellerProducts}
-                    adSettings={adSettings}
+                    adSettings={{ ...adSettings, external_url_extra_cost: pricingData?.getCategoryPricing?.external_url_extra_cost || 0 }}
                     userRoles={userRoles}
                     onSlotMediaChange={(slot, field, value) => {
                       setSlotMedia((m) => ({

@@ -100,7 +100,7 @@ const AdUrlSettings = () => {
               <ul className="mb-0 mt-1">
                 <li><strong>Internal URL</strong> – points to a page within the same website (e.g. a product or category page). Default for sellers.</li>
                 <li><strong>External URL</strong> – points to any off-site URL. Default for Ad Managers.</li>
-                <li>An extra surcharge can be charged for external URLs — configure the amount under <em>Pricing Config</em>.</li>
+                <li>To charge a surcharge for external URLs, set the amount in <em>Pricing Config</em> per tier.</li>
               </ul>
             </Alert>
 
