@@ -43,6 +43,8 @@ const ad = {
   approval: lazy(() => import('views/admin/Advertisement/Approval/AdApproval')),
   pricing: lazy(() => import('views/admin/Advertisement/Pricing/AdPricingSetup')),
   defaultAds: lazy(() => import('views/admin/Advertisement/DefaultAds/DefaultAdsList')),
+  categoryDefaultAds: lazy(() => import('views/admin/Advertisement/Cat/CategoryDefaultAds')),
+  adUrlSettings: lazy(() => import('views/admin/Advertisement/Settings/AdUrlSettings')),
 };
 const b2b = {
   list: lazy(() => import('views/admin/B2B/List/ListB2B')),
@@ -1112,8 +1114,10 @@ const routesAndMenuItems = {
         { path: '/pricing', label: 'Pricing Config', component: ad.pricing },
         { path: '/approval', label: 'Ad Approvals', component: ad.approval },
         { path: '/default-ads', label: 'Default Ads', component: ad.defaultAds },
+        { path: '/category/:categoryId/default-ads', component: ad.categoryDefaultAds, hideInMenu: true },
         { path: '/product-approval', label: 'Product Ad Approvals', component: ProductAdApproval },
         { path: '/reporting', label: 'Reporting', component: ad.reporting },
+        { path: '/url-settings', label: 'URL Settings', component: ad.adUrlSettings },
       ],
     },
     {

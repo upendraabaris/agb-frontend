@@ -2,11 +2,29 @@ import React, { useState } from 'react';
 import { Form, Row, Col, Card, InputGroup, ListGroup } from 'react-bootstrap';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
 
-const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSlotMediaChange = () => {}, sellerProducts = [] }) => {
+const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSlotMediaChange = () => {}, sellerProducts = [], adSettings = {}, userRoles = [] }) => {
   const [productSearch, setProductSearch] = useState({});
   const [showDropdown, setShowDropdown] = useState({});
   // Per-slot, per-device inline validation errors
   const [imageErrors, setImageErrors] = useState({});
+
+  // Role-based URL type control
+  const isAdmin = userRoles.includes('admin') || userRoles.includes('masterAdmin');
+  const isAdMgr = !isAdmin && userRoles.includes('adManager');
+  const isSeller = !isAdmin && !isAdMgr; // default: seller
+
+  // What URL types are allowed for this user?
+  const canUseExternal = isAdmin || isAdMgr || (isSeller && adSettings.allow_external_url_for_sellers);
+  const canUseInternal = isAdmin || isSeller || (isAdMgr && adSettings.allow_internal_url_for_ad_managers);
+
+  // Default URL type: adManager → external, everyone else → internal
+  const defaultUrlType = isAdMgr ? 'external' : 'internal';
+
+  // Resolved effective url type for a slot (stored value or role default)
+  const getEffectiveUrlType = (media) => media.urlType || defaultUrlType;
+
+  // External URL surcharge from admin settings
+  const externalSurcharge = adSettings.external_url_extra_cost || 0;
 
   const formatSlotName = (slot) => {
     if (!slot) return slot;
@@ -195,33 +213,44 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
                 <Col md={6}>
                   <Form.Group className='mt-2'>
                     <Form.Label className='fw-bold'>URL Type</Form.Label>
-                    <div className='d-flex gap-4'>
-                      <Form.Check
-                        type='radio'
-                        id={`urlType-external-${categoryId}-${slot}`}
-                        label='External URL'
-                        name={`urlType-${categoryId}-${slot}`}
-                        checked={(media.urlType || 'external') === 'external'}
-                        onChange={() => onSlotMediaChange(slot, 'urlType', 'external')}
-                      />
-                      <Form.Check
-                        type='radio'
-                        id={`urlType-internal-${categoryId}-${slot}`}
-                        label='Internal URL'
-                        name={`urlType-${categoryId}-${slot}`}
-                        checked={media.urlType === 'internal'}
-                        onChange={() => onSlotMediaChange(slot, 'urlType', 'internal')}
-                      />
-                    </div>
+                    {/* Show radio only when both options are available for this role */}
+                    {canUseExternal && canUseInternal ? (
+                      <div className='d-flex gap-4'>
+                        <Form.Check
+                          type='radio'
+                          id={`urlType-external-${categoryId}-${slot}`}
+                          label='External URL'
+                          name={`urlType-${categoryId}-${slot}`}
+                          checked={getEffectiveUrlType(media) === 'external'}
+                          onChange={() => onSlotMediaChange(slot, 'urlType', 'external')}
+                        />
+                        <Form.Check
+                          type='radio'
+                          id={`urlType-internal-${categoryId}-${slot}`}
+                          label='Internal URL'
+                          name={`urlType-${categoryId}-${slot}`}
+                          checked={getEffectiveUrlType(media) === 'internal'}
+                          onChange={() => onSlotMediaChange(slot, 'urlType', 'internal')}
+                        />
+                      </div>
+                    ) : (
+                      <div className='badge bg-secondary'>{canUseExternal ? 'External URL' : 'Internal URL'}</div>
+                    )}
                     <Form.Text className='text-muted'>
                       External: Links outside this website | Internal: Links within this website
                     </Form.Text>
+                    {/* Surcharge notice for external */}
+                    {getEffectiveUrlType(media) === 'external' && externalSurcharge > 0 && (
+                      <div className='mt-1 text-warning fw-bold' style={{ fontSize: '0.82rem' }}>
+                        ⚠ External URL surcharge: +₹{externalSurcharge.toLocaleString('en-IN')} per slot
+                      </div>
+                    )}
                   </Form.Group>
                 </Col>
                 <Col md={6}>
                   <Form.Group className='mt-2'>
                     <Form.Label className='fw-bold'>Redirect URL</Form.Label>
-                    {(media.urlType || 'external') === 'external' ? (
+                    {getEffectiveUrlType(media) === 'external' ? (
                       <>
                         <Form.Control
                           type='text'

@@ -212,48 +212,24 @@ export const GETSUPERSELLERBYCATEGORYNAME = gql`
   }
 `;
 
-// Default ads query
-const GET_ALL_DEFAULT_ADS = gql`
-  query GetAllDefaultAds {
-    getAllDefaultAds {
-      id
-      ad_type
-      slot_position
-      slot_name
-      mobile_image_url
-      desktop_image_url
-      redirect_url
-      title
-      is_active
-    }
-  }
-`;
-
-export const GET_APPROVED_ADS_BY_CATEGORY = gql`
-  query GetApprovedAdsByCategory($categoryName: String) {
-    getApprovedAdsByCategory(categoryName: $categoryName) {
-      id
-      sellerName
-      sellerEmail
-      categoryId
-      categoryName
-      medias {
-        id
-        slot
-        media_type
+// Ads for category: 3-level fallback (paid → category default → global default) handled by backend
+const GET_ADS_FOR_CATEGORY = gql`
+  query GetAdsForCategory($category_id: ID!) {
+    getAdsForCategory(category_id: $category_id) {
+      category_id
+      category_name
+      ads {
+        slot_name
+        ad_type
+        slot_position
+        source
         mobile_image_url
         desktop_image_url
         redirect_url
+        title
+        seller_id
+        seller_name
       }
-      durations {
-        id
-        slot
-        duration_days
-        start_date
-        end_date
-        status
-      }
-      createdAt
     }
   }
 `;
@@ -413,117 +389,55 @@ const SubcategoryL2 = () => {
     // eslint-disable-next-line
   }, [params]);
 
-  // APPROVED ADS BY CATEGORY
-  const [approvedAds, setApprovedAds] = useState([]);
-  const [getApprovedAds, { data: dataApprovedAds, loading: loadingAds }] = useLazyQuery(GET_APPROVED_ADS_BY_CATEGORY, {
-    onCompleted(res) {
-      console.log('[GET_APPROVED_ADS_BY_CATEGORY] response:', res);
-      setApprovedAds(res?.getApprovedAdsByCategory || []);
-    },
-    onError(error) {
-      toast.error(error.message || 'Something went wrong!');
-      console.error('GET_APPROVED_ADS_BY_CATEGORY', error);
-    },
-  });
-
-  // DEFAULT ADS
-  const [defaultAds, setDefaultAds] = useState([]);
-  const [defaultAdsLoaded, setDefaultAdsLoaded] = useState(false);
-  const [getDefaultAds] = useLazyQuery(GET_ALL_DEFAULT_ADS, {
+  // CATEGORY ADS (3-level fallback: paid → category default → global default)
+  const [categoryAds, setCategoryAds] = useState([]);
+  const [adsLoaded, setAdsLoaded] = useState(false);
+  const [getAdsForCategory, { loading: loadingAds }] = useLazyQuery(GET_ADS_FOR_CATEGORY, {
     fetchPolicy: 'network-only',
     onCompleted(res) {
-      console.log('[GET_ALL_DEFAULT_ADS] response:', res);
-      setDefaultAds((res?.getAllDefaultAds || []).filter(ad => ad.is_active));
-      setDefaultAdsLoaded(true);
+      setCategoryAds(res?.getAdsForCategory?.ads || []);
+      setAdsLoaded(true);
     },
     onError(error) {
-      console.error('GET_ALL_DEFAULT_ADS', error);
-      setDefaultAdsLoaded(true); // Mark loaded even on error so UI doesn't wait forever
+      console.error('GET_ADS_FOR_CATEGORY', error);
+      setAdsLoaded(true); // Mark loaded even on error so UI doesn't wait forever
     },
   });
 
-  // Fetch default ads on mount
-  useEffect(() => {
-    getDefaultAds();
-    // eslint-disable-next-line
-  }, []);
-
-  // Prepare stamp ads (flatten all medias with slot containing 'stamp')
+  // Prepare stamp ads — shape kept compatible with carousel rendering
   const stampAds = useMemo(() => {
-    // Build paid stamp ads indexed by slot position
-    const paidStamps = {};
-    if (approvedAds && approvedAds.length > 0) {
-      approvedAds.forEach((ad) => {
-        (ad.medias || []).forEach((m) => {
-          if (m.slot && m.slot.toLowerCase().includes('stamp')) {
-            paidStamps[m.slot] = { ...m, ad, source: 'paid' };
-          }
-        });
-      });
-    }
-    // Fill all 4 stamp slots: paid first, then default fallback
-    const result = [];
-    [1, 2, 3, 4].forEach(pos => {
-      const slotName = `stamp_${pos}`;
-      if (paidStamps[slotName]) {
-        result.push(paidStamps[slotName]);
-      } else {
-        const fallback = defaultAds.find(d => d.ad_type === 'stamp' && d.slot_position === pos);
-        if (fallback) {
-          result.push({
-            slot: slotName,
-            mobile_image_url: fallback.mobile_image_url,
-            desktop_image_url: fallback.desktop_image_url,
-            redirect_url: fallback.redirect_url || '',
-            ad: { id: fallback.id, sellerName: fallback.title || 'Default Ad' },
-            source: 'default',
-          });
-        }
-      }
-    });
-    return result;
-  }, [approvedAds, defaultAds]);
+    return categoryAds
+      .filter(ad => ad.ad_type === 'stamp')
+      .sort((a, b) => a.slot_position - b.slot_position)
+      .map(ad => ({
+        slot: ad.slot_name,
+        mobile_image_url: ad.mobile_image_url,
+        desktop_image_url: ad.desktop_image_url,
+        redirect_url: ad.redirect_url || '',
+        ad: { id: ad.seller_id || ad.slot_name, sellerName: ad.seller_name || ad.title || 'Ad' },
+        source: ad.source,
+      }));
+  }, [categoryAds]);
 
-  // Prepare banner ads (flatten all medias with slot containing 'banner')
+  // Prepare banner ads — shape kept compatible with carousel rendering
   const bannerAds = useMemo(() => {
-    // Build paid banner ads indexed by slot position
-    const paidBanners = {};
-    if (approvedAds && approvedAds.length > 0) {
-      approvedAds.forEach((ad) => {
-        (ad.medias || []).forEach((m) => {
-          if (m.slot && m.slot.toLowerCase().includes('banner')) {
-            paidBanners[m.slot] = { ...m, ad, source: 'paid' };
-          }
-        });
-      });
-    }
-    // Fill all 4 banner slots: paid first, then default fallback
-    const result = [];
-    [1, 2, 3, 4].forEach(pos => {
-      const slotName = `banner_${pos}`;
-      if (paidBanners[slotName]) {
-        result.push(paidBanners[slotName]);
-      } else {
-        const fallback = defaultAds.find(d => d.ad_type === 'banner' && d.slot_position === pos);
-        if (fallback) {
-          result.push({
-            slot: slotName,
-            mobile_image_url: fallback.mobile_image_url,
-            desktop_image_url: fallback.desktop_image_url,
-            redirect_url: fallback.redirect_url || '',
-            ad: { id: fallback.id, sellerName: fallback.title || 'Default Ad' },
-            source: 'default',
-          });
-        }
-      }
-    });
-    return result;
-  }, [approvedAds, defaultAds]);
+    return categoryAds
+      .filter(ad => ad.ad_type === 'banner')
+      .sort((a, b) => a.slot_position - b.slot_position)
+      .map(ad => ({
+        slot: ad.slot_name,
+        mobile_image_url: ad.mobile_image_url,
+        desktop_image_url: ad.desktop_image_url,
+        redirect_url: ad.redirect_url || '',
+        ad: { id: ad.seller_id || ad.slot_name, sellerName: ad.seller_name || ad.title || 'Ad' },
+        source: ad.source,
+      }));
+  }, [categoryAds]);
 
     // Ensure Bootstrap carousel instances are initialized after ads render
     useEffect(() => {
       if (typeof window === 'undefined') return undefined;
-      if (!defaultAdsLoaded) return undefined; // Wait for default ads to load before initializing carousel
+      if (!adsLoaded) return undefined; // Wait for ads to load before initializing carousel
       const bs = window.bootstrap;
       if (!bs) return undefined;
 
@@ -553,24 +467,22 @@ const SubcategoryL2 = () => {
         return () => clearTimeout(timer);
       }
       return undefined;
-    }, [approvedAds, bannerAds, defaultAdsLoaded]);
+    }, [categoryAds, bannerAds, adsLoaded]);
 
   // When category data is available, fetch approved ads by categoryId
   useEffect(() => {
     const catName = params.categoryname.replace(/_/g, ' ');
-    // Query backend by categoryName (server expects name-based matching)
-    if (data && data.getCategoryByName) {
-      const name = data.getCategoryByName.name || catName;
-      getApprovedAds({ variables: { categoryName: name } });
+    // Use category_id once available (preferred — avoids extra name-based lookup in backend)
+    if (data && data.getCategoryByName && data.getCategoryByName.id) {
+      getAdsForCategory({ variables: { category_id: data.getCategoryByName.id } });
       return;
     }
-
-    // Fallback to params-based categoryName when category data isn't loaded yet
-    if (catName) {
-      getApprovedAds({ variables: { categoryName: catName } });
+    // If category data not loaded yet, skip — will re-run when data arrives
+    if (!data && catName) {
+      // nothing to do yet
     }
     // eslint-disable-next-line
-  }, [params, data, getApprovedAds]);
+  }, [params, data, getAdsForCategory]);
 
   const { themeValues } = useSelector((state) => state.settings);
   const lgBreakpoint = parseInt(themeValues.lg.replace('px', ''), 10);
@@ -669,7 +581,7 @@ const SubcategoryL2 = () => {
 
       <aside>
         {/* APPROVED ADS CAROUSEL - TOP OF CATEGORY PAGE */}
-        {!loadingAds && defaultAdsLoaded && bannerAds && bannerAds.length > 0 && (
+        {!loadingAds && adsLoaded && bannerAds && bannerAds.length > 0 && (
           <div id="categoryTopAdsCarousel" className="carousel slide mb-3 rounded border" data-bs-ride="carousel">
             <div className="carousel-inner rounded">
               {bannerAds.map((item, index) => {
@@ -728,7 +640,7 @@ const SubcategoryL2 = () => {
         )}
 
         {/* CATEGORY SLIDER IMAGE - FALLBACK WHEN NO BANNER ADS */}
-        {!loadingAds && defaultAdsLoaded && (!bannerAds || bannerAds.length === 0) && categorySliderImageData?.getCategoryByName?.sliderImage && (
+        {!loadingAds && adsLoaded && (!bannerAds || bannerAds.length === 0) && categorySliderImageData?.getCategoryByName?.sliderImage && (
           <div className="container-fluid px-0 rounded border mb-3">
             {/* <img src={categorySliderImageData.getCategoryByName.sliderImage} className="d-block w-100 rounded" alt="Slider Image" /> */}
             <img src={categorySliderImageData.getCategoryByName.sliderImage} className="d-block w-100 rounded" alt="" />
@@ -804,59 +716,6 @@ const SubcategoryL2 = () => {
               </Dropdown.Menu>
             </Dropdown>
           </div>
-          
-          
-          
-          {/* Old card-based ads code (commented out) */}
-          {false && approvedAds && approvedAds.length > 0 && (
-            <Row className="my-3 g-2 mx-0">
-              <div className="w-100 mb-2">
-                <h6 className="font_black fw-bold ps-2">Featured Offers</h6>
-              </div>
-              {approvedAds.map((ad) => (
-                <Col key={ad.id} xs="12" sm="6" md="4" lg="3" className="mb-3">
-                  <Card className="h-100 hover-border-color border overflow-hidden">
-                    {ad.medias && ad.medias.length > 0 && (
-                      <a 
-                        href={ad.medias[0]?.redirect_url || '#'} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        style={{ textDecoration: 'none', display: 'block' }}
-                      >
-                        <img
-                          src={ad.medias[0]?.mobile_image_url || ad.medias[0]?.desktop_image_url}
-                          alt={`Ad from ${ad.sellerName}`}
-                          className="card-img-top w-100"
-                          style={{ objectFit: 'cover', height: isLgScreen ? '200px' : '140px' }}
-                        />
-                      </a>
-                    )}
-                    <Card.Body className="p-2">
-                      <div className="small text-muted mb-1">
-                        <OverlayTrigger
-                          delay={{ show: 500, hide: 0 }}
-                          placement="top"
-                          overlay={<Tooltip id="tooltip-seller">{ad.sellerName}</Tooltip>}
-                        >
-                          <span className="text-truncate d-block">{ad.sellerName}</span>
-                        </OverlayTrigger>
-                      </div>
-                      <div className="text-center mt-2">
-                        <a 
-                          href={ad.medias[0]?.redirect_url || '#'} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="btn btn-sm btn_color"
-                        >
-                          View Offer
-                        </a>
-                      </div>
-                    </Card.Body>
-                  </Card>
-                </Col>
-              ))}
-            </Row>
-          )}
 
           {/* eslint-disable-next-line no-nested-ternary */}
           {loading || loadingseries || loadingtmt ? (
