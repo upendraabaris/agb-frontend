@@ -139,6 +139,16 @@ const VALIDATE_AD_COUPON = gql`
   }
 `;
 
+const GET_AD_SETTINGS = gql`
+  query GetAdSettings {
+    getAdSettings {
+      allow_external_url_for_sellers
+      allow_internal_url_for_ad_managers
+      external_url_extra_cost
+    }
+  }
+`;
+
 const Advertisement = () => {
   const history = useHistory();
   const location = useLocation();
@@ -146,6 +156,11 @@ const Advertisement = () => {
   const { currentUser } = useSelector((state) => state.auth);
   const isAdManager = location.pathname.startsWith('/adManager');
   const basePath = isAdManager ? '/adManager' : '/seller';
+  const userRoles = currentUser?.role || [];
+
+  // Ad settings (controls which URL types are available per role)
+  const { data: adSettingsData } = useQuery(GET_AD_SETTINGS);
+  const adSettings = adSettingsData?.getAdSettings || {};
 
   useEffect(() => {
     dispatch(menuChangeUseSidebar(true));
@@ -849,7 +864,7 @@ const Advertisement = () => {
             media.mobileFile instanceof File ? uploadOneFile(media.mobileFile) : Promise.resolve(media.mobileImage || ''),
             media.desktopFile instanceof File ? uploadOneFile(media.desktopFile) : Promise.resolve(media.desktopImage || ''),
           ]);
-          sharedUploadCache[slot] = { mobileUrl, desktopUrl, redirectUrl: media.redirectUrl || '', urlType: media.urlType || 'external' };
+          sharedUploadCache[slot] = { mobileUrl, desktopUrl, redirectUrl: media.redirectUrl || '', urlType: media.urlType || (isAdManager ? 'external' : 'internal') };
         }));
       }
 
@@ -878,7 +893,7 @@ const Advertisement = () => {
               mobile_image_url: mobileUrl,
               desktop_image_url: desktopUrl,
               redirect_url: media.redirectUrl || '',
-              url_type: media.urlType || 'external',
+              url_type: media.urlType || (isAdManager ? 'external' : 'internal'),
             };
           })
         );
@@ -1769,6 +1784,8 @@ const Advertisement = () => {
                       selectedSlots={selectedSlots}
                       slotMedia={sharedSlotMedia}
                       sellerProducts={sellerProducts}
+                      adSettings={adSettings}
+                      userRoles={userRoles}
                       onSlotMediaChange={(slot, field, value) => {
                         setSharedSlotMedia(m => ({ ...m, [slot]: { ...(m[slot] || {}), [field]: value } }));
                       }}
@@ -1792,6 +1809,8 @@ const Advertisement = () => {
                       selectedSlots={selectedSlots}
                       slotMedia={catMedia}
                       sellerProducts={sellerProducts}
+                      adSettings={adSettings}
+                      userRoles={userRoles}
                       onSlotMediaChange={(slot, field, value) => {
                         setPerCategorySlotMedia(prev => ({
                           ...prev,
@@ -2322,6 +2341,8 @@ const Advertisement = () => {
                     selectedSlots={selectedSlots}
                     slotMedia={slotMedia}
                     sellerProducts={sellerProducts}
+                    adSettings={adSettings}
+                    userRoles={userRoles}
                     onSlotMediaChange={(slot, field, value) => {
                       setSlotMedia((m) => ({
                         ...m,

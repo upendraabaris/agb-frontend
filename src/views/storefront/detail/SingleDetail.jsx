@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useWindowSize } from 'hooks/useWindowSize';
 import { gql, useMutation, useLazyQuery, useQuery } from '@apollo/client';
 import { useSelector } from 'react-redux';
 import { NavLink, useHistory } from 'react-router-dom';
@@ -38,23 +39,18 @@ const GET_AD_CONTENT = gql`
   }
 `;
 
-const GET_APPROVED_ADS_BY_PRODUCT = gql`
-  query GetApprovedAdsByProduct($productId: ID) {
-    getApprovedAdsByProduct(productId: $productId) {
-      id
-      medias {
-        slot
-        media_type
+const GET_ADS_FOR_PRODUCT = gql`
+  query GetAdsForProduct($product_id: ID!) {
+    getAdsForProduct(product_id: $product_id) {
+      ads {
+        slot_name
+        ad_type
+        slot_position
+        source
         mobile_image_url
         desktop_image_url
-        mobile_redirect_url
-        desktop_redirect_url
-      }
-      durations {
-        slot
-        status
-        start_date
-        end_date
+        redirect_url
+        title
       }
     }
   }
@@ -264,33 +260,28 @@ const SingleDetail = ({ product }) => {
     });
   }, [getproductDetailsPageSlider]);
 
-  const [getApprovedProductAds, { data: approvedAdsData }] = useLazyQuery(GET_APPROVED_ADS_BY_PRODUCT, {
+  const [getProductAds, { data: productAdsData }] = useLazyQuery(GET_ADS_FOR_PRODUCT, {
     fetchPolicy: 'network-only',
   });
 
   useEffect(() => {
     if (product?.id) {
-      getApprovedProductAds({ variables: { productId: product.id } });
+      getProductAds({ variables: { product_id: product.id } });
     }
   }, [product?.id]);
 
-  // Flatten all running medias across all approved ad requests
-  const now = new Date();
-  const approvedAds = approvedAdsData?.getApprovedAdsByProduct || [];
-  const activeMedias = approvedAds.flatMap((adReq) =>
-    adReq.medias.filter((media) => {
-      const dur = adReq.durations.find((d) => d.slot === media.slot);
-      // Show if duration is approved/running; only hide if explicitly expired
-      if (!dur) return false;
-      if (dur.status !== 'approved' && dur.status !== 'running') return false;
-      const end = dur.end_date ? new Date(dur.end_date) : null;
-      if (end && now > end) return false; // expired — hide it
-      return true; // approved/running + not expired → show
-    })
-  );
-  const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  const bannerMedias = activeMedias.filter((m) => m.slot.startsWith('banner_'));
-  const stampMedias = activeMedias.filter((m) => m.slot.startsWith('stamp_'));
+  // Map 3-level fallback SlotAd results to the shape the JSX expects
+  const { width } = useWindowSize();
+  const isMobile = width < 768;
+  const productAds = (productAdsData?.getAdsForProduct?.ads || []).map((ad) => ({
+    slot: ad.slot_name,
+    mobile_image_url: ad.mobile_image_url,
+    desktop_image_url: ad.desktop_image_url,
+    mobile_redirect_url: ad.redirect_url,
+    desktop_redirect_url: ad.redirect_url,
+  }));
+  const bannerMedias = productAds.filter((m) => m.slot.startsWith('banner_'));
+  const stampMedias = productAds.filter((m) => m.slot.startsWith('stamp_'));
 
   // Init Bootstrap carousel for product banner ads
   useEffect(() => {
@@ -743,10 +734,10 @@ const SingleDetail = ({ product }) => {
                         {bannerMedias.map((media, i) => {
                           const BASE = (process.env.REACT_APP_API_URL || 'http://localhost:4000') + '/';
                           const toAbs = (url) => url && !url.startsWith('http') ? BASE + url : url;
-                          const imgUrl = isMobileDevice
+                          const imgUrl = isMobile
                             ? toAbs(media.mobile_image_url) || toAbs(media.desktop_image_url)
                             : toAbs(media.desktop_image_url) || toAbs(media.mobile_image_url);
-                          const redirectUrl = isMobileDevice
+                          const redirectUrl = isMobile
                             ? media.mobile_redirect_url || media.desktop_redirect_url
                             : media.desktop_redirect_url || media.mobile_redirect_url;
                           if (!imgUrl) return null;
@@ -758,7 +749,7 @@ const SingleDetail = ({ product }) => {
                                     src={imgUrl}
                                     className="d-block w-100 rounded"
                                     alt={`Ad Banner ${i + 1}`}
-                                    style={{ objectFit: 'cover', height: '220px' }}
+                                    style={{ objectFit: 'cover', height: '280px', width: '100%' }}
                                   />
                                 </a>
                               ) : (
@@ -766,7 +757,7 @@ const SingleDetail = ({ product }) => {
                                   src={imgUrl}
                                   className="d-block w-100 rounded"
                                   alt={`Ad Banner ${i + 1}`}
-                                  style={{ objectFit: 'cover', height: '220px' }}
+                                  style={{ objectFit: 'cover', height: '280px', width: '100%' }}
                                 />
                               )}
                             </div>
@@ -1285,22 +1276,24 @@ const SingleDetail = ({ product }) => {
           {stampMedias.map((media, i) => {
             const BASE = (process.env.REACT_APP_API_URL || 'http://localhost:4000') + '/';
             const toAbsolute = (url) => url && !url.startsWith('http') ? BASE + url : url;
-            const imgUrl = isMobileDevice
+            const imgUrl = isMobile
               ? toAbsolute(media.mobile_image_url) || toAbsolute(media.desktop_image_url)
               : toAbsolute(media.desktop_image_url) || toAbsolute(media.mobile_image_url);
-            const redirectUrl = isMobileDevice
+            const redirectUrl = isMobile
               ? media.mobile_redirect_url || media.desktop_redirect_url
               : media.desktop_redirect_url || media.mobile_redirect_url;
             if (!imgUrl) return null;
             return (
               <Col key={i} xs={6} sm={4} md={3}>
-                {redirectUrl ? (
-                  <a href={redirectUrl} target="_blank" rel="noopener noreferrer">
-                    <img src={imgUrl} className="w-100 rounded border" alt={`Ad Stamp ${i + 1}`} style={{ objectFit: 'cover', height: '120px' }} />
-                  </a>
-                ) : (
-                  <img src={imgUrl} className="w-100 rounded border" alt={`Ad Stamp ${i + 1}`} style={{ objectFit: 'cover', height: '120px' }} />
-                )}
+                <Card className="w-100 hover-img-scale-up p-0 border-0">
+                  {redirectUrl ? (
+                    <a href={redirectUrl} target="_blank" rel="noopener noreferrer">
+                      <img src={imgUrl} className="img-fluid w-100 rounded" alt={`Ad Stamp ${i + 1}`} style={{ objectFit: 'cover', height: '180px' }} />
+                    </a>
+                  ) : (
+                    <img src={imgUrl} className="img-fluid w-100 rounded" alt={`Ad Stamp ${i + 1}`} style={{ objectFit: 'cover', height: '180px' }} />
+                  )}
+                </Card>
               </Col>
             );
           })}

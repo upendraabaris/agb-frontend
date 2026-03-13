@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useHistory, NavLink } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import { useQuery, useLazyQuery, useMutation, gql } from '@apollo/client';
 import { Card, Button, Row, Col, Alert, Spinner, Modal, Badge, Form, Table } from 'react-bootstrap';
 import { toast } from 'react-toastify';
@@ -62,6 +63,15 @@ const GET_MY_WALLET = gql`
     getMyWallet {
       id
       balance
+    }
+  }
+`;
+
+const GET_AD_SETTINGS = gql`
+  query GetAdSettings {
+    getAdSettings {
+      allow_external_url_for_sellers
+      allow_internal_url_for_ad_managers
     }
   }
 `;
@@ -317,7 +327,7 @@ const ProductAdvertisement = () => {
   const [selectedProduct, setSelectedProduct] = useState(null); // full product object from list
   const [selectedDuration, setSelectedDuration] = useState(90);
   const [selectedSlots, setSelectedSlots] = useState([]);
-  // keyed by slot: { mobileFile, desktopFile, mobilePreview, desktopPreview, redirectUrl }
+  // keyed by slot: { mobileFile, desktopFile, mobilePreview, desktopPreview, redirectUrl, urlType }
   const [slotMedia, setSlotMedia] = useState({});
   const [pricingData, setPricingData] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -335,6 +345,20 @@ const ProductAdvertisement = () => {
 
   const { data: walletData, refetch: refetchWallet } = useQuery(GET_MY_WALLET, { fetchPolicy: 'network-only' });
   const walletBalance = walletData?.getMyWallet?.balance ?? 0;
+
+  // ── Ad Settings & role-based URL logic ──────────────────────────────
+  const { currentUser } = useSelector((state) => state.auth);
+  const userRoles = currentUser?.role || [];
+  const { data: adSettingsData } = useQuery(GET_AD_SETTINGS);
+  const adSettings = adSettingsData?.getAdSettings || {};
+  const isAdmin = userRoles.includes('admin') || userRoles.includes('masterAdmin');
+  const isAdMgr = !isAdmin && userRoles.includes('adManager');
+  const isSeller = !isAdmin && !isAdMgr;
+  const canUseExternal = isAdmin || isAdMgr || (isSeller && adSettings.allow_external_url_for_sellers);
+  const canUseInternal = isAdmin || isSeller || (isAdMgr && adSettings.allow_internal_url_for_ad_managers);
+  const defaultUrlType = isAdMgr ? 'external' : 'internal';
+  const getEffectiveUrlType = (slot) => slotMedia[slot]?.urlType || defaultUrlType;
+  const externalSurcharge = adSettings.external_url_extra_cost || 0;
 
   const [fetchPricing, { loading: pricingLoading }] = useLazyQuery(GET_PRODUCT_AD_PRICING, {
     fetchPolicy: 'network-only',
@@ -457,7 +481,7 @@ const ProductAdvertisement = () => {
       }
       setSlotMedia((m) => ({
         ...m,
-        [slotName]: { mobileFile: null, desktopFile: null, mobilePreview: '', desktopPreview: '', redirectUrl: '' },
+        [slotName]: { mobileFile: null, desktopFile: null, mobilePreview: '', desktopPreview: '', redirectUrl: '', urlType: '' },
       }));
       return [...prev, slotName];
     });
@@ -517,6 +541,7 @@ const ProductAdvertisement = () => {
             desktop_image_url: desktopUrl,
             mobile_redirect_url: m.redirectUrl || '',
             desktop_redirect_url: m.redirectUrl || '',
+            url_type: m.urlType || (isAdMgr ? 'external' : 'internal'),
           };
         })
       );
@@ -810,6 +835,38 @@ const ProductAdvertisement = () => {
                 value={slotMedia[slot]?.redirectUrl || ''}
                 onChange={(e) => handleMediaChange(slot, 'redirectUrl', e.target.value)}
               />
+            </Col>
+
+            {/* URL Type */}
+            <Col md={12} className="mt-2">
+              <Form.Label className="small fw-bold">URL Type</Form.Label>
+              {canUseExternal && canUseInternal ? (
+                <div className="d-flex gap-4">
+                  <Form.Check
+                    type="radio"
+                    label="Internal URL (same site)"
+                    id={`url-type-internal-${slot}`}
+                    checked={getEffectiveUrlType(slot) === 'internal'}
+                    onChange={() => handleMediaChange(slot, 'urlType', 'internal')}
+                  />
+                  <Form.Check
+                    type="radio"
+                    label="External URL (off-site)"
+                    id={`url-type-external-${slot}`}
+                    checked={getEffectiveUrlType(slot) === 'external'}
+                    onChange={() => handleMediaChange(slot, 'urlType', 'external')}
+                  />
+                </div>
+              ) : (
+                <div>
+                  <Badge bg="secondary">{canUseExternal ? 'External URL' : 'Internal URL'}</Badge>
+                </div>
+              )}
+              {getEffectiveUrlType(slot) === 'external' && externalSurcharge > 0 && (
+                <div className="text-warning fw-bold mt-1" style={{ fontSize: '0.82rem' }}>
+                  ⚠ External URL surcharge: +₹{externalSurcharge.toLocaleString('en-IN')} per slot
+                </div>
+              )}
             </Col>
           </Row>
         </div>

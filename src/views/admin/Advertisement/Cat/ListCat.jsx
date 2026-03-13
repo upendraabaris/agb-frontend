@@ -317,7 +317,16 @@ const ListViewCategory = () => {
                         <CsLineIcons icon="edit-square" className="text-primary" size="17" />
                       </Button>
                     </div>
-                  </OverlayTrigger>                
+                  </OverlayTrigger>
+                  <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip-default-ads">Category Default Ads</Tooltip>}>
+                    <div className="d-inline-block ms-1">
+                      <NavLink to={`/admin/advertisment/category/${category.id}/default-ads`}>
+                        <Button variant="foreground-alternate" className="btn-icon btn-icon-only shadow">
+                          <CsLineIcons icon="image" className="text-success" size="17" />
+                        </Button>
+                      </NavLink>
+                    </div>
+                  </OverlayTrigger>
                 </div>
               </Col>
             </Row>
