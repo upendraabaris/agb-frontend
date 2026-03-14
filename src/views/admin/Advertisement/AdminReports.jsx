@@ -11,8 +11,8 @@ import BreadcrumbList from 'components/breadcrumb-list/BreadcrumbList';
 // ==========================================
 
 const GET_ADMIN_REVENUE_REPORT = gql`
-  query GetAdminRevenueReport($period: String!, $year: Int!, $month: Int, $quarter: Int) {
-    getAdminRevenueReport(period: $period, year: $year, month: $month, quarter: $quarter) {
+  query GetAdminRevenueReport($period: String!, $year: Int!, $quarter: Int, $half: Int) {
+    getAdminRevenueReport(period: $period, year: $year, quarter: $quarter, half: $half) {
       totalRevenue
       period
       year
@@ -119,8 +119,8 @@ const GET_ADMIN_ADVERTISER_SPENDING = gql`
 // ==========================================
 
 const GET_ADMIN_PRODUCT_AD_REVENUE_REPORT = gql`
-  query GetAdminProductAdRevenueReport($period: String!, $year: Int!, $month: Int, $quarter: Int) {
-    getAdminProductAdRevenueReport(period: $period, year: $year, month: $month, quarter: $quarter) {
+  query GetAdminProductAdRevenueReport($period: String!, $year: Int!, $quarter: Int, $half: Int) {
+    getAdminProductAdRevenueReport(period: $period, year: $year, quarter: $quarter, half: $half) {
       totalRevenue
       period
       year
@@ -206,6 +206,26 @@ const GET_ADMIN_PRODUCT_AD_ADVERTISER_SPENDING = gql`
 // Component
 // ==========================================
 
+const formatDate = (date) => {
+  const d = date instanceof Date ? date : new Date(date);
+  if (!date || Number.isNaN(d.getTime())) return 'N/A';
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = d.toLocaleString('en-US', { month: 'long' });
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
+const quarterToStartDate = (quarter, year) => {
+  const m = (quarter - 1) * 3 + 1;
+  return `${year}-${String(m).padStart(2, '0')}-01`;
+};
+
+const quarterToEndDate = (quarter, year) => {
+  const endMonth = quarter * 3;
+  const lastDay = new Date(year, endMonth, 0).getDate();
+  return `${year}-${String(endMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+};
+
 const AdminReports = () => {
   const title = 'Advertisement Reports';
   const description = 'Comprehensive advertisement performance and analytics reports';
@@ -217,49 +237,56 @@ const AdminReports = () => {
 
   // State for filters
   const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth() + 1;
 
   const [adTypeTab, setAdTypeTab] = useState('category');
 
-  const [revenuePeriod, setRevenuePeriod] = useState('monthly');
+  const [revenuePeriod, setRevenuePeriod] = useState('quarterly');
   const [revenueYear, setRevenueYear] = useState(currentYear);
-  const [revenueMonth, setRevenueMonth] = useState(currentMonth);
   const [revenueQuarter, setRevenueQuarter] = useState(1);
+  const [revenueHalf, setRevenueHalf] = useState(1);
 
-  const [tierSalesStartDate, setTierSalesStartDate] = useState('');
-  const [tierSalesEndDate, setTierSalesEndDate] = useState('');
+  const [tierSalesStartQuarter, setTierSalesStartQuarter] = useState(1);
+  const [tierSalesStartYear, setTierSalesStartYear] = useState(currentYear);
+  const [tierSalesEndQuarter, setTierSalesEndQuarter] = useState(4);
+  const [tierSalesEndYear, setTierSalesEndYear] = useState(currentYear);
 
   const [expiryDays, setExpiryDays] = useState(30);
 
-  const [advertiserStartDate, setAdvertiserStartDate] = useState('');
-  const [advertiserEndDate, setAdvertiserEndDate] = useState('');
+  const [advertiserStartQuarter, setAdvertiserStartQuarter] = useState(1);
+  const [advertiserStartYear, setAdvertiserStartYear] = useState(currentYear);
+  const [advertiserEndQuarter, setAdvertiserEndQuarter] = useState(4);
+  const [advertiserEndYear, setAdvertiserEndYear] = useState(currentYear);
 
   // Product Ad filter state
-  const [productAdRevenuePeriod, setProductAdRevenuePeriod] = useState('monthly');
+  const [productAdRevenuePeriod, setProductAdRevenuePeriod] = useState('quarterly');
   const [productAdRevenueYear, setProductAdRevenueYear] = useState(currentYear);
-  const [productAdRevenueMonth, setProductAdRevenueMonth] = useState(currentMonth);
   const [productAdRevenueQuarter, setProductAdRevenueQuarter] = useState(1);
-  const [productAdTierSalesStartDate, setProductAdTierSalesStartDate] = useState('');
-  const [productAdTierSalesEndDate, setProductAdTierSalesEndDate] = useState('');
+  const [productAdRevenueHalf, setProductAdRevenueHalf] = useState(1);
+  const [productAdTierSalesStartQuarter, setProductAdTierSalesStartQuarter] = useState(1);
+  const [productAdTierSalesStartYear, setProductAdTierSalesStartYear] = useState(currentYear);
+  const [productAdTierSalesEndQuarter, setProductAdTierSalesEndQuarter] = useState(4);
+  const [productAdTierSalesEndYear, setProductAdTierSalesEndYear] = useState(currentYear);
   const [productAdExpiryDays, setProductAdExpiryDays] = useState(30);
-  const [productAdAdvertiserStartDate, setProductAdAdvertiserStartDate] = useState('');
-  const [productAdAdvertiserEndDate, setProductAdAdvertiserEndDate] = useState('');
+  const [productAdAdvertiserStartQuarter, setProductAdAdvertiserStartQuarter] = useState(1);
+  const [productAdAdvertiserStartYear, setProductAdAdvertiserStartYear] = useState(currentYear);
+  const [productAdAdvertiserEndQuarter, setProductAdAdvertiserEndQuarter] = useState(4);
+  const [productAdAdvertiserEndYear, setProductAdAdvertiserEndYear] = useState(currentYear);
 
   // GraphQL Queries
   const revenueQuery = useQuery(GET_ADMIN_REVENUE_REPORT, {
     variables: {
       period: revenuePeriod,
       year: revenueYear,
-      month: revenuePeriod === 'monthly' ? revenueMonth : null,
       quarter: revenuePeriod === 'quarterly' ? revenueQuarter : null,
+      half: revenuePeriod === 'half-yearly' ? revenueHalf : null,
     },
     onError: (error) => toast.error(`Revenue Report Error: ${error.message}`),
   });
 
   const tierSalesQuery = useQuery(GET_ADMIN_TIER_SALES_REPORT, {
     variables: {
-      startDate: tierSalesStartDate || null,
-      endDate: tierSalesEndDate || null,
+      startDate: quarterToStartDate(tierSalesStartQuarter, tierSalesStartYear),
+      endDate: quarterToEndDate(tierSalesEndQuarter, tierSalesEndYear),
     },
     onError: (error) => toast.error(`Tier Sales Error: ${error.message}`),
   });
@@ -279,8 +306,8 @@ const AdminReports = () => {
 
   const advertiserSpendingQuery = useQuery(GET_ADMIN_ADVERTISER_SPENDING, {
     variables: {
-      startDate: advertiserStartDate || null,
-      endDate: advertiserEndDate || null,
+      startDate: quarterToStartDate(advertiserStartQuarter, advertiserStartYear),
+      endDate: quarterToEndDate(advertiserEndQuarter, advertiserEndYear),
     },
     onError: (error) => toast.error(`Advertiser Spending Error: ${error.message}`),
   });
@@ -290,8 +317,8 @@ const AdminReports = () => {
     variables: {
       period: productAdRevenuePeriod,
       year: productAdRevenueYear,
-      month: productAdRevenuePeriod === 'monthly' ? productAdRevenueMonth : null,
       quarter: productAdRevenuePeriod === 'quarterly' ? productAdRevenueQuarter : null,
+      half: productAdRevenuePeriod === 'half-yearly' ? productAdRevenueHalf : null,
     },
     skip: adTypeTab !== 'product',
     onError: (error) => toast.error(`Product Ad Revenue Error: ${error.message}`),
@@ -299,8 +326,8 @@ const AdminReports = () => {
 
   const productAdTierSalesQuery = useQuery(GET_ADMIN_PRODUCT_AD_TIER_SALES_REPORT, {
     variables: {
-      startDate: productAdTierSalesStartDate || null,
-      endDate: productAdTierSalesEndDate || null,
+      startDate: quarterToStartDate(productAdTierSalesStartQuarter, productAdTierSalesStartYear),
+      endDate: quarterToEndDate(productAdTierSalesEndQuarter, productAdTierSalesEndYear),
     },
     skip: adTypeTab !== 'product',
     onError: (error) => toast.error(`Product Ad Tier Sales Error: ${error.message}`),
@@ -319,8 +346,8 @@ const AdminReports = () => {
 
   const productAdAdvertiserSpendingQuery = useQuery(GET_ADMIN_PRODUCT_AD_ADVERTISER_SPENDING, {
     variables: {
-      startDate: productAdAdvertiserStartDate || null,
-      endDate: productAdAdvertiserEndDate || null,
+      startDate: quarterToStartDate(productAdAdvertiserStartQuarter, productAdAdvertiserStartYear),
+      endDate: quarterToEndDate(productAdAdvertiserEndQuarter, productAdAdvertiserEndYear),
     },
     skip: adTypeTab !== 'product',
     onError: (error) => toast.error(`Product Ad Advertiser Spending Error: ${error.message}`),
@@ -402,7 +429,7 @@ const AdminReports = () => {
             <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4 border-bottom pb-3 d-print-none">
               <div>
                 <h1 className="h3 fw-bold text-dark mb-1">Advertisement Performance Report</h1>
-                <p className="text-muted small mb-0">Generated on: {new Date().toLocaleDateString()}</p>
+                <p className="text-muted small mb-0">Generated on: {formatDate(new Date())}</p>
               </div>
 
               <div className="d-flex gap-2 mt-3 mt-md-0">
@@ -437,8 +464,8 @@ const AdminReports = () => {
                       <div className="col-md-3">
                         <Form.Label>Period</Form.Label>
                         <Form.Select value={revenuePeriod} onChange={(e) => setRevenuePeriod(e.target.value)} size="sm">
-                          <option value="monthly">Monthly</option>
                           <option value="quarterly">Quarterly</option>
+                          <option value="half-yearly">Half-Yearly</option>
                           <option value="annual">Annual</option>
                         </Form.Select>
                       </div>
@@ -446,18 +473,6 @@ const AdminReports = () => {
                         <Form.Label>Year</Form.Label>
                         <Form.Control type="number" value={revenueYear} onChange={(e) => setRevenueYear(parseInt(e.target.value, 10))} size="sm" />
                       </div>
-                      {revenuePeriod === 'monthly' && (
-                        <div className="col-md-2">
-                          <Form.Label>Month</Form.Label>
-                          <Form.Select value={revenueMonth} onChange={(e) => setRevenueMonth(parseInt(e.target.value, 10))} size="sm">
-                            {[...Array(12)].map((_, i) => (
-                              <option key={i + 1} value={i + 1}>
-                                {i + 1}
-                              </option>
-                            ))}
-                          </Form.Select>
-                        </div>
-                      )}
                       {revenuePeriod === 'quarterly' && (
                         <div className="col-md-2">
                           <Form.Label>Quarter</Form.Label>
@@ -466,6 +481,15 @@ const AdminReports = () => {
                             <option value={2}>Q2</option>
                             <option value={3}>Q3</option>
                             <option value={4}>Q4</option>
+                          </Form.Select>
+                        </div>
+                      )}
+                      {revenuePeriod === 'half-yearly' && (
+                        <div className="col-md-2">
+                          <Form.Label>Half</Form.Label>
+                          <Form.Select value={revenueHalf} onChange={(e) => setRevenueHalf(parseInt(e.target.value, 10))} size="sm">
+                            <option value={1}>H1 (Jan–Jun)</option>
+                            <option value={2}>H2 (Jul–Dec)</option>
                           </Form.Select>
                         </div>
                       )}
@@ -479,8 +503,8 @@ const AdminReports = () => {
                             ₹{revenueQuery.data?.getAdminRevenueReport?.totalRevenue?.toLocaleString() || 0}
                           </span>
                           <small className="text-muted">
-                            {revenuePeriod === 'monthly' && `${revenueMonth}/${revenueYear}`}
                             {revenuePeriod === 'quarterly' && `Q${revenueQuarter} ${revenueYear}`}
+                            {revenuePeriod === 'half-yearly' && `H${revenueHalf} ${revenueYear}`}
                             {revenuePeriod === 'annual' && `${revenueYear}`}
                           </small>
                         </div>
@@ -525,13 +549,36 @@ const AdminReports = () => {
 
                     {/* Filters */}
                     <div className="row g-3 mb-3 d-print-none">
-                      <div className="col-md-3">
-                        <Form.Label>Start Date</Form.Label>
-                        <Form.Control type="date" value={tierSalesStartDate} onChange={(e) => setTierSalesStartDate(e.target.value)} size="sm" />
+                      <div className="col-md-2">
+                        <Form.Label>Start Quarter</Form.Label>
+                        <Form.Select value={tierSalesStartQuarter} onChange={(e) => setTierSalesStartQuarter(parseInt(e.target.value, 10))} size="sm">
+                          <option value={1}>Q1</option>
+                          <option value={2}>Q2</option>
+                          <option value={3}>Q3</option>
+                          <option value={4}>Q4</option>
+                        </Form.Select>
                       </div>
-                      <div className="col-md-3">
-                        <Form.Label>End Date</Form.Label>
-                        <Form.Control type="date" value={tierSalesEndDate} onChange={(e) => setTierSalesEndDate(e.target.value)} size="sm" />
+                      <div className="col-md-2">
+                        <Form.Label>Start Year</Form.Label>
+                        <Form.Control
+                          type="number"
+                          value={tierSalesStartYear}
+                          onChange={(e) => setTierSalesStartYear(parseInt(e.target.value, 10))}
+                          size="sm"
+                        />
+                      </div>
+                      <div className="col-md-2">
+                        <Form.Label>End Quarter</Form.Label>
+                        <Form.Select value={tierSalesEndQuarter} onChange={(e) => setTierSalesEndQuarter(parseInt(e.target.value, 10))} size="sm">
+                          <option value={1}>Q1</option>
+                          <option value={2}>Q2</option>
+                          <option value={3}>Q3</option>
+                          <option value={4}>Q4</option>
+                        </Form.Select>
+                      </div>
+                      <div className="col-md-2">
+                        <Form.Label>End Year</Form.Label>
+                        <Form.Control type="number" value={tierSalesEndYear} onChange={(e) => setTierSalesEndYear(parseInt(e.target.value, 10))} size="sm" />
                       </div>
                     </div>
 
@@ -681,7 +728,7 @@ const AdminReports = () => {
                                 <td>{item.sellerEmail}</td>
                                 <td>{item.categoryName}</td>
                                 <td>{item.tierName}</td>
-                                <td>{new Date(item.requestDate).toLocaleDateString()}</td>
+                                <td>{formatDate(item.requestDate)}</td>
                                 <td className="text-center">{item.slotsRequested}</td>
                               </tr>
                             ))}
@@ -735,7 +782,7 @@ const AdminReports = () => {
                                 <td>{item.categoryName}</td>
                                 <td>{item.tierName}</td>
                                 <td>{item.slot}</td>
-                                <td>{new Date(item.endDate).toLocaleDateString()}</td>
+                                <td>{formatDate(item.endDate)}</td>
                                 <td className="text-center">
                                   <span className={`badge ${item.remainingDays <= 7 ? 'bg-danger' : 'bg-warning text-dark'}`}>{item.remainingDays} days</span>
                                 </td>
@@ -769,13 +816,36 @@ const AdminReports = () => {
 
                     {/* Filters */}
                     <div className="row g-3 mb-3 d-print-none">
-                      <div className="col-md-3">
-                        <Form.Label>Start Date</Form.Label>
-                        <Form.Control type="date" value={advertiserStartDate} onChange={(e) => setAdvertiserStartDate(e.target.value)} size="sm" />
+                      <div className="col-md-2">
+                        <Form.Label>Start Quarter</Form.Label>
+                        <Form.Select value={advertiserStartQuarter} onChange={(e) => setAdvertiserStartQuarter(parseInt(e.target.value, 10))} size="sm">
+                          <option value={1}>Q1</option>
+                          <option value={2}>Q2</option>
+                          <option value={3}>Q3</option>
+                          <option value={4}>Q4</option>
+                        </Form.Select>
                       </div>
-                      <div className="col-md-3">
-                        <Form.Label>End Date</Form.Label>
-                        <Form.Control type="date" value={advertiserEndDate} onChange={(e) => setAdvertiserEndDate(e.target.value)} size="sm" />
+                      <div className="col-md-2">
+                        <Form.Label>Start Year</Form.Label>
+                        <Form.Control
+                          type="number"
+                          value={advertiserStartYear}
+                          onChange={(e) => setAdvertiserStartYear(parseInt(e.target.value, 10))}
+                          size="sm"
+                        />
+                      </div>
+                      <div className="col-md-2">
+                        <Form.Label>End Quarter</Form.Label>
+                        <Form.Select value={advertiserEndQuarter} onChange={(e) => setAdvertiserEndQuarter(parseInt(e.target.value, 10))} size="sm">
+                          <option value={1}>Q1</option>
+                          <option value={2}>Q2</option>
+                          <option value={3}>Q3</option>
+                          <option value={4}>Q4</option>
+                        </Form.Select>
+                      </div>
+                      <div className="col-md-2">
+                        <Form.Label>End Year</Form.Label>
+                        <Form.Control type="number" value={advertiserEndYear} onChange={(e) => setAdvertiserEndYear(parseInt(e.target.value, 10))} size="sm" />
                       </div>
                     </div>
 
@@ -831,8 +901,8 @@ const AdminReports = () => {
                       <div className="col-md-3">
                         <Form.Label>Period</Form.Label>
                         <Form.Select value={productAdRevenuePeriod} onChange={(e) => setProductAdRevenuePeriod(e.target.value)} size="sm">
-                          <option value="monthly">Monthly</option>
                           <option value="quarterly">Quarterly</option>
+                          <option value="half-yearly">Half-Yearly</option>
                           <option value="annual">Annual</option>
                         </Form.Select>
                       </div>
@@ -845,18 +915,6 @@ const AdminReports = () => {
                           size="sm"
                         />
                       </div>
-                      {productAdRevenuePeriod === 'monthly' && (
-                        <div className="col-md-2">
-                          <Form.Label>Month</Form.Label>
-                          <Form.Select value={productAdRevenueMonth} onChange={(e) => setProductAdRevenueMonth(parseInt(e.target.value, 10))} size="sm">
-                            {[...Array(12)].map((_, i) => (
-                              <option key={i + 1} value={i + 1}>
-                                {i + 1}
-                              </option>
-                            ))}
-                          </Form.Select>
-                        </div>
-                      )}
                       {productAdRevenuePeriod === 'quarterly' && (
                         <div className="col-md-2">
                           <Form.Label>Quarter</Form.Label>
@@ -865,6 +923,15 @@ const AdminReports = () => {
                             <option value={2}>Q2</option>
                             <option value={3}>Q3</option>
                             <option value={4}>Q4</option>
+                          </Form.Select>
+                        </div>
+                      )}
+                      {productAdRevenuePeriod === 'half-yearly' && (
+                        <div className="col-md-2">
+                          <Form.Label>Half</Form.Label>
+                          <Form.Select value={productAdRevenueHalf} onChange={(e) => setProductAdRevenueHalf(parseInt(e.target.value, 10))} size="sm">
+                            <option value={1}>H1 (Jan–Jun)</option>
+                            <option value={2}>H2 (Jul–Dec)</option>
                           </Form.Select>
                         </div>
                       )}
@@ -877,8 +944,8 @@ const AdminReports = () => {
                             ₹{productAdRevenueQuery.data?.getAdminProductAdRevenueReport?.totalRevenue?.toLocaleString() || 0}
                           </span>
                           <small className="text-muted">
-                            {productAdRevenuePeriod === 'monthly' && `${productAdRevenueMonth}/${productAdRevenueYear}`}
                             {productAdRevenuePeriod === 'quarterly' && `Q${productAdRevenueQuarter} ${productAdRevenueYear}`}
+                            {productAdRevenuePeriod === 'half-yearly' && `H${productAdRevenueHalf} ${productAdRevenueYear}`}
                             {productAdRevenuePeriod === 'annual' && `${productAdRevenueYear}`}
                           </small>
                         </div>
@@ -917,18 +984,49 @@ const AdminReports = () => {
                   <div className="mb-5">
                     <h5 className="fw-bold text-dark border-bottom mb-3 pb-2">2. Product Ad Sales by Tier</h5>
                     <div className="row g-3 mb-3 d-print-none">
-                      <div className="col-md-3">
-                        <Form.Label>Start Date</Form.Label>
+                      <div className="col-md-2">
+                        <Form.Label>Start Quarter</Form.Label>
+                        <Form.Select
+                          value={productAdTierSalesStartQuarter}
+                          onChange={(e) => setProductAdTierSalesStartQuarter(parseInt(e.target.value, 10))}
+                          size="sm"
+                        >
+                          <option value={1}>Q1</option>
+                          <option value={2}>Q2</option>
+                          <option value={3}>Q3</option>
+                          <option value={4}>Q4</option>
+                        </Form.Select>
+                      </div>
+                      <div className="col-md-2">
+                        <Form.Label>Start Year</Form.Label>
                         <Form.Control
-                          type="date"
-                          value={productAdTierSalesStartDate}
-                          onChange={(e) => setProductAdTierSalesStartDate(e.target.value)}
+                          type="number"
+                          value={productAdTierSalesStartYear}
+                          onChange={(e) => setProductAdTierSalesStartYear(parseInt(e.target.value, 10))}
                           size="sm"
                         />
                       </div>
-                      <div className="col-md-3">
-                        <Form.Label>End Date</Form.Label>
-                        <Form.Control type="date" value={productAdTierSalesEndDate} onChange={(e) => setProductAdTierSalesEndDate(e.target.value)} size="sm" />
+                      <div className="col-md-2">
+                        <Form.Label>End Quarter</Form.Label>
+                        <Form.Select
+                          value={productAdTierSalesEndQuarter}
+                          onChange={(e) => setProductAdTierSalesEndQuarter(parseInt(e.target.value, 10))}
+                          size="sm"
+                        >
+                          <option value={1}>Q1</option>
+                          <option value={2}>Q2</option>
+                          <option value={3}>Q3</option>
+                          <option value={4}>Q4</option>
+                        </Form.Select>
+                      </div>
+                      <div className="col-md-2">
+                        <Form.Label>End Year</Form.Label>
+                        <Form.Control
+                          type="number"
+                          value={productAdTierSalesEndYear}
+                          onChange={(e) => setProductAdTierSalesEndYear(parseInt(e.target.value, 10))}
+                          size="sm"
+                        />
                       </div>
                     </div>
                     {renderQueryResult(productAdTierSalesQuery, 'Error loading product ad tier sales report', () => (
@@ -994,7 +1092,7 @@ const AdminReports = () => {
                                 <td>{item.sellerEmail}</td>
                                 <td>{item.productName}</td>
                                 <td>{item.tierName}</td>
-                                <td>{new Date(item.requestDate).toLocaleDateString()}</td>
+                                <td>{formatDate(item.requestDate)}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -1049,7 +1147,7 @@ const AdminReports = () => {
                                 <td>{item.productName}</td>
                                 <td>{item.tierName}</td>
                                 <td>{item.slot}</td>
-                                <td>{new Date(item.endDate).toLocaleDateString()}</td>
+                                <td>{formatDate(item.endDate)}</td>
                                 <td className="text-center">
                                   <span className={`badge ${item.remainingDays <= 7 ? 'bg-danger' : 'bg-warning text-dark'}`}>{item.remainingDays} days</span>
                                 </td>
@@ -1078,21 +1176,47 @@ const AdminReports = () => {
                   <div className="mb-4">
                     <h5 className="fw-bold text-dark border-bottom mb-3 pb-2">5. Product Ad Advertiser Spending</h5>
                     <div className="row g-3 mb-3 d-print-none">
-                      <div className="col-md-3">
-                        <Form.Label>Start Date</Form.Label>
+                      <div className="col-md-2">
+                        <Form.Label>Start Quarter</Form.Label>
+                        <Form.Select
+                          value={productAdAdvertiserStartQuarter}
+                          onChange={(e) => setProductAdAdvertiserStartQuarter(parseInt(e.target.value, 10))}
+                          size="sm"
+                        >
+                          <option value={1}>Q1</option>
+                          <option value={2}>Q2</option>
+                          <option value={3}>Q3</option>
+                          <option value={4}>Q4</option>
+                        </Form.Select>
+                      </div>
+                      <div className="col-md-2">
+                        <Form.Label>Start Year</Form.Label>
                         <Form.Control
-                          type="date"
-                          value={productAdAdvertiserStartDate}
-                          onChange={(e) => setProductAdAdvertiserStartDate(e.target.value)}
+                          type="number"
+                          value={productAdAdvertiserStartYear}
+                          onChange={(e) => setProductAdAdvertiserStartYear(parseInt(e.target.value, 10))}
                           size="sm"
                         />
                       </div>
-                      <div className="col-md-3">
-                        <Form.Label>End Date</Form.Label>
+                      <div className="col-md-2">
+                        <Form.Label>End Quarter</Form.Label>
+                        <Form.Select
+                          value={productAdAdvertiserEndQuarter}
+                          onChange={(e) => setProductAdAdvertiserEndQuarter(parseInt(e.target.value, 10))}
+                          size="sm"
+                        >
+                          <option value={1}>Q1</option>
+                          <option value={2}>Q2</option>
+                          <option value={3}>Q3</option>
+                          <option value={4}>Q4</option>
+                        </Form.Select>
+                      </div>
+                      <div className="col-md-2">
+                        <Form.Label>End Year</Form.Label>
                         <Form.Control
-                          type="date"
-                          value={productAdAdvertiserEndDate}
-                          onChange={(e) => setProductAdAdvertiserEndDate(e.target.value)}
+                          type="number"
+                          value={productAdAdvertiserEndYear}
+                          onChange={(e) => setProductAdAdvertiserEndYear(parseInt(e.target.value, 10))}
                           size="sm"
                         />
                       </div>

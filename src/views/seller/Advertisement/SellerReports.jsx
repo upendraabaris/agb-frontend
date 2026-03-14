@@ -134,6 +134,15 @@ const GET_MY_PRODUCT_AD_VALIDITY = gql`
 // Component
 // ==========================================
 
+const formatDate = (date) => {
+  const d = date instanceof Date ? date : new Date(date);
+  if (!date || Number.isNaN(d.getTime())) return 'N/A';
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = d.toLocaleString('en-US', { month: 'long' });
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
 const SellerReports = () => {
   const title = 'My Advertisement Reports';
   const description = 'Track your advertisement campaigns and performance';
@@ -257,7 +266,7 @@ const SellerReports = () => {
             <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4 border-bottom pb-3 d-print-none">
               <div>
                 <h1 className="h3 fw-bold text-dark mb-1">Advertiser Campaign Report</h1>
-                <p className="text-muted small mb-0">Generated on: {new Date().toLocaleDateString()}</p>
+                <p className="text-muted small mb-0">Generated on: {formatDate(new Date())}</p>
               </div>
 
               <div className="d-flex gap-2 mt-3 mt-md-0">
@@ -330,8 +339,8 @@ const SellerReports = () => {
                                     <td>
                                       <code>{ad.slot}</code>
                                     </td>
-                                    <td>{new Date(ad.startDate).toLocaleDateString()}</td>
-                                    <td>{new Date(ad.endDate).toLocaleDateString()}</td>
+                                    <td>{formatDate(ad.startDate)}</td>
+                                    <td>{formatDate(ad.endDate)}</td>
                                     <td className="text-center">{ad.durationDays}</td>
                                     <td className="text-center">
                                       <span className={`badge ${ad.remainingDays <= 7 ? 'bg-warning text-dark' : 'bg-success'}`}>{ad.remainingDays} days</span>
@@ -438,13 +447,13 @@ const SellerReports = () => {
                                     <td>
                                       <code>{ad.slot}</code>
                                     </td>
-                                    <td>{ad.startDate ? new Date(ad.startDate).toLocaleDateString() : 'N/A'}</td>
-                                    <td>{ad.endDate ? new Date(ad.endDate).toLocaleDateString() : 'N/A'}</td>
+                                    <td>{ad.startDate ? formatDate(ad.startDate) : 'N/A'}</td>
+                                    <td>{ad.endDate ? formatDate(ad.endDate) : 'N/A'}</td>
                                     <td className="text-center">{ad.durationDays}</td>
                                     <td>
                                       <span className={`badge ${ad.status === 'completed' ? 'bg-secondary' : 'bg-danger'}`}>{ad.status}</span>
                                     </td>
-                                    <td>{ad.completedDate ? new Date(ad.completedDate).toLocaleDateString() : 'N/A'}</td>
+                                    <td>{formatDate(ad.completedDate)}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -502,7 +511,7 @@ const SellerReports = () => {
                                     <td>
                                       <code>{ad.slot}</code>
                                     </td>
-                                    <td>{new Date(ad.endDate).toLocaleDateString()}</td>
+                                    <td>{formatDate(ad.endDate)}</td>
                                     <td className="text-center">
                                       <span className={`badge ${getDaysVariant(ad.remainingDays)}`}>{ad.remainingDays} days</span>
                                     </td>
@@ -580,8 +589,8 @@ const SellerReports = () => {
                                     <td>
                                       <code>{ad.slot}</code>
                                     </td>
-                                    <td>{new Date(ad.startDate).toLocaleDateString()}</td>
-                                    <td>{new Date(ad.endDate).toLocaleDateString()}</td>
+                                    <td>{formatDate(ad.startDate)}</td>
+                                    <td>{formatDate(ad.endDate)}</td>
                                     <td className="text-center">{ad.durationDays}</td>
                                     <td className="text-center">
                                       <span className={`badge ${ad.remainingDays <= 7 ? 'bg-warning text-dark' : 'bg-success'}`}>{ad.remainingDays} days</span>
@@ -679,13 +688,13 @@ const SellerReports = () => {
                                     <td>
                                       <code>{ad.slot}</code>
                                     </td>
-                                    <td>{ad.startDate ? new Date(ad.startDate).toLocaleDateString() : 'N/A'}</td>
-                                    <td>{ad.endDate ? new Date(ad.endDate).toLocaleDateString() : 'N/A'}</td>
+                                    <td>{ad.startDate ? formatDate(ad.startDate) : 'N/A'}</td>
+                                    <td>{ad.endDate ? formatDate(ad.endDate) : 'N/A'}</td>
                                     <td className="text-center">{ad.durationDays}</td>
                                     <td>
                                       <span className={`badge ${ad.status === 'completed' ? 'bg-secondary' : 'bg-danger'}`}>{ad.status}</span>
                                     </td>
-                                    <td>{ad.completedDate ? new Date(ad.completedDate).toLocaleDateString() : 'N/A'}</td>
+                                    <td>{formatDate(ad.completedDate)}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -736,7 +745,7 @@ const SellerReports = () => {
                                     <td>
                                       <code>{ad.slot}</code>
                                     </td>
-                                    <td>{new Date(ad.endDate).toLocaleDateString()}</td>
+                                    <td>{formatDate(ad.endDate)}</td>
                                     <td className="text-center">
                                       <span className={`badge ${getDaysVariant(ad.remainingDays)}`}>{ad.remainingDays} days</span>
                                     </td>
