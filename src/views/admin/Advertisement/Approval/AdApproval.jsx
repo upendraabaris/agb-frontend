@@ -151,12 +151,8 @@ function AdApproval() {
   // compute projected total price across ALL durations/slots
   const computeProjectedTotal = () => {
     if (!selectedRequest?.durations || selectedRequest.durations.length === 0) return 0;
-    return selectedRequest.durations.reduce((total, dur) => {
-      if (dur.pricing_breakdown && dur.pricing_breakdown.length > 0) {
-        return total + dur.pricing_breakdown.reduce((sum, b) => sum + (b.subtotal || 0), 0);
-      }
-      return total + (dur.total_price || 0);
-    }, 0);
+    // Always use stored total_price — it's the authoritative value (includes surcharge, pro-rata, etc.)
+    return selectedRequest.durations.reduce((total, dur) => total + (dur.total_price || 0), 0);
   };
 
   // Compute total after coupon discount
@@ -172,10 +168,10 @@ function AdApproval() {
     return selectedRequest?.durations?.some((d) => d.coupon_code) || false;
   };
 
-  // human-readable slot label
+  // human-readable slot label (handles both "banner_1" and "banner1" formats)
   const slotLabel = (slot) => {
     if (!slot) return 'Unknown Slot';
-    const match = slot.match(/^(banner|stamp)(\d+)$/i);
+    const match = slot.match(/^(banner|stamp)_?(\d+)$/i);
     if (match) return `${match[1].charAt(0).toUpperCase() + match[1].slice(1)} ${match[2]}`;
     return slot;
   };
@@ -505,13 +501,22 @@ function AdApproval() {
                           <div className="mb-2">
                             <small className="text-muted d-block mb-1">Pricing Breakdown</small>
                             <ul className="mb-0 ps-3">
-                              {dur.pricing_breakdown.map((b, i) => (
-                                <li key={i}>
-                                  <strong>{b.quarter}</strong>
-                                  {b.start && b.end && ` (${new Date(b.start).toLocaleDateString()} – ${new Date(b.end).toLocaleDateString()})`}
-                                  : {b.days}d × ₹{b.rate_per_day}/d = ₹{b.subtotal}
-                                </li>
-                              ))}
+                              {dur.pricing_breakdown.map((b, i) => {
+                                if (b.days === 0 && b.subtotal > 0) {
+                                  return (
+                                    <li key={i} style={{ color: '#d97706', fontWeight: 600, listStyle: 'none', marginLeft: '-1rem' }}>
+                                      ⚠ {b.quarter}: +₹{b.subtotal}
+                                    </li>
+                                  );
+                                }
+                                return (
+                                  <li key={i}>
+                                    <strong>{b.quarter}</strong>
+                                    {b.start && b.end && ` (${new Date(b.start).toLocaleDateString()} – ${new Date(b.end).toLocaleDateString()})`}
+                                    : {b.days}d × ₹{b.rate_per_day}/d = ₹{b.subtotal}
+                                  </li>
+                                );
+                              })}
                             </ul>
                           </div>
                         )}
