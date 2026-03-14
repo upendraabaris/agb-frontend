@@ -45,6 +45,8 @@ const GET_PRODUCT_AD_PRICING = gql`
     getProductAdPricing(productId: $productId) {
       tierId
       tierName
+      banner_external_url_extra_cost
+      stamp_external_url_extra_cost
       adCategories {
         id
         ad_type
@@ -358,7 +360,13 @@ const ProductAdvertisement = () => {
   const canUseInternal = isAdmin || isSeller || (isAdMgr && adSettings.allow_internal_url_for_ad_managers);
   const defaultUrlType = isAdMgr ? 'external' : 'internal';
   const getEffectiveUrlType = (slot) => slotMedia[slot]?.urlType || defaultUrlType;
-  const externalSurcharge = adSettings.external_url_extra_cost || 0;
+  // External URL surcharge depends on slot type (banner vs stamp), read from pricing config
+  const getExternalSurcharge = (slotName) => {
+    const adType = slotName?.split('_')[0];
+    return adType === 'stamp'
+      ? (pricingData?.stamp_external_url_extra_cost || 0)
+      : (pricingData?.banner_external_url_extra_cost || 0);
+  };
 
   const [fetchPricing, { loading: pricingLoading }] = useLazyQuery(GET_PRODUCT_AD_PRICING, {
     fetchPolicy: 'network-only',
@@ -862,9 +870,9 @@ const ProductAdvertisement = () => {
                   <Badge bg="secondary">{canUseExternal ? 'External URL' : 'Internal URL'}</Badge>
                 </div>
               )}
-              {getEffectiveUrlType(slot) === 'external' && externalSurcharge > 0 && (
+              {getEffectiveUrlType(slot) === 'external' && getExternalSurcharge(slot) > 0 && (
                 <div className="text-warning fw-bold mt-1" style={{ fontSize: '0.82rem' }}>
-                  ⚠ External URL surcharge: +₹{externalSurcharge.toLocaleString('en-IN')} per slot
+                  ⚠ External URL surcharge: +₹{getExternalSurcharge(slot).toLocaleString('en-IN')} per slot
                 </div>
               )}
             </Col>

@@ -50,7 +50,8 @@ const GET_ALL_PRICING_CONFIGS = gql`
         A2
         A3
       }
-      external_url_extra_cost
+      banner_external_url_extra_cost
+      stamp_external_url_extra_cost
       is_base_tier
       generated_prices {
         ad_type
@@ -97,7 +98,8 @@ function AdPricingSetup() {
   const [selectedTierId, setSelectedTierId] = useState('');
   const [banner1Price, setBanner1Price] = useState(10000);
   const [stamp1Price, setStamp1Price] = useState(5000);
-  const [externalUrlExtraCost, setExternalUrlExtraCost] = useState(0);
+  const [bannerExternalUrlExtraCost, setBannerExternalUrlExtraCost] = useState(0);
+  const [stampExternalUrlExtraCost, setStampExternalUrlExtraCost] = useState(0);
   const [durationMultipliers, setDurationMultipliers] = useState({
     quarterly: 1.0,
     half_yearly: 1.8,
@@ -157,7 +159,8 @@ function AdPricingSetup() {
       if (existingConfig) {
         setBanner1Price(existingConfig.banner1_quarterly_price || 10000);
         setStamp1Price(existingConfig.stamp1_quarterly_price || 5000);
-        setExternalUrlExtraCost(existingConfig.external_url_extra_cost || 0);
+        setBannerExternalUrlExtraCost(existingConfig.banner_external_url_extra_cost ?? existingConfig.external_url_extra_cost ?? 0);
+        setStampExternalUrlExtraCost(existingConfig.stamp_external_url_extra_cost ?? existingConfig.external_url_extra_cost ?? 0);
         setDurationMultipliers(existingConfig.duration_multipliers || {
           quarterly: 1.0,
           half_yearly: 1.8,
@@ -185,7 +188,8 @@ function AdPricingSetup() {
         // Reset to defaults for new tier
         setBanner1Price(10000);
         setStamp1Price(5000);
-        setExternalUrlExtraCost(0);
+        setBannerExternalUrlExtraCost(0);
+        setStampExternalUrlExtraCost(0);
         setDurationMultipliers({ quarterly: 1.0, half_yearly: 1.8, yearly: 3.2 });
         setBannerMultipliers({ pos1: 1.0, pos2: 0.8, pos3: 0.65, pos4: 0.5 });
         setStampMultipliers({ pos1: 1.0, pos2: 0.8, pos3: 0.65, pos4: 0.5 });
@@ -267,7 +271,8 @@ function AdPricingSetup() {
           } : null,
           is_base_tier: isBaseTier,
           auto_cascade_to_other_tiers: isBaseTier && autoCascade,
-          external_url_extra_cost: parseFloat(externalUrlExtraCost) || 0,
+          banner_external_url_extra_cost: parseFloat(bannerExternalUrlExtraCost) || 0,
+          stamp_external_url_extra_cost: parseFloat(stampExternalUrlExtraCost) || 0,
           is_active: true
         }
       }
@@ -358,15 +363,28 @@ function AdPricingSetup() {
                       </Col>
                       <Col md={6}>
                         <Form.Group className="mb-3">
-                          <Form.Label>External URL Extra Cost (₹ per slot)</Form.Label>
+                          <Form.Label>Banner External URL Cost (₹ per slot)</Form.Label>
                           <Form.Control
                             type="number"
-                            value={externalUrlExtraCost}
-                            onChange={(e) => setExternalUrlExtraCost(e.target.value)}
+                            value={bannerExternalUrlExtraCost}
+                            onChange={(e) => setBannerExternalUrlExtraCost(e.target.value)}
                             min="0"
                             placeholder="0"
                           />
-                          <Form.Text className="text-muted">Flat surcharge added when advertiser selects an external (off-site) redirect URL</Form.Text>
+                          <Form.Text className="text-muted">Surcharge for banner slots with external redirect URL</Form.Text>
+                        </Form.Group>
+                      </Col>
+                      <Col md={6}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>Stamp External URL Cost (₹ per slot)</Form.Label>
+                          <Form.Control
+                            type="number"
+                            value={stampExternalUrlExtraCost}
+                            onChange={(e) => setStampExternalUrlExtraCost(e.target.value)}
+                            min="0"
+                            placeholder="0"
+                          />
+                          <Form.Text className="text-muted">Surcharge for stamp slots with external redirect URL</Form.Text>
                         </Form.Group>
                       </Col>
                     </Row>

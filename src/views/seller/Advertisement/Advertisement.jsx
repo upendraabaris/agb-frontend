@@ -59,7 +59,8 @@ const GET_CATEGORY_PRICING = gql`
       categoryId
       tierId
       tierName
-      external_url_extra_cost
+      banner_external_url_extra_cost
+      stamp_external_url_extra_cost
       adCategories {
         id
         ad_type
@@ -691,8 +692,11 @@ const Advertisement = () => {
     if (!adCat) adCat = pricing.adCategories?.find(ac => ac.ad_type === adType && ac.duration_days === selectedDuration);
     if (!adCat) return null;
 
-    // Total = full duration price + pro-rata + external URL surcharge (flat fee from pricing config)
-    const externalSurcharge = urlType === 'external' ? (pricing.external_url_extra_cost || 0) : 0;
+    // Total = full duration price + pro-rata + external URL surcharge (flat fee from pricing config, differs by ad type)
+    let externalSurcharge = 0;
+    if (urlType === 'external') {
+      externalSurcharge = adType === 'stamp' ? (pricing.stamp_external_url_extra_cost || 0) : (pricing.banner_external_url_extra_cost || 0);
+    }
     const totalPrice = adCat.price + proRataCharge + externalSurcharge;
     const totalDays = segments.reduce((sum, s) => sum + s.days, 0);
 
@@ -1794,7 +1798,7 @@ const Advertisement = () => {
                       selectedSlots={selectedSlots}
                       slotMedia={sharedSlotMedia}
                       sellerProducts={sellerProducts}
-                      adSettings={{ ...adSettings, external_url_extra_cost: pricingData?.getCategoryPricing?.external_url_extra_cost || 0 }}
+                      adSettings={{ ...adSettings, banner_external_url_extra_cost: pricingData?.getCategoryPricing?.banner_external_url_extra_cost || 0, stamp_external_url_extra_cost: pricingData?.getCategoryPricing?.stamp_external_url_extra_cost || 0 }}
                       userRoles={userRoles}
                       onSlotMediaChange={(slot, field, value) => {
                         setSharedSlotMedia(m => ({ ...m, [slot]: { ...(m[slot] || {}), [field]: value } }));
@@ -1819,7 +1823,7 @@ const Advertisement = () => {
                       selectedSlots={selectedSlots}
                       slotMedia={catMedia}
                       sellerProducts={sellerProducts}
-                      adSettings={{ ...adSettings, external_url_extra_cost: (catId === selectedCategory ? pricingData?.getCategoryPricing?.external_url_extra_cost : categoryPricingMap[catId]?.external_url_extra_cost) || 0 }}
+                      adSettings={{ ...adSettings, banner_external_url_extra_cost: (catId === selectedCategory ? pricingData?.getCategoryPricing?.banner_external_url_extra_cost : categoryPricingMap[catId]?.banner_external_url_extra_cost) || 0, stamp_external_url_extra_cost: (catId === selectedCategory ? pricingData?.getCategoryPricing?.stamp_external_url_extra_cost : categoryPricingMap[catId]?.stamp_external_url_extra_cost) || 0 }}
                       userRoles={userRoles}
                       onSlotMediaChange={(slot, field, value) => {
                         setPerCategorySlotMedia(prev => ({
@@ -1898,7 +1902,10 @@ const Advertisement = () => {
                       if (!adCat) adCat = pr.adCategories?.find(ac => ac.ad_type === adType && ac.duration_days === selectedDuration);
                       const basePrice = adCat?.price || 0;
                       const slotUrlType = entry.slotMedia[slot]?.urlType || defaultUrlType;
-                      const slotExtSurcharge = slotUrlType === 'external' ? (entry.pricingData?.external_url_extra_cost || 0) : 0;
+                      let slotExtSurcharge = 0;
+                      if (slotUrlType === 'external') {
+                        slotExtSurcharge = adType === 'stamp' ? (entry.pricingData?.stamp_external_url_extra_cost || 0) : (entry.pricingData?.banner_external_url_extra_cost || 0);
+                      }
                       price = basePrice + proRataCharge + slotExtSurcharge;
 
                       // Build breakdown
@@ -2362,7 +2369,7 @@ const Advertisement = () => {
                     selectedSlots={selectedSlots}
                     slotMedia={slotMedia}
                     sellerProducts={sellerProducts}
-                    adSettings={{ ...adSettings, external_url_extra_cost: pricingData?.getCategoryPricing?.external_url_extra_cost || 0 }}
+                    adSettings={{ ...adSettings, banner_external_url_extra_cost: pricingData?.getCategoryPricing?.banner_external_url_extra_cost || 0, stamp_external_url_extra_cost: pricingData?.getCategoryPricing?.stamp_external_url_extra_cost || 0 }}
                     userRoles={userRoles}
                     onSlotMediaChange={(slot, field, value) => {
                       setSlotMedia((m) => ({

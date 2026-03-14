@@ -23,8 +23,13 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
   // Resolved effective url type for a slot (stored value or role default)
   const getEffectiveUrlType = (media) => media.urlType || defaultUrlType;
 
-  // External URL surcharge from admin settings
-  const externalSurcharge = adSettings.external_url_extra_cost || 0;
+  // External URL surcharge depends on ad type (banner vs stamp)
+  const getExternalSurcharge = (slotName) => {
+    const adType = slotName?.split('_')[0];
+    return adType === 'stamp'
+      ? (adSettings.stamp_external_url_extra_cost || 0)
+      : (adSettings.banner_external_url_extra_cost || 0);
+  };
 
   const formatSlotName = (slot) => {
     if (!slot) return slot;
@@ -240,9 +245,9 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
                       External: Links outside this website | Internal: Links within this website
                     </Form.Text>
                     {/* Surcharge notice for external */}
-                    {getEffectiveUrlType(media) === 'external' && externalSurcharge > 0 && (
+                    {getEffectiveUrlType(media) === 'external' && getExternalSurcharge(slot) > 0 && (
                       <div className='mt-1 text-warning fw-bold' style={{ fontSize: '0.82rem' }}>
-                        ⚠ External URL surcharge: +₹{externalSurcharge.toLocaleString('en-IN')} per slot
+                        ⚠ External URL surcharge: +₹{getExternalSurcharge(slot).toLocaleString('en-IN')} per slot
                       </div>
                     )}
                   </Form.Group>
