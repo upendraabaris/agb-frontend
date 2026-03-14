@@ -1106,13 +1106,13 @@ const routesAndMenuItems = {
 
       subs: [
         { path: '/home_advertisment', label: 'Home Page Ads', component: ad.add },
-        { path: '/down_banner', label: 'Down Banner', component: ad.list },
+        // { path: '/down_banner', label: 'Down Banner', component: ad.list },
         { path: '/category_advertisment', label: 'Category Ads', component: ad.cat },
-        { path: '/productDetailPageSlider', label: 'Product Detail Ads', component: ad.pro },
+        // { path: '/productDetailPageSlider', label: 'Product Detail Ads', component: ad.pro },
         { path: '/ads_category_master', label: 'Ad Tier', component: ad.adTier },
-        { path: '/ads_category', label: 'Ads Pricing (Legacy)', component: ad.adsCategory },
+        // { path: '/ads_category', label: 'Ads Pricing (Legacy)', component: ad.adsCategory },
         { path: '/pricing', label: 'Pricing Config', component: ad.pricing },
-        { path: '/approval', label: 'Ad Approvals', component: ad.approval },
+        { path: '/approval', label: 'Category Ad Approvals', component: ad.approval },
         { path: '/default-ads', label: 'Default Ads', component: ad.defaultAds },
         { path: '/category/:categoryId/default-ads', component: ad.categoryDefaultAds, hideInMenu: true },
         { path: '/product-approval', label: 'Product Ad Approvals', component: ProductAdApproval },
