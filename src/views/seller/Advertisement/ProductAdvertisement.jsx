@@ -210,7 +210,7 @@ const splitIntervalByQuarter = (startDate, totalDays) => {
       Math.floor(
         (Date.UTC(qEnd.getUTCFullYear(), qEnd.getUTCMonth(), qEnd.getUTCDate()) -
           Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), cursor.getUTCDate())) /
-        msPerDay
+          msPerDay
       ) + 1;
     const take = Math.min(remaining, diff);
 
@@ -363,9 +363,7 @@ const ProductAdvertisement = () => {
   // External URL surcharge depends on slot type (banner vs stamp), read from pricing config
   const getExternalSurcharge = (slotName) => {
     const adType = slotName?.split('_')[0];
-    return adType === 'stamp'
-      ? (pricingData?.stamp_external_url_extra_cost || 0)
-      : (pricingData?.banner_external_url_extra_cost || 0);
+    return adType === 'stamp' ? pricingData?.stamp_external_url_extra_cost || 0 : pricingData?.banner_external_url_extra_cost || 0;
   };
 
   const [fetchPricing, { loading: pricingLoading }] = useLazyQuery(GET_PRODUCT_AD_PRICING, {
@@ -461,11 +459,30 @@ const ProductAdvertisement = () => {
     return selectedProduct.quarterAvailability.find((q) => q.quarter === quarterLabel) || null;
   };
 
+  // ── Effective duration (accounts for current-quarter partial-elapsed logic) ──
+  // When the current quarter is selected, the actual booking runs from today to
+  // end of next quarter (same logic the backend uses). Price is scaled proportionally.
+  const effectiveDuration = (() => {
+    const today = new Date();
+    const currentQStartMonth = Math.floor(today.getMonth() / 3) * 3;
+    const currentQIsoDate = `${today.getFullYear()}-${String(currentQStartMonth + 1).padStart(2, '0')}-01`;
+    if (!selectedStartQuarter || selectedStartQuarter === currentQIsoDate) {
+      const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+      const nextQStart = getNextQuarterStart(today);
+      const endDate = getQuarterEnd(nextQStart);
+      return Math.floor((endDate - todayUTC) / (24 * 60 * 60 * 1000)) + 1;
+    }
+    return selectedDuration;
+  })();
+
   // ── Pricing helpers ──────────────────────────────────────────────────
   const computeSlotPrice = (slotName) => {
-    const base = getSlotPrice(pricingData, slotName, selectedDuration);
+    const basePrice = getSlotPrice(pricingData, slotName, selectedDuration);
+    const scaledBase = effectiveDuration !== selectedDuration
+      ? Math.round((basePrice / selectedDuration) * effectiveDuration)
+      : basePrice;
     const surcharge = getEffectiveUrlType(slotName) === 'external' ? getExternalSurcharge(slotName) : 0;
-    return base + surcharge;
+    return scaledBase + surcharge;
   };
 
   const grandTotal = selectedSlots.reduce((sum, s) => sum + computeSlotPrice(s), 0);
@@ -474,9 +491,7 @@ const ProductAdvertisement = () => {
   const handleSlotToggle = (slotName) => {
     // Use quarter-specific availability if a quarter is selected
     const qAvail = getSelectedQuarterAvailability();
-    const info = qAvail
-      ? qAvail.slots?.find((s) => s.slot === slotName)
-      : selectedProduct?.slotStatuses?.find((s) => s.slot === slotName);
+    const info = qAvail ? qAvail.slots?.find((s) => s.slot === slotName) : selectedProduct?.slotStatuses?.find((s) => s.slot === slotName);
     const isAvailable = qAvail ? info?.available : info?.available;
     if (!isAvailable) {
       toast.error('This slot is already booked for the selected quarter');
@@ -522,7 +537,7 @@ const ProductAdvertisement = () => {
   const canGoToStep4 =
     selectedSlots.every((slot) => {
       const m = slotMedia[slot] || {};
-      return m.mobileFile || m.mobilePreview || m.desktopFile || m.desktopPreview;
+      return (m.mobileFile || m.mobilePreview || m.desktopFile || m.desktopPreview) && m.redirectUrl?.trim();
     }) && selectedSlots.length > 0;
 
   // ── Submit ───────────────────────────────────────────────────────────
@@ -707,9 +722,7 @@ const ProductAdvertisement = () => {
       // Use quarter-specific availability so that a slot booked for Q2 doesn't
       // appear as booked when the user is selecting Q3 or Q4.
       const qAvail = getSelectedQuarterAvailability();
-      const info = qAvail
-        ? qAvail.slots?.find((s) => s.slot === slot)
-        : selectedProduct?.slotStatuses?.find((s) => s.slot === slot);
+      const info = qAvail ? qAvail.slots?.find((s) => s.slot === slot) : selectedProduct?.slotStatuses?.find((s) => s.slot === slot);
       const isBooked = qAvail ? !info?.available : !info?.available;
       const isSelected = selectedSlots.includes(slot);
       const price = computeSlotPrice(slot);
@@ -839,14 +852,16 @@ const ProductAdvertisement = () => {
 
             {/* Redirect URL */}
             <Col md={12}>
-              <Form.Label className="small fw-bold">Redirect URL (optional)</Form.Label>
+              <Form.Label className="small fw-bold">Redirect URL <span className="text-danger">*</span></Form.Label>
               <Form.Control
                 type="url"
                 size="sm"
                 placeholder="https://example.com"
                 value={slotMedia[slot]?.redirectUrl || ''}
                 onChange={(e) => handleMediaChange(slot, 'redirectUrl', e.target.value)}
+                isInvalid={!slotMedia[slot]?.redirectUrl?.trim()}
               />
+              <Form.Control.Feedback type="invalid">Redirect URL is required.</Form.Control.Feedback>
             </Col>
 
             {/* URL Type */}
@@ -909,9 +924,22 @@ const ProductAdvertisement = () => {
 
       {/* Quarter breakdown */}
       {(() => {
-        const startDate = selectedStartQuarter ? new Date(selectedStartQuarter) : new Date();
-        const segments = splitIntervalByQuarter(startDate, selectedDuration);
-        const endDate = addDays(startDate, selectedDuration - 1);
+        const today = new Date();
+        const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+        const currentQStartMonth = Math.floor(today.getMonth() / 3) * 3;
+        const currentQIsoDate = `${today.getFullYear()}-${String(currentQStartMonth + 1).padStart(2, '0')}-01`;
+        const isCurrentQuarter = !selectedStartQuarter || selectedStartQuarter === currentQIsoDate;
+
+        let startDate, endDate;
+        if (isCurrentQuarter) {
+          startDate = todayUTC;
+          endDate = getQuarterEnd(getNextQuarterStart(today));
+        } else {
+          startDate = new Date(selectedStartQuarter);
+          endDate = addDays(startDate, effectiveDuration - 1);
+        }
+
+        const segments = splitIntervalByQuarter(startDate, effectiveDuration);
 
         return (
           <div className="mb-3 p-3 rounded" style={{ background: '#f8f9fa', border: '1px solid #e9ecef' }}>
@@ -947,9 +975,12 @@ const ProductAdvertisement = () => {
             const m = slotMedia[slot] || {};
             const hasImg = m.mobilePreview || m.desktopPreview;
             const basePrice = getSlotPrice(pricingData, slot, selectedDuration);
+            const scaledBase = effectiveDuration !== selectedDuration
+              ? Math.round((basePrice / selectedDuration) * effectiveDuration)
+              : basePrice;
             const isExternal = getEffectiveUrlType(slot) === 'external';
             const surcharge = isExternal ? getExternalSurcharge(slot) : 0;
-            const slotTotal = basePrice + surcharge;
+            const slotTotal = scaledBase + surcharge;
             return (
               <tr key={slot}>
                 <td>{slotLabel(slot)}</td>
@@ -966,7 +997,7 @@ const ProductAdvertisement = () => {
                 <td className="text-end fw-bold">
                   {surcharge > 0 ? (
                     <div>
-                      <small className="text-muted d-block">Base: ₹{basePrice}</small>
+                      <small className="text-muted d-block">Base: ₹{scaledBase}</small>
                       <small className="text-warning d-block">Ext. URL: +₹{surcharge}</small>
                       <span className="text-dark">₹{slotTotal}</span>
                     </div>
