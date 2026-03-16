@@ -1663,10 +1663,10 @@ const routesAndMenuItems = {
       icon: 'radio',
       roles: [USER_ROLE.AdManager],
       subs: [
-        { path: '/add', label: 'Ad at Categories', component: Advertisement },
+        { path: '/add', label: 'Book Ad at Categories', component: Advertisement },
         { path: '/list', label: 'My Ad List', component: MyAds },
         { path: '/reporting', label: 'Reporting', component: SellerReports },
-        { path: '/ads-product', label: 'Advertise a Product', component: ProductAdvertisement },
+        { path: '/ads-product', label: 'Book Ad at Products', component: ProductAdvertisement },
         { path: '/product-list', label: 'My Product Ads', component: MyProductAds },
         { path: '/approval', label: 'Ad Approvals', component: ad.approval },
       ],

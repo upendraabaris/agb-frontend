@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useDispatch } from 'react-redux';
 import { useQuery, gql } from '@apollo/client';
 import { Row, Col, Card, Table, Badge, Spinner, Alert, Button } from 'react-bootstrap';
 import { toast } from 'react-toastify';
@@ -6,6 +7,7 @@ import { NavLink } from 'react-router-dom';
 import HtmlHead from 'components/html-head/HtmlHead';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
 import moment from 'moment';
+import { menuChangeUseSidebar } from 'layout/nav/main-menu/menuSlice';
 
 const GET_MY_PRODUCT_ADS = gql`
   query GetMyProductAds {
@@ -52,8 +54,13 @@ const getStatusBadge = (status) => {
 };
 
 const MyProductAds = () => {
+    const dispatch = useDispatch();
     const title = 'My Product Advertisements';
     const description = 'View and manage your product-level ad submissions';
+
+    useEffect(() => {
+        dispatch(menuChangeUseSidebar(true));
+    }, [dispatch]);
 
     const { data, loading, error } = useQuery(GET_MY_PRODUCT_ADS, { fetchPolicy: 'network-only' });
 

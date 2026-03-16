@@ -462,7 +462,11 @@ const ProductAdvertisement = () => {
   };
 
   // ── Pricing helpers ──────────────────────────────────────────────────
-  const computeSlotPrice = (slotName) => getSlotPrice(pricingData, slotName, selectedDuration);
+  const computeSlotPrice = (slotName) => {
+    const base = getSlotPrice(pricingData, slotName, selectedDuration);
+    const surcharge = getEffectiveUrlType(slotName) === 'external' ? getExternalSurcharge(slotName) : 0;
+    return base + surcharge;
+  };
 
   const grandTotal = selectedSlots.reduce((sum, s) => sum + computeSlotPrice(s), 0);
 
@@ -942,6 +946,10 @@ const ProductAdvertisement = () => {
           {selectedSlots.map((slot) => {
             const m = slotMedia[slot] || {};
             const hasImg = m.mobilePreview || m.desktopPreview;
+            const basePrice = getSlotPrice(pricingData, slot, selectedDuration);
+            const isExternal = getEffectiveUrlType(slot) === 'external';
+            const surcharge = isExternal ? getExternalSurcharge(slot) : 0;
+            const slotTotal = basePrice + surcharge;
             return (
               <tr key={slot}>
                 <td>{slotLabel(slot)}</td>
@@ -955,7 +963,17 @@ const ProductAdvertisement = () => {
                     <span className="text-muted small">No image</span>
                   )}
                 </td>
-                <td className="text-end fw-bold">₹{computeSlotPrice(slot)}</td>
+                <td className="text-end fw-bold">
+                  {surcharge > 0 ? (
+                    <div>
+                      <small className="text-muted d-block">Base: ₹{basePrice}</small>
+                      <small className="text-warning d-block">Ext. URL: +₹{surcharge}</small>
+                      <span className="text-dark">₹{slotTotal}</span>
+                    </div>
+                  ) : (
+                    `₹${slotTotal}`
+                  )}
+                </td>
               </tr>
             );
           })}

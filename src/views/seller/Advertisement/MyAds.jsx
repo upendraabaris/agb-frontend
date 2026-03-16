@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useDispatch } from 'react-redux';
 import { useQuery, gql } from '@apollo/client';
 import { Row, Col, Card, Table, Badge, Spinner, Alert, Nav } from 'react-bootstrap';
 import { toast } from 'react-toastify';
@@ -6,6 +7,7 @@ import { NavLink, useLocation, useHistory } from 'react-router-dom';
 import HtmlHead from 'components/html-head/HtmlHead';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
 import moment from 'moment';
+import { menuChangeUseSidebar } from 'layout/nav/main-menu/menuSlice';
 
 // ─── GraphQL Queries ─────────────────────────────────────────────────────────
 
@@ -357,12 +359,17 @@ const ProductAdsTab = () => {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const MyAds = () => {
+  const dispatch = useDispatch();
   const title = 'My Ads';
   const description = 'View and manage all your category and product advertisements';
   const location = useLocation();
   const history = useHistory();
   const tabParam = new URLSearchParams(location.search).get('tab');
   const activeTab = (tabParam === 'product') ? 'product' : 'category';
+
+  useEffect(() => {
+    dispatch(menuChangeUseSidebar(true));
+  }, [dispatch]);
 
   const setActiveTab = (key) => {
     history.push(`/seller/advertisement/list?tab=${key}`);
