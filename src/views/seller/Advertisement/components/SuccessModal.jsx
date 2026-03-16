@@ -1,10 +1,14 @@
 import React from 'react';
 import { Modal, Button } from 'react-bootstrap';
 import { useHistory } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
+import { resolveAdBasePath } from '../routeUtils';
 
 const SuccessModal = ({ show, categoryName, onClose, viewAdsPath }) => {
   const history = useHistory();
+  const { currentUser } = useSelector((state) => state.auth);
+  const defaultViewAdsPath = `${resolveAdBasePath({ roles: currentUser?.role || [] })}/advertisement/list`;
 
   const handleClose = () => {
     onClose();
@@ -12,7 +16,7 @@ const SuccessModal = ({ show, categoryName, onClose, viewAdsPath }) => {
 
   const handleViewStatus = () => {
     handleClose();
-    history.push(viewAdsPath || '/seller/advertisement/list');
+    history.push(viewAdsPath || defaultViewAdsPath);
   };
 
   return (

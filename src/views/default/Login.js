@@ -94,8 +94,8 @@ const Login = () => {
       dispatch(setCurrentUser(data.loginUser.user));
       if (data?.loginUser?.user?.role?.includes('admin')) {
         history.push('/admin');
-      } else if (data?.loginUser?.user?.role?.includes('adManager')) {
-        history.push('/adManager');
+      } else if (data?.loginUser?.user?.role?.includes('adManager') || data?.loginUser?.user?.role?.includes('adsAssociate')) {
+        history.push('/adsassociate');
       } else if (data?.loginUser?.user?.role?.includes('seller')) {
         history.push('/seller');
       } else {

@@ -24,8 +24,8 @@ const NavUserMenuContent = ({ user }) => {
     hrefUrl = '/accounts/dashboard';
   } else if (user && user.role?.includes('superSeller')) {
     hrefUrl = '/superSeller/dashboard';
-  } else if (user && user.role?.includes('adManager')) {
-    hrefUrl = '/adManager/dashboard';
+  } else if (user && (user.role?.includes('adManager') || user.role?.includes('adsAssociate'))) {
+    hrefUrl = '/adsassociate/dashboard';
   } else {
     hrefUrl = 'empty';
   }

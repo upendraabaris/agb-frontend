@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useHistory, NavLink } from 'react-router-dom';
+import { useHistory, NavLink, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useQuery, useLazyQuery, useMutation, gql } from '@apollo/client';
 import { Card, Button, Row, Col, Alert, Spinner, Modal, Badge, Form, Table } from 'react-bootstrap';
@@ -7,6 +7,7 @@ import { toast } from 'react-toastify';
 import HtmlHead from 'components/html-head/HtmlHead';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
 import SuccessModal from './components/SuccessModal';
+import { resolveAdBasePath } from './routeUtils';
 
 // ─── GraphQL ────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,24 @@ const GET_MY_WALLET = gql`
     getMyWallet {
       id
       balance
+    }
+  }
+`;
+
+const VALIDATE_AD_COUPON = gql`
+  query ValidateAdCoupon($code: String!, $userId: ID!, $orderAmount: Float!) {
+    validateAdCoupon(code: $code, userId: $userId, orderAmount: $orderAmount) {
+      valid
+      message
+      discountAmount
+      finalAmount
+      coupon {
+        id
+        couponName
+        couponCode
+        discount
+        discountType
+      }
     }
   }
 `;
@@ -320,6 +339,7 @@ const ProductAdvertisement = () => {
   const title = 'Advertise a Product';
   const description = 'Book a banner or stamp slot on a product listing page';
   const history = useHistory();
+  const location = useLocation();
 
   // ── Wizard state ────────────────────────────────────────────────────
   const [showWizard, setShowWizard] = useState(false);
@@ -335,6 +355,9 @@ const ProductAdvertisement = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStartQuarter, setSelectedStartQuarter] = useState(null); // ISO date of chosen quarter
   const [expandedProductId, setExpandedProductId] = useState(null); // which product card is expanded
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponError, setCouponError] = useState('');
 
   // Success modal
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -351,10 +374,11 @@ const ProductAdvertisement = () => {
   // ── Ad Settings & role-based URL logic ──────────────────────────────
   const { currentUser } = useSelector((state) => state.auth);
   const userRoles = currentUser?.role || [];
+  const basePath = resolveAdBasePath({ pathname: location.pathname, roles: userRoles });
   const { data: adSettingsData } = useQuery(GET_AD_SETTINGS);
   const adSettings = adSettingsData?.getAdSettings || {};
   const isAdmin = userRoles.includes('admin') || userRoles.includes('masterAdmin');
-  const isAdMgr = !isAdmin && userRoles.includes('adManager');
+  const isAdMgr = !isAdmin && (userRoles.includes('adManager') || userRoles.includes('adsAssociate'));
   const isSeller = !isAdmin && !isAdMgr;
   const canUseExternal = isAdmin || isAdMgr || (isSeller && adSettings.allow_external_url_for_sellers);
   const canUseInternal = isAdmin || isSeller || (isAdMgr && adSettings.allow_internal_url_for_ad_managers);
@@ -381,6 +405,7 @@ const ProductAdvertisement = () => {
 
   const [uploadFile] = useMutation(UPLOAD_FILE);
   const [createProductAdRequest, { loading: submitLoading }] = useMutation(CREATE_PRODUCT_AD_REQUEST);
+  const [validateAdCoupon, { loading: couponLoading }] = useLazyQuery(VALIDATE_AD_COUPON, { fetchPolicy: 'network-only' });
 
   // ── Session Storage restore ──────────────────────────────────────────
   React.useEffect(() => {
@@ -395,6 +420,8 @@ const ProductAdvertisement = () => {
       if (s.slotMedia) setSlotMedia(s.slotMedia);
       if (s.pricingData) setPricingData(s.pricingData);
       if (s.selectedStartQuarter) setSelectedStartQuarter(s.selectedStartQuarter);
+      if (s.couponInput) setCouponInput(s.couponInput);
+      if (s.appliedCoupon) setAppliedCoupon(s.appliedCoupon);
       if (s.showWizard) {
         setShowWizard(true);
         setWizardStep(s.wizardStep || 1);
@@ -418,6 +445,8 @@ const ProductAdvertisement = () => {
           slotMedia,
           pricingData,
           selectedStartQuarter,
+          couponInput,
+          appliedCoupon,
           showWizard: true,
           wizardStep,
         })
@@ -429,7 +458,7 @@ const ProductAdvertisement = () => {
 
   const goToWalletRecharge = () => {
     saveWizardState();
-    history.push('/seller/wallet?returnTo=/seller/ads/product/add');
+    history.push(`${basePath}/wallet?returnTo=${basePath}/advertisement/ads-product`);
   };
 
   // ── Open wizard for a product ────────────────────────────────────────
@@ -440,6 +469,9 @@ const ProductAdvertisement = () => {
     setPricingData(null);
     setWizardStep(1);
     setShowWizard(true);
+    setCouponInput('');
+    setAppliedCoupon(null);
+    setCouponError('');
     fetchPricing({ variables: { productId: product.id } });
   };
 
@@ -486,6 +518,7 @@ const ProductAdvertisement = () => {
   };
 
   const grandTotal = selectedSlots.reduce((sum, s) => sum + computeSlotPrice(s), 0);
+  const effectiveTotal = appliedCoupon?.valid ? appliedCoupon.finalAmount : grandTotal;
 
   // ── Slot toggle ──────────────────────────────────────────────────────
   const handleSlotToggle = (slotName) => {
@@ -499,6 +532,8 @@ const ProductAdvertisement = () => {
     }
     setSelectedSlots((prev) => {
       if (prev.includes(slotName)) {
+        setAppliedCoupon(null);
+        setCouponError('');
         setSlotMedia((m) => {
           const c = { ...m };
           delete c[slotName];
@@ -510,11 +545,17 @@ const ProductAdvertisement = () => {
         ...m,
         [slotName]: { mobileFile: null, desktopFile: null, mobilePreview: '', desktopPreview: '', redirectUrl: '', urlType: '' },
       }));
+      setAppliedCoupon(null);
+      setCouponError('');
       return [...prev, slotName];
     });
   };
 
   const handleMediaChange = (slot, field, value) => {
+    if (field === 'urlType') {
+      setAppliedCoupon(null);
+      setCouponError('');
+    }
     setSlotMedia((m) => ({ ...m, [slot]: { ...(m[slot] || {}), [field]: value } }));
   };
 
@@ -542,8 +583,8 @@ const ProductAdvertisement = () => {
 
   // ── Submit ───────────────────────────────────────────────────────────
   const handleSubmit = async () => {
-    if (pricingData && walletBalance < grandTotal) {
-      toast.error(`Insufficient wallet balance (₹${walletBalance}). Need ₹${grandTotal}.`);
+    if (pricingData && walletBalance < effectiveTotal) {
+      toast.error(`Insufficient wallet balance (₹${walletBalance}). Need ₹${effectiveTotal}.`);
       return;
     }
     try {
@@ -587,6 +628,7 @@ const ProductAdvertisement = () => {
               const qNum = Math.ceil(mo / 3);
               return `Q${qNum} ${yr}`;
             })(),
+            coupon_code: appliedCoupon?.valid ? appliedCoupon.coupon.couponCode : undefined,
             medias,
           },
         },
@@ -602,6 +644,9 @@ const ProductAdvertisement = () => {
       setPricingData(null);
       setSelectedDuration(90);
       setSelectedStartQuarter(null);
+      setCouponInput('');
+      setAppliedCoupon(null);
+      setCouponError('');
     } catch (err) {
       setUploading(false);
       console.error('[ProductAd] Submit error:', err);
@@ -637,7 +682,15 @@ const ProductAdvertisement = () => {
           <div className="text-muted small mb-2">Select Duration:</div>
           <div className="d-flex gap-2 flex-wrap">
             {DURATION_OPTIONS.map((opt) => (
-              <Button key={opt.value} variant={selectedDuration === opt.value ? 'primary' : 'outline-secondary'} onClick={() => setSelectedDuration(opt.value)}>
+              <Button
+                key={opt.value}
+                variant={selectedDuration === opt.value ? 'primary' : 'outline-secondary'}
+                onClick={() => {
+                  setSelectedDuration(opt.value);
+                  setAppliedCoupon(null);
+                  setCouponError('');
+                }}
+              >
                 {opt.label}
               </Button>
             ))}
@@ -1012,29 +1065,123 @@ const ProductAdvertisement = () => {
         <tfoot>
           <tr className="fw-bold table-light">
             <td colSpan={2}>Total</td>
-            <td className="text-end text-primary">₹{grandTotal}</td>
+            <td className="text-end text-primary">
+              {appliedCoupon?.valid ? (
+                <>
+                  <span style={{ textDecoration: 'line-through', color: '#999', fontSize: '0.85rem', marginRight: '8px' }}>₹{grandTotal}</span>
+                  ₹{effectiveTotal}
+                </>
+              ) : (
+                `₹${grandTotal}`
+              )}
+            </td>
           </tr>
         </tfoot>
       </Table>
 
+      <Card className="mb-3">
+        <Card.Body className="py-3">
+          <div className="fw-bold mb-2">
+            <span className="me-2">🏷️</span>Have a Coupon Code?
+          </div>
+          {appliedCoupon?.valid ? (
+            <div className="d-flex align-items-center justify-content-between">
+              <div>
+                <span className="badge bg-success me-2" style={{ fontSize: '0.85rem' }}>
+                  {appliedCoupon.coupon.couponCode}
+                </span>
+                <span className="text-success" style={{ fontSize: '0.85rem' }}>
+                  {appliedCoupon.coupon.discountType === 'flat'
+                    ? `₹${appliedCoupon.coupon.discount} off`
+                    : `${appliedCoupon.coupon.discount}% off`}
+                </span>
+              </div>
+              <Button
+                variant="outline-danger"
+                size="sm"
+                onClick={() => {
+                  setAppliedCoupon(null);
+                  setCouponInput('');
+                  setCouponError('');
+                }}
+              >
+                Remove
+              </Button>
+            </div>
+          ) : (
+            <div>
+              <div className="d-flex gap-2">
+                <input
+                  type="text"
+                  className="form-control form-control-sm"
+                  placeholder="Enter coupon code"
+                  value={couponInput}
+                  onChange={(e) => {
+                    setCouponInput(e.target.value.toUpperCase());
+                    setCouponError('');
+                  }}
+                  style={{ maxWidth: '250px' }}
+                />
+                <Button
+                  variant="outline-primary"
+                  size="sm"
+                  disabled={!couponInput.trim() || couponLoading}
+                  onClick={async () => {
+                    setCouponError('');
+                    setAppliedCoupon(null);
+                    try {
+                      const { data } = await validateAdCoupon({
+                        variables: {
+                          code: couponInput.trim(),
+                          // eslint-disable-next-line no-underscore-dangle
+                          userId: currentUser?.id || currentUser?._id || '',
+                          orderAmount: grandTotal,
+                        },
+                      });
+                      const result = data?.validateAdCoupon;
+                      if (result?.valid) {
+                        setAppliedCoupon(result);
+                        setCouponError('');
+                      } else {
+                        setCouponError(result?.message || 'Invalid coupon');
+                      }
+                    } catch (err) {
+                      setCouponError(err.message || 'Failed to validate coupon');
+                    }
+                  }}
+                >
+                  {couponLoading ? <Spinner animation="border" size="sm" /> : 'Apply'}
+                </Button>
+              </div>
+              {couponError && <small className="text-danger d-block mt-1">{couponError}</small>}
+            </div>
+          )}
+          {appliedCoupon?.valid && (
+            <small className="text-success d-block mt-2">
+              Coupon &quot;{appliedCoupon.coupon.couponCode}&quot; applied — You save ₹{appliedCoupon.discountAmount}!
+            </small>
+          )}
+        </Card.Body>
+      </Card>
+
       {/* Wallet check */}
       <div
         className="d-flex align-items-center justify-content-between p-3 rounded"
-        style={{ background: walletBalance >= grandTotal ? '#d4edda' : '#fff3cd', border: `1px solid ${walletBalance >= grandTotal ? '#c3e6cb' : '#ffc107'}` }}
+        style={{ background: walletBalance >= effectiveTotal ? '#d4edda' : '#fff3cd', border: `1px solid ${walletBalance >= effectiveTotal ? '#c3e6cb' : '#ffc107'}` }}
       >
         <div>
           <strong>Wallet Balance:</strong>{' '}
-          <span className={walletBalance >= grandTotal ? 'text-success fw-bold' : 'text-danger fw-bold'}>₹{walletBalance.toFixed(2)}</span>
+          <span className={walletBalance >= effectiveTotal ? 'text-success fw-bold' : 'text-danger fw-bold'}>₹{walletBalance.toFixed(2)}</span>
         </div>
-        {walletBalance < grandTotal && (
+        {walletBalance < effectiveTotal && (
           <Button size="sm" variant="warning" onClick={goToWalletRecharge}>
             <CsLineIcons icon="plus" size="13" className="me-1" />
-            Recharge (need ₹{(grandTotal - walletBalance).toFixed(2)} more)
+            Recharge (need ₹{(effectiveTotal - walletBalance).toFixed(2)} more)
           </Button>
         )}
       </div>
 
-      {walletBalance < grandTotal && (
+      {walletBalance < effectiveTotal && (
         <Alert variant="warning" className="mt-3 mb-0">
           Insufficient balance. Please recharge your wallet before submitting.
         </Alert>
@@ -1062,7 +1209,7 @@ const ProductAdvertisement = () => {
       <div className="page-title-container mb-3">
         <Row className="g-0">
           <Col className="col-auto mb-3 mb-sm-0 me-auto">
-            <NavLink className="muted-link pb-1 d-inline-block hidden breadcrumb-back" to="/seller/advertisement/list?tab=product">
+            <NavLink className="muted-link pb-1 d-inline-block hidden breadcrumb-back" to={`${basePath}/advertisement/list?tab=product`}>
               <CsLineIcons icon="chevron-left" size="13" />
               <span className="align-middle text-small ms-1">My Ads</span>
             </NavLink>
@@ -1321,7 +1468,7 @@ const ProductAdvertisement = () => {
                 Next →
               </Button>
             ) : (
-              <Button variant="success" onClick={handleSubmit} disabled={submitLoading || uploading || (pricingData && walletBalance < grandTotal)}>
+              <Button variant="success" onClick={handleSubmit} disabled={submitLoading || uploading || (pricingData && walletBalance < effectiveTotal)}>
                 {submitLoading || uploading ? (
                   <>
                     <Spinner animation="border" size="sm" className="me-2" />
@@ -1343,10 +1490,10 @@ const ProductAdvertisement = () => {
       <SuccessModal
         show={showSuccessModal}
         categoryName={submittedProductName}
-        viewAdsPath="/seller/advertisement/list?tab=product"
+        viewAdsPath={`${basePath}/advertisement/list?tab=product`}
         onClose={() => {
           setShowSuccessModal(false);
-          history.push('/seller/advertisement/list?tab=product');
+          history.push(`${basePath}/advertisement/list?tab=product`);
         }}
       />
     </>

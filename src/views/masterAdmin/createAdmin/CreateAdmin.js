@@ -117,16 +117,16 @@ function CreateAdmin() {
       }
     }
   `;
-  const ADD_AD_MANAGER_ROLE = gql`
-    mutation AddAdManagerRole($userId: ID) {
-      addAdManagerRole(userID: $userId) {
+  const ADD_ADS_ASSOCIATE_ROLE = gql`
+    mutation AddAdsAssociateRole($userId: ID) {
+      addAdsAssociateRole(userID: $userId) {
         message
       }
     }
   `;
-  const REMOVE_AD_MANAGER_ROLE = gql`
-    mutation RemoveAdManagerRole($userId: ID) {
-      removeAdManagerRole(userID: $userId) {
+  const REMOVE_ADS_ASSOCIATE_ROLE = gql`
+    mutation RemoveAdsAssociateRole($userId: ID) {
+      removeAdsAssociateRole(userID: $userId) {
         message
       }
     }
@@ -162,9 +162,9 @@ function CreateAdmin() {
       }
     },
   });
-  const [AddAdManagerRole] = useMutation(ADD_AD_MANAGER_ROLE, {
+  const [AddAdsAssociateRole] = useMutation(ADD_ADS_ASSOCIATE_ROLE, {
     onCompleted: (res) => {
-      toast.success(res.addAdManagerRole.message || 'User updated !');
+      toast.success(res.addAdsAssociateRole.message || 'User updated !');
       setModalView(false);
       setAdmin(null);
       refetch();
@@ -176,9 +176,9 @@ function CreateAdmin() {
       }
     },
   });
-  const [RemoveAdManagerRole] = useMutation(REMOVE_AD_MANAGER_ROLE, {
+  const [RemoveAdsAssociateRole] = useMutation(REMOVE_ADS_ASSOCIATE_ROLE, {
     onCompleted: (res) => {
-      toast.success(res.removeAdManagerRole.message || 'User updated !');
+      toast.success(res.removeAdsAssociateRole.message || 'User updated !');
       setModalView(false);
       setAdmin(null);
       refetch();
@@ -210,15 +210,15 @@ function CreateAdmin() {
       },
     });
   };
-  const addAdManager = async () => {
-    await AddAdManagerRole({
+  const addAdsAssociate = async () => {
+    await AddAdsAssociateRole({
       variables: {
         userId: admin.id,
       },
     });
   };
-  const removeAdManager = async () => {
-    await RemoveAdManagerRole({
+  const removeAdsAssociate = async () => {
+    await RemoveAdsAssociateRole({
       variables: {
         userId: admin.id,
       },
@@ -404,12 +404,24 @@ function CreateAdmin() {
             </Button>
           </div>
           <div className="mb-2">
-            <small className="text-muted fw-bold">Ad Manager</small>
+            <small className="text-muted fw-bold">Ads Associate</small>
           </div>
           <div className="mb-3 d-flex justify-content-around">
-            <Button size="sm" variant="info" onClick={addAdManager} disabled={admin?.role?.includes('adManager')}>Add Ad Manager</Button>
-            <Button size="sm" onClick={removeAdManager} variant="danger" disabled={!admin?.role?.includes('adManager')}>
-              Remove Ad Manager
+            <Button
+              size="sm"
+              variant="info"
+              onClick={addAdsAssociate}
+              disabled={admin?.role?.includes('adManager') || admin?.role?.includes('adsAssociate')}
+            >
+              Add Ads Associate
+            </Button>
+            <Button
+              size="sm"
+              onClick={removeAdsAssociate}
+              variant="danger"
+              disabled={!admin?.role?.includes('adManager') && !admin?.role?.includes('adsAssociate')}
+            >
+              Remove Ads Associate
             </Button>
           </div>
         </Modal.Body>

@@ -99,7 +99,7 @@ const AdUrlSettings = () => {
               <strong>How URL types work:</strong>
               <ul className="mb-0 mt-1">
                 <li><strong>Internal URL</strong> – points to a page within the same website (e.g. a product or category page). Default for sellers.</li>
-                <li><strong>External URL</strong> – points to any off-site URL. Default for Ad Managers.</li>
+                <li><strong>External URL</strong> – points to any off-site URL. Default for Ads Associates.</li>
                 <li>To charge a surcharge for external URLs, set the amount in <em>Pricing Config</em> per tier.</li>
               </ul>
             </Alert>
@@ -129,9 +129,9 @@ const AdUrlSettings = () => {
                   id="allow-internal-ad-managers"
                   label={
                     <span>
-                      <strong>Allow Ad Managers to use internal (same-site) redirect URLs</strong>
+                      <strong>Allow Ads Associates to use internal (same-site) redirect URLs</strong>
                       <div className="text-muted" style={{ fontSize: '0.82rem' }}>
-                        By default, Ad Managers are forced to use external URLs only.
+                        By default, Ads Associates are forced to use external URLs only.
                         Enable this to also allow them to choose internal URLs.
                       </div>
                     </span>
