@@ -983,7 +983,8 @@ const ProductAdvertisement = () => {
         const currentQIsoDate = `${today.getFullYear()}-${String(currentQStartMonth + 1).padStart(2, '0')}-01`;
         const isCurrentQuarter = !selectedStartQuarter || selectedStartQuarter === currentQIsoDate;
 
-        let startDate, endDate;
+        let startDate;
+        let endDate;
         if (isCurrentQuarter) {
           startDate = todayUTC;
           endDate = getQuarterEnd(getNextQuarterStart(today));
