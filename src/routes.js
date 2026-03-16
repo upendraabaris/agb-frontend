@@ -1689,6 +1689,7 @@ const routesAndMenuItems = {
       subs: [
         { path: '/list', label: 'My Ads List', component: MyAds },
         { path: '/add', label: 'Book Ad at Categories', component: Advertisement },
+        { path: '/list', label: 'My Ad List', component: MyAds },
         // { path: '/reporting', label: 'Reporting', component: SellerReports },
         { path: '/ads-product', label: 'Book Ad at Products', component: ProductAdvertisement },
         { path: '/product-list', label: 'My Product Ads', component: MyProductAds },
