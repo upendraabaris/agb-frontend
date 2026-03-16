@@ -155,8 +155,8 @@ const Advertisement = () => {
   const location = useLocation();
   const dispatch = useDispatch();
   const { currentUser } = useSelector((state) => state.auth);
-  const isAdManager = location.pathname.startsWith('/adManager');
-  const basePath = isAdManager ? '/adManager' : '/seller';
+  const isAdsAssociatePath = location.pathname.startsWith('/adsassociate') || location.pathname.startsWith('/adManager');
+  const basePath = isAdsAssociatePath ? '/adsassociate' : '/seller';
   const userRoles = currentUser?.role || [];
 
   // Ad settings (controls which URL types are available per role)
@@ -164,7 +164,7 @@ const Advertisement = () => {
   const adSettings = adSettingsData?.getAdSettings || {};
   // Role-based URL type defaults (mirrors ImageUpload logic)
   const isAdminRole = userRoles.includes('admin') || userRoles.includes('masterAdmin');
-  const isAdMgrRole = !isAdminRole && userRoles.includes('adManager');
+  const isAdMgrRole = !isAdminRole && (userRoles.includes('adManager') || userRoles.includes('adsAssociate'));
   const defaultUrlType = isAdMgrRole ? 'external' : 'internal';
 
   useEffect(() => {
@@ -878,7 +878,7 @@ const Advertisement = () => {
             media.mobileFile instanceof File ? uploadOneFile(media.mobileFile) : Promise.resolve(media.mobileImage || ''),
             media.desktopFile instanceof File ? uploadOneFile(media.desktopFile) : Promise.resolve(media.desktopImage || ''),
           ]);
-          sharedUploadCache[slot] = { mobileUrl, desktopUrl, redirectUrl: media.redirectUrl || '', urlType: media.urlType || (isAdManager ? 'external' : 'internal') };
+          sharedUploadCache[slot] = { mobileUrl, desktopUrl, redirectUrl: media.redirectUrl || '', urlType: media.urlType || defaultUrlType };
         }));
       }
 
@@ -907,7 +907,7 @@ const Advertisement = () => {
               mobile_image_url: mobileUrl,
               desktop_image_url: desktopUrl,
               redirect_url: media.redirectUrl || '',
-              url_type: media.urlType || (isAdManager ? 'external' : 'internal'),
+              url_type: media.urlType || defaultUrlType,
             };
           })
         );
@@ -2461,6 +2461,7 @@ const Advertisement = () => {
       <SuccessModal
         show={showSuccessModal}
         categoryName={submittedCategoryName}
+        viewAdsPath={`${basePath}/advertisement/list`}
         onClose={() => setShowSuccessModal(false)}
       />
     </>

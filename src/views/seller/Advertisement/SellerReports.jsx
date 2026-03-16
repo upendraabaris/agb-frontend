@@ -31,7 +31,7 @@ const GET_MY_ACTIVE_ADS = gql`
         slot
         mobileImageUrl
         desktopImageUrl
-        redirect_url
+        redirectUrl
       }
     }
   }
@@ -396,7 +396,7 @@ const SellerReports = () => {
                                             </a>
                                           </td>
                                           <td className="text-truncate" style={{ maxWidth: '150px' }}>
-                                            <small>{ad.media.redirect_url}</small>
+                                            <small>{ad.media.redirectUrl}</small>
                                           </td>
                                           {/* <td className="text-truncate" style={{ maxWidth: '150px' }}>
                                                                             <small>{ad.media.desktopRedirectUrl}</small>

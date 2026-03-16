@@ -10,7 +10,7 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
 
   // Role-based URL type control
   const isAdmin = userRoles.includes('admin') || userRoles.includes('masterAdmin');
-  const isAdMgr = !isAdmin && userRoles.includes('adManager');
+  const isAdMgr = !isAdmin && (userRoles.includes('adManager') || userRoles.includes('adsAssociate'));
   const isSeller = !isAdmin && !isAdMgr; // default: seller
 
   // What URL types are allowed for this user?

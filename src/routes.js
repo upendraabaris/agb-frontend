@@ -469,7 +469,7 @@ const appEnquiry = `${appRoot}/enquiry`;
 const appService = `${appRoot}/service`;
 const appSubBusiness = `${appRoot}/subBusiness`;
 const appAccounts = `${appRoot}/accounts`;
-const appAdManager = `${appRoot}/adManager`;
+const appAdsAssociate = `${appRoot}/adsassociate`;
 
 const routesAndMenuItems = {
   mainMenuItems: [
@@ -1639,44 +1639,68 @@ const routesAndMenuItems = {
     },
 
     /* ------------------------------------------------------------------ */
-    /* ----------------------  Ad Manager Dashboard  -------------------- */
+    /* ----------------------  Ads Associate Dashboard  -------------------- */
     /* ------------------------------------------------------------------ */
 
+    {
+      path: '/adsassociate',
+      exact: true,
+      redirect: true,
+      to: `${appAdsAssociate}/dashboard`,
+    },
     {
       path: '/adManager',
       exact: true,
       redirect: true,
-      to: `${appAdManager}/dashboard`,
+      to: `${appAdsAssociate}/dashboard`,
     },
     {
-      path: `${appAdManager}/dashboard`,
-      component: SellerReports,
-      label: <span className="badge blockquote mb-0 bg-primary">Ad Manager Dashboard</span>,
-      roles: [USER_ROLE.AdManager],
-    },
-    {
-      path: `${appAdManager}/advertisement`,
+      path: '/adManager/dashboard',
       exact: true,
       redirect: true,
-      to: `${appAdManager}/advertisement/add`,
+      to: `${appAdsAssociate}/dashboard`,
+    },
+    {
+      path: '/adManager/advertisement',
+      exact: true,
+      redirect: true,
+      to: `${appAdsAssociate}/advertisement/add`,
+    },
+    {
+      path: '/adManager/wallet',
+      exact: true,
+      redirect: true,
+      to: `${appAdsAssociate}/wallet`,
+    },
+    {
+      path: `${appAdsAssociate}/dashboard`,
+      component: SellerReports,
+      label: <span className="badge blockquote mb-0 bg-primary">Ad Associate Dashboard</span>,
+      roles: [USER_ROLE.AdManager, USER_ROLE.AdsAssociate],
+    },
+    {
+      path: `${appAdsAssociate}/advertisement`,
+      exact: true,
+      redirect: true,
+      to: `${appAdsAssociate}/advertisement/add`,
       label: 'Advertisement',
       icon: 'radio',
-      roles: [USER_ROLE.AdManager],
+      roles: [USER_ROLE.AdManager, USER_ROLE.AdsAssociate],
       subs: [
+        { path: '/list', label: 'My Ads List', component: MyAds },
         { path: '/add', label: 'Book Ad at Categories', component: Advertisement },
-        { path: '/list', label: 'My Ad List', component: MyAds },
-        { path: '/reporting', label: 'Reporting', component: SellerReports },
+        // { path: '/reporting', label: 'Reporting', component: SellerReports },
         { path: '/ads-product', label: 'Book Ad at Products', component: ProductAdvertisement },
         { path: '/product-list', label: 'My Product Ads', component: MyProductAds },
-        { path: '/approval', label: 'Ad Approvals', component: ad.approval },
+        // { path: '/approval', label: 'Ad Approvals', component: ad.approval },
       ],
     },
     {
-      path: `${appAdManager}/wallet`,
+      path: `${appAdsAssociate}/wallet`,
       component: SellerWallet,
       label: 'Wallet',
       icon: 'money',
-      roles: [USER_ROLE.AdManager],
+      roles: [USER_ROLE.AdManager, USER_ROLE.AdsAssociate],
     },
 
     /* ------------------------------------------------------------------ */

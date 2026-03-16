@@ -62,4 +62,5 @@ export const USER_ROLE = {
   b2bManager: 'b2bManager',
   InventoryManager: 'inventoryManager',
   AdManager: 'adManager',
+  AdsAssociate: 'adsAssociate',
 };

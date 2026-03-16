@@ -1,13 +1,15 @@
 import React, { useEffect } from 'react';
-import { useDispatch } from 'react-redux';
+
+import { useDispatch, useSelector } from 'react-redux';
 import { useQuery, gql } from '@apollo/client';
 import { Row, Col, Card, Table, Badge, Spinner, Alert, Button } from 'react-bootstrap';
 import { toast } from 'react-toastify';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import HtmlHead from 'components/html-head/HtmlHead';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
 import moment from 'moment';
 import { menuChangeUseSidebar } from 'layout/nav/main-menu/menuSlice';
+import { resolveAdBasePath } from './routeUtils';
 
 const GET_MY_PRODUCT_ADS = gql`
   query GetMyProductAds {
@@ -55,8 +57,11 @@ const getStatusBadge = (status) => {
 
 const MyProductAds = () => {
     const dispatch = useDispatch();
+    const location = useLocation();
+    const { currentUser } = useSelector((state) => state.auth);
     const title = 'My Product Advertisements';
     const description = 'View and manage your product-level ad submissions';
+    const basePath = resolveAdBasePath({ pathname: location.pathname, roles: currentUser?.role || [] });
 
     useEffect(() => {
         dispatch(menuChangeUseSidebar(true));
@@ -78,11 +83,11 @@ const MyProductAds = () => {
                         <div className="text-muted fs-base">{description}</div>
                     </Col>
                     <Col xs="auto" className="d-flex align-items-end gap-2">
-                        <NavLink to="/seller/advertisement/ads-product" className="btn btn-primary">
+                        <NavLink to={`${basePath}/advertisement/ads-product`} className="btn btn-primary">
                             <CsLineIcons icon="plus" className="me-2" />
                             New Product Ad
                         </NavLink>
-                        <NavLink to="/seller/advertisement/list" className="btn btn-outline-secondary">
+                        <NavLink to={`${basePath}/advertisement/list`} className="btn btn-outline-secondary">
                             <CsLineIcons icon="grid-5" className="me-2" />
                             Category Ads
                         </NavLink>
@@ -101,7 +106,7 @@ const MyProductAds = () => {
                             <Alert variant="info" className="mb-0">
                                 <CsLineIcons icon="info" className="me-2" />
                                 No product advertisements yet.{' '}
-                                <NavLink to="/seller/advertisement/ads-product">Submit your first product ad</NavLink>
+                                <NavLink to={`${basePath}/advertisement/ads-product`}>Submit your first product ad</NavLink>
                             </Alert>
                         )}
 

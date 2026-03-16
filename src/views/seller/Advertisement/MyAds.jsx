@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useDispatch } from 'react-redux';
+import { useDispatch,useSelector } from 'react-redux';
 import { useQuery, gql } from '@apollo/client';
 import { Row, Col, Card, Table, Badge, Spinner, Alert, Nav } from 'react-bootstrap';
 import { toast } from 'react-toastify';
@@ -8,6 +8,7 @@ import HtmlHead from 'components/html-head/HtmlHead';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
 import moment from 'moment';
 import { menuChangeUseSidebar } from 'layout/nav/main-menu/menuSlice';
+import { resolveAdBasePath } from './routeUtils';
 
 // ─── GraphQL Queries ─────────────────────────────────────────────────────────
 
@@ -92,7 +93,7 @@ const getStatusBadge = (status) => {
 
 // ─── Category Ads Tab ─────────────────────────────────────────────────────────
 
-const CategoryAdsTab = () => {
+const CategoryAdsTab = ({ basePath }) => {
   const { data, loading, error } = useQuery(GET_MY_ADS, { fetchPolicy: 'network-only' });
 
   if (error) toast.error(error.message || 'Failed to fetch category ads');
@@ -103,7 +104,7 @@ const CategoryAdsTab = () => {
     <Card>
       <Card.Header className="d-flex align-items-center justify-content-between py-3">
         <span className="fw-semibold">Category Advertisements</span>
-        <NavLink to="/seller/advertisement/add" className="btn btn-sm btn-primary">
+        <NavLink to={`${basePath}/advertisement/add`} className="btn btn-sm btn-primary">
           <CsLineIcons icon="plus" size="14" className="me-1" />
           Book Ad at Categories
         </NavLink>
@@ -119,7 +120,7 @@ const CategoryAdsTab = () => {
           <Alert variant="info" className="m-3 mb-0">
             <CsLineIcons icon="info" className="me-2" />
             No category advertisements yet.{' '}
-            <NavLink to="/seller/advertisement/add">Submit your first category ad</NavLink>
+            <NavLink to={`${basePath}/advertisement/add`}>Submit your first category ad</NavLink>
           </Alert>
         )}
         {!loading && ads.length > 0 && (
@@ -221,7 +222,7 @@ const CategoryAdsTab = () => {
 
 // ─── Product Ads Tab ──────────────────────────────────────────────────────────
 
-const ProductAdsTab = () => {
+const ProductAdsTab = ({ basePath }) => {
   const { data, loading, error } = useQuery(GET_MY_PRODUCT_ADS, { fetchPolicy: 'network-only' });
 
   if (error) toast.error(error.message || 'Failed to load product ads');
@@ -232,7 +233,7 @@ const ProductAdsTab = () => {
     <Card>
       <Card.Header className="d-flex align-items-center justify-content-between py-3">
         <span className="fw-semibold">Product Advertisements</span>
-        <NavLink to="/seller/advertisement/ads-product" className="btn btn-sm btn-primary">
+        <NavLink to={`${basePath}/advertisement/ads-product`} className="btn btn-sm btn-primary">
           <CsLineIcons icon="plus" size="14" className="me-1" />
           Book Ad at Products
         </NavLink>
@@ -248,7 +249,7 @@ const ProductAdsTab = () => {
           <Alert variant="info" className="m-3 mb-0">
             <CsLineIcons icon="info" className="me-2" />
             No product advertisements yet.{' '}
-            <NavLink to="/seller/advertisement/ads-product">Submit your first product ad</NavLink>
+            <NavLink to={`${basePath}/advertisement/ads-product`}>Submit your first product ad</NavLink>
           </Alert>
         )}
         {!loading && ads.length > 0 && (
@@ -360,10 +361,12 @@ const ProductAdsTab = () => {
 
 const MyAds = () => {
   const dispatch = useDispatch();
+  const { currentUser } = useSelector((state) => state.auth);
   const title = 'My Ads';
   const description = 'View and manage all your category and product advertisements';
   const location = useLocation();
   const history = useHistory();
+  const basePath = resolveAdBasePath({ pathname: location.pathname, roles: currentUser?.role || [] });
   const tabParam = new URLSearchParams(location.search).get('tab');
   const activeTab = (tabParam === 'product') ? 'product' : 'category';
 
@@ -372,7 +375,7 @@ const MyAds = () => {
   }, [dispatch]);
 
   const setActiveTab = (key) => {
-    history.push(`/seller/advertisement/list?tab=${key}`);
+    history.push(`${basePath}/advertisement/list?tab=${key}`);
   };
 
   return (
@@ -426,8 +429,8 @@ const MyAds = () => {
       </Nav>
 
       {/* Tab Content */}
-      {activeTab === 'category' && <CategoryAdsTab />}
-      {activeTab === 'product' && <ProductAdsTab />}
+      {activeTab === 'category' && <CategoryAdsTab basePath={basePath} />}
+      {activeTab === 'product' && <ProductAdsTab basePath={basePath} />}
     </>
   );
 };
