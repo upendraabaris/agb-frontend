@@ -170,20 +170,20 @@ const Advertisement = () => {
   useEffect(() => {
     dispatch(menuChangeUseSidebar(true));
   }, [dispatch]);
-  
+
   // Tab state for category selection
   const [categoryTab, setCategoryTab] = useState('category'); // 'category', 'subcategory', 'subsubcategory'
 
   // Queries
   const { data: categoriesData, loading: categoriesLoading, error: categoriesError, refetch: refetchCategories } = useQuery(GET_CATEGORIES_WITH_SLOTS);
-  
+
   // Get seller's products for internal URL dropdown
   const { data: sellerProductsData } = useQuery(GET_SELLER_PRODUCTS);
   const sellerProducts = sellerProductsData?.getProductByForSeller || [];
 
   // Build category hierarchy based on parent field
   const allCategories = categoriesData?.getCategoriesWithAvailableSlots || [];
-  
+
   // Create a map for quick parent lookup
   const categoryMap = {};
   allCategories.forEach(cat => {
@@ -196,12 +196,12 @@ const Advertisement = () => {
   // - SubSubCategory: parent exists and parent's parent also exists
   const topLevelCategories = allCategories.filter(cat => !cat.parent);
   const subCategories = allCategories.filter(cat => {
-    if (!cat.parent  || !cat.tierId) return false;
+    if (!cat.parent || !cat.tierId) return false;
     const parentCat = categoryMap[cat.parent];
     return parentCat && !parentCat.parent;
   });
   const subSubCategories = allCategories.filter(cat => {
-    if (!cat.parent  || !cat.tierId) return false;
+    if (!cat.parent || !cat.tierId) return false;
     const parentCat = categoryMap[cat.parent];
     return parentCat && parentCat.parent;
   });
@@ -329,7 +329,7 @@ const Advertisement = () => {
     } catch (e) {
       console.warn('[Ad] Could not restore wizard state:', e);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Navigate to wallet with state saved
@@ -343,7 +343,7 @@ const Advertisement = () => {
     console.log('Categories Data:', categoriesData);
     console.log('Categories Error:', categoriesError);
     console.log('Categories Loading:', categoriesLoading);
-    
+
     if (categoriesError) {
       console.error('Categories Error:', categoriesError);
       toast.error('Failed to load categories');
@@ -605,10 +605,10 @@ const Advertisement = () => {
   const getQuarterEnd = (date) => {
     const m = date.getUTCMonth() + 1;
     const year = date.getUTCFullYear();
-    if (m >= 1 && m <= 3) return new Date(Date.UTC(year, 2, 31, 23,59,59,999));
-    if (m >= 4 && m <= 6) return new Date(Date.UTC(year, 5, 30, 23,59,59,999));
-    if (m >= 7 && m <= 9) return new Date(Date.UTC(year, 8, 30, 23,59,59,999));
-    return new Date(Date.UTC(year, 11, 31, 23,59,59,999));
+    if (m >= 1 && m <= 3) return new Date(Date.UTC(year, 2, 31, 23, 59, 59, 999));
+    if (m >= 4 && m <= 6) return new Date(Date.UTC(year, 5, 30, 23, 59, 59, 999));
+    if (m >= 7 && m <= 9) return new Date(Date.UTC(year, 8, 30, 23, 59, 59, 999));
+    return new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
   };
 
   const splitIntervalByQuarter = (startDate, totalDays) => {
@@ -622,11 +622,11 @@ const Advertisement = () => {
       const diff = Math.floor((Date.UTC(qEnd.getUTCFullYear(), qEnd.getUTCMonth(), qEnd.getUTCDate()) - Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), cursor.getUTCDate())) / msPerDay) + 1;
       const take = Math.min(remaining, diff);
       const segmentEnd = addDays(cursor, take - 1);
-      segments.push({ 
-        quarter: getQuarterLabel(cursor), 
-        start: new Date(cursor), 
+      segments.push({
+        quarter: getQuarterLabel(cursor),
+        start: new Date(cursor),
         end: segmentEnd,
-        days: take 
+        days: take
       });
       cursor = addDays(cursor, take);
       remaining -= take;
@@ -739,12 +739,26 @@ const Advertisement = () => {
     return { startDate, endDate, breakdown, total: totalPrice, totalDays };
   };
 
+  // Helper to get the redirect URL type for a specific category and slot
+  const getSlotUrlType = (catId, slotName) => {
+    // If we're in the wizard modal
+    if (showWizardModal) {
+      if (useSharedMedia) {
+        return sharedSlotMedia[slotName]?.urlType || defaultUrlType;
+      }
+      return perCategorySlotMedia[catId]?.[slotName]?.urlType || defaultUrlType;
+    }
+    // Standard inline view
+    return slotMedia[slotName]?.urlType || defaultUrlType;
+  };
+
   // compute total price for selected slots (sums per-slot pricing)
   const computeTotalForSelectedSlots = () => {
     if (!selectedSlots || selectedSlots.length === 0) return 0;
     let sum = 0;
     selectedSlots.forEach(slot => {
-      const p = computePricingPreview(slot);
+      const urlType = getSlotUrlType(selectedCategory, slot);
+      const p = computePricingPreview(slot, urlType);
       if (p) sum += p.total;
     });
     return sum;
@@ -776,7 +790,15 @@ const Advertisement = () => {
       let adCat = pricing.adCategories?.find(ac => ac.slot_name === slotName && ac.duration_days === selectedDuration);
       if (!adCat) adCat = pricing.adCategories?.find(ac => ac.ad_type === adType && ac.duration_days === selectedDuration);
       const slotPrice = adCat?.price || 0;
-      sum += slotPrice + proRataCharge;
+
+      // Add external URL surcharge
+      let externalSurcharge = 0;
+      const urlType = getSlotUrlType(entry.categoryId, slotName);
+      if (urlType === 'external') {
+        externalSurcharge = adType === 'stamp' ? (pricing.stamp_external_url_extra_cost || 0) : (pricing.banner_external_url_extra_cost || 0);
+      }
+
+      sum += slotPrice + proRataCharge + externalSurcharge;
     });
     return sum;
   };
@@ -789,6 +811,7 @@ const Advertisement = () => {
         total += computeTotalForSelectedSlots();
       } else {
         const entry = {
+          categoryId: catId,
           slots: [...selectedSlots],
           pricingData: categoryPricingMap[catId] || null,
         };
@@ -965,8 +988,8 @@ const Advertisement = () => {
       }
     }
   };
-  
-  
+
+
 
   const getSlotDisplayName = (slot) => {
     const parts = slot.split('_');
@@ -1027,30 +1050,30 @@ const Advertisement = () => {
             >
               <Card.Body style={{ padding: '0.75rem' }}>
                 <div className='d-flex gap-1 mb-2' style={{ flexWrap: 'wrap' }}>
-                {category.parent && categoryMap[category.parent] && (
-                  <small className='text-muted d-block w-100 mb-1' style={{ fontSize: '0.7rem' }}>
-                    {categoryMap[category.parent].parent && categoryMap[categoryMap[category.parent].parent]
-                      ? `${categoryMap[categoryMap[category.parent].parent].name} › ${categoryMap[category.parent].name}`
-                      : categoryMap[category.parent].name}
-                  </small>
-                )}
-                <div className='d-flex justify-content-between align-items-center w-100'>
-                  <Card.Title className='fw-bold mb-0' style={{ fontSize: '0.95rem', color: '#333' }}>
-                    {category?.name || 'Unnamed'}
-                  </Card.Title>
-                  <span
-                    className='badge'
-                    style={{
-                      backgroundColor: '#17a2b8',
-                      fontSize: '0.75rem',
-                      padding: '0.25rem 0.5rem',
-                      borderRadius: '4px',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {category?.tierId?.name || 'Tier'}
-                  </span>
-                </div>
+                  {category.parent && categoryMap[category.parent] && (
+                    <small className='text-muted d-block w-100 mb-1' style={{ fontSize: '0.7rem' }}>
+                      {categoryMap[category.parent].parent && categoryMap[categoryMap[category.parent].parent]
+                        ? `${categoryMap[categoryMap[category.parent].parent].name} › ${categoryMap[category.parent].name}`
+                        : categoryMap[category.parent].name}
+                    </small>
+                  )}
+                  <div className='d-flex justify-content-between align-items-center w-100'>
+                    <Card.Title className='fw-bold mb-0' style={{ fontSize: '0.95rem', color: '#333' }}>
+                      {category?.name || 'Unnamed'}
+                    </Card.Title>
+                    <span
+                      className='badge'
+                      style={{
+                        backgroundColor: '#17a2b8',
+                        fontSize: '0.75rem',
+                        padding: '0.25rem 0.5rem',
+                        borderRadius: '4px',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {category?.tierId?.name || 'Tier'}
+                    </span>
+                  </div>
                   {category.pricing90 && category.pricing90.length > 0 && (
                     <div style={{ fontSize: '0.8rem', color: '#555', marginTop: '4px' }}>
                       {category.pricing90.map(p => `${p.ad_type.charAt(0).toUpperCase() + p.ad_type.slice(1)} ₹${p.price}/Qtr`).join(' | ')}
@@ -1190,7 +1213,7 @@ const Advertisement = () => {
         </Alert>
       );
     }
-    
+
     // Tab bar UI
     const tabOptions = [
       { key: 'category', label: 'Category' },
@@ -1331,27 +1354,28 @@ const Advertisement = () => {
           {pricing?.adCategories && pricing.adCategories.length > 0 ? (
             <table className='table table-sm'>
               <thead>
-                  <tr>
-                    <th>Ad Type</th>
-                    <th>Duration</th>
-                    <th>Price</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pricing.adCategories
-                    .filter(ac => (ac?.duration_days || 30) === selectedDuration)
-                    .map((category) => {
-                      const { slot_name: slotName = '', price: basePrice = 0 } = category || {};
-                      const durationLabel = getDurationLabel(selectedDuration);
-                      const isSelectedSlot = selectedSlots.includes(slotName);
-                      return (
+                <tr>
+                  <th>Ad Type</th>
+                  <th>Duration</th>
+                  <th>Price</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pricing.adCategories
+                  .filter(ac => (ac?.duration_days || 30) === selectedDuration)
+                  .map((category) => {
+                    const { slot_name: slotName = '', price: basePrice = 0 } = category || {};
+                    const durationLabel = getDurationLabel(selectedDuration);
+                    const isSelectedSlot = selectedSlots.includes(slotName);
+                    return (
                       <tr key={category?.id || `${slotName}-${selectedDuration}`} className={isSelectedSlot ? 'table-active' : ''}>
                         <td><strong>{getSlotDisplayName(slotName)}</strong></td>
                         <td>{durationLabel}</td>
                         <td><strong>₹{basePrice}</strong></td>
                       </tr>
-                    )})}
-                </tbody>
+                    )
+                  })}
+              </tbody>
             </table>
           ) : (
             <Alert variant='info'>No pricing tiers configured for this category</Alert>
@@ -2429,29 +2453,29 @@ const Advertisement = () => {
                   return media.mobileImage || media.desktopImage;
                 });
               return ready ? (
-              <Card>
-                <Card.Body className='text-end'>
-                  <Button
-                    variant='outline-secondary'
-                    className='me-2'
-                    onClick={() => {
-                      setSelectedCategory('');
-                      setSelectedDuration(30);
-                      setSelectedSlots([]);
-                      setSlotMedia({});
-                    }}
-                  >
-                    Reset
-                  </Button>
-                  <Button
-                    variant='primary'
-                    onClick={handlePreview}
-                    disabled={submitLoading}
-                  >
-                    Preview & Submit
-                  </Button>
-                </Card.Body>
-              </Card>
+                <Card>
+                  <Card.Body className='text-end'>
+                    <Button
+                      variant='outline-secondary'
+                      className='me-2'
+                      onClick={() => {
+                        setSelectedCategory('');
+                        setSelectedDuration(30);
+                        setSelectedSlots([]);
+                        setSlotMedia({});
+                      }}
+                    >
+                      Reset
+                    </Button>
+                    <Button
+                      variant='primary'
+                      onClick={handlePreview}
+                      disabled={submitLoading}
+                    >
+                      Preview & Submit
+                    </Button>
+                  </Card.Body>
+                </Card>
               ) : null;
             })()}
           </div>
