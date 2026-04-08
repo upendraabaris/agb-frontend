@@ -1769,13 +1769,27 @@ const routesAndMenuItems = {
       roles: [USER_ROLE.SuperSeller],
       hidden: true,
     },
+    // {
+    //   path: `${appSuperSeller}/advertisement`,
+    //   component: sellerProfile,
+    //   label: 'Advertisement',
+    //   icon: 'radio',
+    //   roles: [USER_ROLE.SuperSeller],
+    //   hidden: true,
+    // },
     {
       path: `${appSuperSeller}/advertisement`,
-      component: sellerProfile,
+      component: baProfile,
       label: 'Advertisement',
       icon: 'radio',
       roles: [USER_ROLE.SuperSeller],
       hidden: true,
+      subs: [
+        { path: '/list', label: 'My Ads', component: MyAds },
+        { path: '/add', label: 'Book Ad at Categories', component: Advertisement },
+        { path: '/ads-product', label: 'Book Ad at Products', component: ProductAdvertisement },
+        { path: '/reporting', label: 'Reporting', component: SellerReports },
+      ],
     },
 
     /* ------------------------------------------------------------------ */
