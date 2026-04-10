@@ -6,6 +6,7 @@ import { Card, Button, Row, Col, Alert, Spinner, Modal, Badge, Form, Table } fro
 import { toast } from 'react-toastify';
 import HtmlHead from 'components/html-head/HtmlHead';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
+import moment from 'moment';
 import SuccessModal from './components/SuccessModal';
 import { resolveAdBasePath } from './routeUtils';
 
@@ -229,7 +230,7 @@ const splitIntervalByQuarter = (startDate, totalDays) => {
       Math.floor(
         (Date.UTC(qEnd.getUTCFullYear(), qEnd.getUTCMonth(), qEnd.getUTCDate()) -
           Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), cursor.getUTCDate())) /
-          msPerDay
+        msPerDay
       ) + 1;
     const take = Math.min(remaining, diff);
 
@@ -342,6 +343,7 @@ const ProductAdvertisement = () => {
   const location = useLocation();
 
   // ── Wizard state ────────────────────────────────────────────────────
+  const [imageErrors, setImageErrors] = useState({});
   const [showWizard, setShowWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
 
@@ -559,18 +561,82 @@ const ProductAdvertisement = () => {
     setSlotMedia((m) => ({ ...m, [slot]: { ...(m[slot] || {}), [field]: value } }));
   };
 
+  // const handleFileChange = (slot, type, file) => {
+  //   if (!file) return;
+  //   const preview = URL.createObjectURL(file);
+  //   setSlotMedia((m) => ({
+  //     ...m,
+  //     [slot]: {
+  //       ...(m[slot] || {}),
+  //       [`${type}File`]: file,
+  //       [`${type}Preview`]: preview,
+  //     },
+  //   }));
+  // };
+
   const handleFileChange = (slot, type, file) => {
     if (!file) return;
-    const preview = URL.createObjectURL(file);
-    setSlotMedia((m) => ({
-      ...m,
-      [slot]: {
-        ...(m[slot] || {}),
-        [`${type}File`]: file,
-        [`${type}Preview`]: preview,
-      },
-    }));
+
+    const errorKey = `${slot}_${type}`;
+    const slotType = slot.split('_')[0];
+
+    // Dynamic Dimensions based on type
+    let requiredWidth;
+    let requiredHeight;
+
+    if (type === 'mobile') {
+      // Mobile Dimensions
+      requiredWidth = slotType === 'banner' ? 1000 : 600;
+      requiredHeight = slotType === 'banner' ? 500 : 600;
+    } else {
+      // Desktop Dimensions
+      requiredWidth = slotType === 'banner' ? 2000 : 1000;
+      requiredHeight = slotType === 'banner' ? 300 : 500;
+    }
+
+    // 1. Size Validation (Max 500KB)
+    if (file.size > 500 * 1024) {
+      setImageErrors((prev) => ({
+        ...prev,
+        [errorKey]: `Image size must be 500KB or less. Your file: ${Math.round(file.size / 1024)}KB`,
+      }));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result;
+      const img = new window.Image();
+      img.onload = () => {
+        if (img.width !== requiredWidth || img.height !== requiredHeight) {
+          setImageErrors((prev) => ({
+            ...prev,
+            [errorKey]: `${slotType === 'banner' ? 'Banner' : 'Stamp'} (${type}) must be ${requiredWidth}×${requiredHeight}px. Your image: ${img.width}×${img.height}px`,
+          }));
+          return;
+        }
+
+        // Sab sahi hai toh error clear karein aur media set karein
+        setImageErrors((prev) => {
+          const copy = { ...prev };
+          delete copy[errorKey];
+          return copy;
+        });
+
+        setSlotMedia((m) => ({
+          ...m,
+          [slot]: {
+            ...(m[slot] || {}),
+            [`${type}File`]: file,
+            [`${type}Preview`]: dataUrl,
+          },
+        }));
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
   };
+
 
   // ── Step validation ──────────────────────────────────────────────────
   const canGoToStep2 = selectedProduct && (pricingData || !pricingLoading);
@@ -781,39 +847,58 @@ const ProductAdvertisement = () => {
       const price = computeSlotPrice(slot);
       // freeDate only makes sense for global slotStatuses (has end_date info)
       const globalInfo = selectedProduct?.slotStatuses?.find((s) => s.slot === slot);
-      const freeDate = globalInfo?.freeDate ? formatDate(globalInfo.freeDate) : null;
+      const freeDate = globalInfo?.freeDate ? moment(globalInfo.freeDate).format('DD MMMM YYYY') : null;
 
       return (
+        /* Line 853: Modify the container div to better handle the checkbox */
         <div
           key={slot}
           onClick={() => !isBooked && handleSlotToggle(slot)}
           style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '5px 8px',
-            marginBottom: 4,
-            borderRadius: 6,
+            padding: '8px 10px',        // Fixed padding
+            marginBottom: 6,            // Increased margin
+            borderRadius: 8,            // More rounded corners
             cursor: isBooked ? 'not-allowed' : 'pointer',
-            background: isSelected ? '#e8f4ff' : 'transparent',
-            border: isSelected ? '1px solid #0d6efd' : '1px solid transparent',
+            background: isSelected ? '#e8f4ff' : '#fcfcfc',
+            border: isSelected ? '1px solid #0d6efd' : '1px solid #eee',
             transition: 'all 0.15s',
           }}
         >
-          <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#333', minWidth: 60 }}>{slotLabel(slot)}:</span>
-          {isBooked ? (
-            <span style={{ fontSize: '0.78rem', color: '#dc3545' }}>
-              <strong>✗</strong> Booked till {freeDate || '—'}
+          {/* NEW: Add the Checkbox component here */}
+          <Form.Check
+            type="checkbox"
+            className="me-2"
+            checked={isSelected}
+            disabled={isBooked}
+            readOnly
+          />
+
+          {/* NEW: Wrap original content in a flex div for spacing */}
+          <div className="d-flex justify-content-between align-items-center w-100">
+            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#333' }}>
+              {slotLabel(slot)}
             </span>
-          ) : (
-            <span style={{ fontSize: '0.78rem', color: '#198754' }}>
-              <strong>✓</strong> Available
-              {pricingData && price > 0 && <span style={{ color: '#0d6efd', marginLeft: 6 }}>₹{price}</span>}
-            </span>
-          )}
+
+            {/* Line 870: Availability and Price status */}
+            {isBooked ? (
+              <span style={{ fontSize: '0.75rem', color: '#dc3545' }}>
+                <strong>✗</strong> Booked till {moment(freeDate).format('DD MMMM YYYY')}
+              </span>
+            ) : (
+              <span style={{ fontSize: '0.78rem', color: '#198754' }}>
+                {isSelected ? <strong>Selected</strong> : 'Available'}
+                {pricingData && price > 0 && (
+                  <span style={{ color: '#0d6efd', marginLeft: 8, fontWeight: 'bold' }}>₹{price}</span>
+                )}
+              </span>
+            )}
+          </div>
         </div>
       );
     };
+
 
     return (
       <div>
@@ -876,31 +961,56 @@ const ProductAdvertisement = () => {
 
           <Row className="g-3">
             {/* Mobile Image */}
+            {/* Example for Mobile Image (Desktop ke liye bhi same hoga) */}
             <Col md={6}>
               <Form.Label className="small fw-bold">Mobile Image</Form.Label>
+              <div className="text-muted" style={{ fontSize: '0.65rem', marginBottom: '4px' }}>
+                {slot.startsWith('banner') ? '1000×500px' : '600×600px'} | Max 500KB
+              </div>
+
               {slotMedia[slot]?.mobilePreview && (
-                <img
-                  src={slotMedia[slot].mobilePreview}
-                  alt="mobile preview"
-                  className="d-block mb-2 rounded"
-                  style={{ maxHeight: 120, maxWidth: '100%', objectFit: 'cover' }}
-                />
+                <img src={slotMedia[slot].mobilePreview} alt="mobile preview" className="d-block mb-2 rounded" style={{ maxHeight: 120, maxWidth: '100%', objectFit: 'cover' }} />
               )}
-              <Form.Control type="file" accept="image/*" size="sm" onChange={(e) => handleFileChange(slot, 'mobile', e.target.files[0])} />
+
+              <Form.Control
+                type="file"
+                accept="image/*"
+                size="sm"
+                onChange={(e) => handleFileChange(slot, 'mobile', e.target.files[0])}
+                isInvalid={!!imageErrors[`${slot}_mobile`]}
+              />
+
+              {imageErrors[`${slot}_mobile`] && (
+                <div className="text-danger mt-1" style={{ fontSize: '0.75rem' }}>
+                  <strong>✗</strong> {imageErrors[`${slot}_mobile`]}
+                </div>
+              )}
             </Col>
 
             {/* Desktop Image */}
             <Col md={6}>
               <Form.Label className="small fw-bold">Desktop Image</Form.Label>
+              <div className="text-muted" style={{ fontSize: '0.65rem', marginBottom: '4px' }}>
+                {slot.startsWith('banner') ? '2000×300px' : '1000×500px'} | Max 500KB
+              </div>
+
               {slotMedia[slot]?.desktopPreview && (
-                <img
-                  src={slotMedia[slot].desktopPreview}
-                  alt="desktop preview"
-                  className="d-block mb-2 rounded"
-                  style={{ maxHeight: 120, maxWidth: '100%', objectFit: 'cover' }}
-                />
+                <img src={slotMedia[slot].desktopPreview} alt="desktop preview" className="d-block mb-2 rounded" style={{ maxHeight: 120, maxWidth: '100%', objectFit: 'cover' }} />
               )}
-              <Form.Control type="file" accept="image/*" size="sm" onChange={(e) => handleFileChange(slot, 'desktop', e.target.files[0])} />
+
+              <Form.Control
+                type="file"
+                accept="image/*"
+                size="sm"
+                onChange={(e) => handleFileChange(slot, 'desktop', e.target.files[0])}
+                isInvalid={!!imageErrors[`${slot}_desktop`]}
+              />
+
+              {imageErrors[`${slot}_desktop`] && (
+                <div className="text-danger mt-1" style={{ fontSize: '0.75rem' }}>
+                  <strong>✗</strong> {imageErrors[`${slot}_desktop`]}
+                </div>
+              )}
             </Col>
 
             {/* Redirect URL */}
@@ -1372,7 +1482,7 @@ const ProductAdvertisement = () => {
                                         {BANNER_SLOTS.map((slot) => {
                                           const info = p.slotStatuses?.find((s) => s.slot === slot);
                                           const booked = !info?.available;
-                                          const fd = info?.freeDate ? formatDate(info.freeDate) : null;
+                                          const fd = info?.freeDate ? moment(info.freeDate).format('D MMMM YYYY') : null;
                                           return (
                                             <div
                                               key={slot}
@@ -1401,7 +1511,7 @@ const ProductAdvertisement = () => {
                                         {STAMP_SLOTS.map((slot) => {
                                           const info = p.slotStatuses?.find((s) => s.slot === slot);
                                           const booked = !info?.available;
-                                          const fd = info?.freeDate ? formatDate(info.freeDate) : null;
+                                          const fd = info?.freeDate ? moment(info.freeDate).format('D MMMM YYYY') : null;
                                           return (
                                             <div
                                               key={slot}

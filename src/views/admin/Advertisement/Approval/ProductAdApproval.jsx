@@ -16,6 +16,9 @@ const GET_PRODUCT_AD_REQUESTS = gql`
       seller_id
       sellerName
       sellerEmail
+      sellerCompanyName
+      sellerBusinessEmail
+      sellerBusinessPhone
       product_id
       productName
       brandName
@@ -113,11 +116,14 @@ function ProductAdApproval() {
 
 
     const { loading, error, data, refetch } = useQuery(GET_PRODUCT_AD_REQUESTS, {
-        variables: { status: currentFilter },
+        variables: { status: 'all' },
         fetchPolicy: 'network-only',
     });
 
     const requests = data?.getProductAdRequestsForApproval || [];
+
+    const displayRequests = currentFilter === 'all' ? requests : requests.filter((r) => r.status === currentFilter);
+
 
 
 
@@ -230,14 +236,14 @@ function ProductAdApproval() {
                         </div>
                     )}
 
-                    {!loading && requests.length === 0 && (
+                    {!loading && displayRequests.length === 0 && (
                         <Alert variant="info" className="mb-0">
                             <CsLineIcons icon="info" className="me-2" />
                             No product ad requests found for "{currentFilter}".
                         </Alert>
                     )}
 
-                    {!loading && requests.length > 0 && (
+                    {!loading && displayRequests.length > 0 && (
                         <div className="table-responsive">
                             <Table hover className="align-middle">
                                 <thead className="table-light">
@@ -253,7 +259,7 @@ function ProductAdApproval() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {requests.map((req) => {
+                                    {displayRequests.map((req) => {
                                         const firstMedia = req.medias?.[0];
                                         const firstDuration = req.durations?.[0];
                                         return (
@@ -362,11 +368,27 @@ function ProductAdApproval() {
                     {selectedRequest && (
                         <div>
                             {/* Seller Info */}
-                            <h6 className="text-muted mb-2">Seller</h6>
-                            <Row className="mb-3">
-                                <Col sm={6}><strong>{selectedRequest.sellerName}</strong></Col>
-                                <Col sm={6} className="text-muted">{selectedRequest.sellerEmail}</Col>
-                            </Row>
+                            <h6 className="mb-3">Seller Information</h6>
+                            <div className="mb-3">
+                                <small className="text-muted">Name</small>
+                                <div className="fw-bold">{selectedRequest.sellerName}</div>
+                            </div>
+                            <div className="mb-3">
+                                <small className="text-muted">Email</small>
+                                <div className="fw-bold">{selectedRequest.sellerEmail}</div>
+                            </div>
+                            <div className="mb-3">
+                                <small className="text-muted">Seller Company</small>
+                                <div className="fw-bold">{selectedRequest.sellerCompanyName || 'N/A'}</div>
+                            </div>
+                            <div className="mb-3">
+                                <small className="text-muted">Seller Business Email</small>
+                                <div className="fw-bold">{selectedRequest.sellerBusinessEmail || 'N/A'}</div>
+                            </div>
+                            <div className="mb-3">
+                                <small className="text-muted">Seller Business Phone</small>
+                                <div className="fw-bold">{selectedRequest.sellerBusinessPhone || 'N/A'}</div>
+                            </div>
                             <hr />
 
                             {/* Product Info */}

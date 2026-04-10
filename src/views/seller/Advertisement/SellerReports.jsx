@@ -7,6 +7,7 @@ import { ArrowDownTrayIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import HtmlHead from 'components/html-head/HtmlHead';
 import BreadcrumbList from 'components/breadcrumb-list/BreadcrumbList';
 import { menuChangeUseSidebar } from 'layout/nav/main-menu/menuSlice';
+import moment from 'moment';
 
 // ==========================================
 // GraphQL Queries
@@ -273,7 +274,7 @@ const SellerReports = () => {
             <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4 border-bottom pb-3 d-print-none">
               <div>
                 <h1 className="h3 fw-bold text-dark mb-1">Advertiser Campaign Report</h1>
-                <p className="text-muted small mb-0">Generated on: {formatDate(new Date())}</p>
+                <p className="text-muted small mb-0">Generated on: {moment(new Date()).format('D/MMMM/YYYY')}</p>
               </div>
 
               <div className="d-flex gap-2 mt-3 mt-md-0">
@@ -346,8 +347,8 @@ const SellerReports = () => {
                                     <td>
                                       <code>{ad.slot}</code>
                                     </td>
-                                    <td>{formatDate(ad.startDate)}</td>
-                                    <td>{formatDate(ad.endDate)}</td>
+                                    <td>{moment(ad.startDate).format('D MMMM YYYY')}</td>
+                                    <td>{moment(ad.endDate).format('D MMMM YYYY')}</td>
                                     <td className="text-center">{ad.durationDays}</td>
                                     <td className="text-center">
                                       <span className={`badge ${ad.remainingDays <= 7 ? 'bg-warning text-dark' : 'bg-success'}`}>{ad.remainingDays} days</span>
@@ -454,13 +455,13 @@ const SellerReports = () => {
                                     <td>
                                       <code>{ad.slot}</code>
                                     </td>
-                                    <td>{ad.startDate ? formatDate(ad.startDate) : 'N/A'}</td>
-                                    <td>{ad.endDate ? formatDate(ad.endDate) : 'N/A'}</td>
+                                    <td>{ad.startDate ? moment(ad.startDate).format('D MMMM YYYY') : 'N/A'}</td>
+                                    <td>{ad.endDate ? moment(ad.endDate).format('D MMMM YYYY') : 'N/A'}</td>
                                     <td className="text-center">{ad.durationDays}</td>
                                     <td>
                                       <span className={`badge ${ad.status === 'completed' ? 'bg-secondary' : 'bg-danger'}`}>{ad.status}</span>
                                     </td>
-                                    <td>{formatDate(ad.completedDate)}</td>
+                                    <td>{moment(ad.completedDate).format('D MMMM YYYY')}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -518,7 +519,7 @@ const SellerReports = () => {
                                     <td>
                                       <code>{ad.slot}</code>
                                     </td>
-                                    <td>{formatDate(ad.endDate)}</td>
+                                    <td>{moment(ad.endDate).format('D MMMM YYYY')}</td>
                                     <td className="text-center">
                                       <span className={`badge ${getDaysVariant(ad.remainingDays)}`}>{ad.remainingDays} days</span>
                                     </td>
@@ -596,8 +597,8 @@ const SellerReports = () => {
                                     <td>
                                       <code>{ad.slot}</code>
                                     </td>
-                                    <td>{formatDate(ad.startDate)}</td>
-                                    <td>{formatDate(ad.endDate)}</td>
+                                    <td>{moment(ad.startDate).format('D MMMM YYYY')}</td>
+                                    <td>{moment(ad.endDate).format('D MMMM YYYY')}</td>
                                     <td className="text-center">{ad.durationDays}</td>
                                     <td className="text-center">
                                       <span className={`badge ${ad.remainingDays <= 7 ? 'bg-warning text-dark' : 'bg-success'}`}>{ad.remainingDays} days</span>
@@ -695,13 +696,13 @@ const SellerReports = () => {
                                     <td>
                                       <code>{ad.slot}</code>
                                     </td>
-                                    <td>{ad.startDate ? formatDate(ad.startDate) : 'N/A'}</td>
-                                    <td>{ad.endDate ? formatDate(ad.endDate) : 'N/A'}</td>
+                                    <td>{ad.startDate ? moment(ad.startDate).format('D MMMM YYYY') : 'N/A'}</td>
+                                    <td>{ad.endDate ? moment(ad.endDate).format('D MMMM YYYY') : 'N/A'}</td>
                                     <td className="text-center">{ad.durationDays}</td>
                                     <td>
                                       <span className={`badge ${ad.status === 'completed' ? 'bg-secondary' : 'bg-danger'}`}>{ad.status}</span>
                                     </td>
-                                    <td>{formatDate(ad.completedDate)}</td>
+                                    <td>{moment(ad.completedDate).format('D MMMM YYYY')}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -752,7 +753,7 @@ const SellerReports = () => {
                                     <td>
                                       <code>{ad.slot}</code>
                                     </td>
-                                    <td>{formatDate(ad.endDate)}</td>
+                                    <td>{moment(ad.endDate).format('D MMMM YYYY')}</td>
                                     <td className="text-center">
                                       <span className={`badge ${getDaysVariant(ad.remainingDays)}`}>{ad.remainingDays} days</span>
                                     </td>

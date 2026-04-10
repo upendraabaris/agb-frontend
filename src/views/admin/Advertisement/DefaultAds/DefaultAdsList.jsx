@@ -167,7 +167,7 @@ function DefaultAdsList() {
               </Badge>
             )}
           </Card.Header>
-          
+
           <Card.Body className="p-2">
             {ad ? (
               <>
@@ -184,9 +184,9 @@ function DefaultAdsList() {
                     placement="top"
                     overlay={<Tooltip>Desktop Image</Tooltip>}
                   >
-                    <Badge 
-                      bg="dark" 
-                      className="position-absolute" 
+                    <Badge
+                      bg="dark"
+                      className="position-absolute"
                       style={{ top: '5px', right: '5px', opacity: 0.8 }}
                     >
                       <CsLineIcons icon="desktop" size={12} />
@@ -201,23 +201,23 @@ function DefaultAdsList() {
 
                 {/* Actions */}
                 <div className="d-flex gap-1">
-                  <Button 
-                    variant="outline-primary" 
-                    size="sm" 
+                  <Button
+                    variant="outline-primary"
+                    size="sm"
                     className="flex-grow-1"
                     onClick={() => handleEditClick(ad)}
                   >
                     <CsLineIcons icon="edit" size={14} /> Edit
                   </Button>
-                  <Button 
-                    variant={ad.is_active ? 'outline-warning' : 'outline-success'} 
+                  {/* <Button
+                    variant={ad.is_active ? 'outline-warning' : 'outline-success'}
                     size="sm"
                     onClick={() => handleToggle(ad.id)}
                   >
                     <CsLineIcons icon={ad.is_active ? 'eye-off' : 'eye'} size={14} />
-                  </Button>
-                  <Button 
-                    variant="outline-danger" 
+                  </Button> */}
+                  <Button
+                    variant="outline-danger"
                     size="sm"
                     onClick={() => handleDelete(ad.id)}
                   >
@@ -226,14 +226,14 @@ function DefaultAdsList() {
                 </div>
               </>
             ) : (
-              <div 
+              <div
                 className="d-flex flex-column align-items-center justify-content-center h-100 py-4"
                 style={{ minHeight: '150px' }}
               >
                 <CsLineIcons icon="image" size={40} className="text-muted mb-2" />
                 <p className="text-muted small mb-3">No default ad set</p>
-                <Button 
-                  variant="outline-primary" 
+                <Button
+                  variant="outline-primary"
                   size="sm"
                   onClick={() => handleAddClick(slot)}
                 >
@@ -262,7 +262,7 @@ function DefaultAdsList() {
   return (
     <>
       <HtmlHead title={title} description={description} />
-      
+
       {/* Title */}
       <div className="page-title-container">
         <Row className="g-0">
@@ -281,7 +281,7 @@ function DefaultAdsList() {
           <div className="d-flex align-items-center">
             <CsLineIcons icon="info-hexagon" className="text-primary me-3" size={24} />
             <div>
-              <strong>How it works:</strong> Default ads are shown when a slot has no active paid advertisement. 
+              <strong>How it works:</strong> Default ads are shown when a slot has no active paid advertisement.
               Set up default images for all 8 slots (4 banners + 4 stamps) to ensure no empty spaces on category pages.
             </div>
           </div>
@@ -291,7 +291,7 @@ function DefaultAdsList() {
       {/* Banner Slots */}
       <h5 className="mb-3">
         <CsLineIcons icon="layout-5" className="me-2" />
-        Banner Slots (Top of Category Page)
+        Banner Slots (Default Ads)
       </h5>
       <Row className="mb-4">
         {bannerSlots.map(renderSlotCard)}
@@ -300,7 +300,7 @@ function DefaultAdsList() {
       {/* Stamp Slots */}
       <h5 className="mb-3">
         <CsLineIcons icon="bookmark" className="me-2" />
-        Stamp Slots (Sidebar)
+        Stamp Slots (Default Ads)
       </h5>
       <Row className="mb-4">
         {stampSlots.map(renderSlotCard)}

@@ -115,7 +115,7 @@ function DefaultAdForm({ show, onHide, onSuccess, editingAd, selectedSlot }) {
           file
         }
       });
-      
+
       if (response.data.uploadFile.success) {
         return response.data.uploadFile.url;
       }
@@ -218,7 +218,7 @@ function DefaultAdForm({ show, onHide, onSuccess, editingAd, selectedSlot }) {
   };
 
   const isLoading = creating || updating || uploading;
-  const slotName = selectedSlot 
+  const slotName = selectedSlot
     ? `${selectedSlot.ad_type.charAt(0).toUpperCase() + selectedSlot.ad_type.slice(1)} ${selectedSlot.slot_position}`
     : '';
 
@@ -229,7 +229,7 @@ function DefaultAdForm({ show, onHide, onSuccess, editingAd, selectedSlot }) {
           {editingAd ? 'Edit' : 'Add'} Default Ad - {slotName}
         </Modal.Title>
       </Modal.Header>
-      
+
       <Form onSubmit={handleSubmit}>
         <Modal.Body>
           <Row>
@@ -302,7 +302,7 @@ function DefaultAdForm({ show, onHide, onSuccess, editingAd, selectedSlot }) {
           </Form.Group>
 
           {/* Description */}
-          <Form.Group className="mb-3">
+          {/* <Form.Group className="mb-3">
             <Form.Label className="fw-bold">Description (Optional)</Form.Label>
             <Form.Control
               as="textarea"
@@ -311,7 +311,7 @@ function DefaultAdForm({ show, onHide, onSuccess, editingAd, selectedSlot }) {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Brief description of this ad"
             />
-          </Form.Group>
+          </Form.Group> */}
 
           {/* Redirect URL */}
           <Form.Group className="mb-3">
@@ -329,7 +329,7 @@ function DefaultAdForm({ show, onHide, onSuccess, editingAd, selectedSlot }) {
 
           <Row>
             {/* Priority */}
-            <Col md={6}>
+            {/* <Col md={6}>
               <Form.Group className="mb-3">
                 <Form.Label className="fw-bold">Priority</Form.Label>
                 <Form.Control
@@ -343,10 +343,10 @@ function DefaultAdForm({ show, onHide, onSuccess, editingAd, selectedSlot }) {
                   Higher priority ads shown first (if multiple defaults for same slot)
                 </Form.Text>
               </Form.Group>
-            </Col>
+            </Col> */}
 
             {/* Active Status */}
-            <Col md={6}>
+            {/* <Col md={6}>
               <Form.Group className="mb-3">
                 <Form.Label className="fw-bold">Status</Form.Label>
                 <Form.Check
@@ -358,7 +358,7 @@ function DefaultAdForm({ show, onHide, onSuccess, editingAd, selectedSlot }) {
                   className="mt-2"
                 />
               </Form.Group>
-            </Col>
+            </Col> */}
           </Row>
         </Modal.Body>
 

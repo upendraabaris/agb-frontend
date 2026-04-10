@@ -7,6 +7,7 @@ import HtmlHead from 'components/html-head/HtmlHead';
 import { Row, Col, Button, Form, Card, Modal, Table } from 'react-bootstrap';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
 import { menuChangeUseSidebar } from 'layout/nav/main-menu/menuSlice';
+import moment from 'moment';
 
 const GET_AD_TIER_MASTERS = gql`
   query AdTierMasters {
@@ -60,6 +61,19 @@ const TOGGLE_AD_TIER_MASTER = gql`
     }
   }
 `;
+
+// const formatDate = (date) => {
+//   // Convert string timestamp to number
+//   const timestamp = typeof date === 'string' ? parseInt(date, 10) : date;
+//   const d = new Date(timestamp);
+
+//   if (!timestamp || Number.isNaN(d.getTime())) return 'N/A';
+
+//   const day = String(d.getDate()).padStart(2, '0');
+//   const month = d.toLocaleString('en-US', { month: 'long' });
+//   const year = d.getFullYear();
+//   return `${day} ${month} ${year}`;  // 09 April 2026
+// };
 
 const AdTierMasterManager = () => {
   const title = 'Ad Tier Master';
@@ -191,8 +205,8 @@ const AdTierMasterManager = () => {
                     <tr key={master.id}>
                       <td>{master.name}</td>
                       <td>{master.description}</td>
-                      <td>{master.is_active ? 'Yes' : 'No'}</td>
-                      <td>{new Date(master.createdAt).toLocaleDateString()}</td>
+                      <td>{master.is_active ? 'Active' : 'Inactive'}</td>
+                      <td>{moment(Number(master.createdAt)).format('D MMMM YYYY')}</td>
                       <td>
                         <Button
                           variant="outline-primary"

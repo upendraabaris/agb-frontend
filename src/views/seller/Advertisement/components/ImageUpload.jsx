@@ -47,14 +47,24 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
 
     // Size validation: max 500KB
     if (file.size > 500 * 1024) {
-      setImageErrors(prev => ({ ...prev, [errorKey]: `Image size must be 500KB or less. Your file: ${Math.round(file.size / 1024)}KB` }));
+      setImageErrors((prev) => ({ ...prev, [errorKey]: `Image size must be 500KB or less. Your file: ${Math.round(file.size / 1024)}KB` }));
       e.target.value = '';
       return;
     }
 
     const slotType = slot.split('_')[0];
-    const requiredWidth = slotType === 'banner' ? 2000 : 1000;
-    const requiredHeight = slotType === 'banner' ? 300 : 500;
+    let requiredWidth;
+    let requiredHeight;
+
+    if (device === 'mobile') {
+      // Mobile Dimensions
+      requiredWidth = slotType === 'banner' ? 1000 : 600;
+      requiredHeight = slotType === 'banner' ? 500 : 600;
+    } else {
+      // Desktop Dimensions
+      requiredWidth = slotType === 'banner' ? 2000 : 1000;
+      requiredHeight = slotType === 'banner' ? 300 : 500;
+    }
 
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -63,12 +73,19 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
       const img = new window.Image();
       img.onload = () => {
         if (img.width !== requiredWidth || img.height !== requiredHeight) {
-          setImageErrors(prev => ({ ...prev, [errorKey]: `${slotType === 'banner' ? 'Banner' : 'Stamp'} image must be exactly ${requiredWidth}\u00d7${requiredHeight}px. Your image: ${img.width}\u00d7${img.height}px` }));
+          setImageErrors((prev) => ({
+            ...prev,
+            [errorKey]: `${slotType === 'banner' ? 'Banner' : 'Stamp'} (${device}) must be exactly ${requiredWidth}\u00d7${requiredHeight}px. Your image: ${img.width}\u00d7${img.height}px`,
+          }));
           e.target.value = '';
           return;
         }
         // Clear error on successful upload
-        setImageErrors(prev => { const copy = { ...prev }; delete copy[errorKey]; return copy; });
+        setImageErrors((prev) => {
+          const copy = { ...prev };
+          delete copy[errorKey];
+          return copy;
+        });
         // Store base64 for preview AND raw File object for upload
         const previewField = device === 'mobile' ? 'mobileImage' : 'desktopImage';
         const fileField = device === 'mobile' ? 'mobileFile' : 'desktopFile';
@@ -117,7 +134,7 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
               <Card.Title className='mb-0'>
                 {formatSlotName(slot)}
                 <small className='text-muted ms-2' style={{ fontSize: '0.75rem', fontWeight: 'normal' }}>
-                  ({slot.startsWith('banner') ? '2000\u00d7300px' : '1000\u00d7500px'}, max 500KB)
+                  (Desktop: {slot.startsWith('banner') ? '2000\u00d7300px' : '1000\u00d7500px'} | Mobile: {slot.startsWith('banner') ? '1000\u00d7500px' : '600\u00d7600px'})
                 </small>
               </Card.Title>
             </Card.Header>
@@ -142,7 +159,7 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
                           <CsLineIcons icon='image' className='mb-2 display-4' />
                           <p className='text-muted mb-1'>Drag or click to upload</p>
                           <p className='text-muted mb-0' style={{ fontSize: '0.7rem' }}>
-                            {slot.startsWith('banner') ? '2000 \u00d7 300px' : '1000 \u00d7 500px'} | Max 500KB
+                            {slot.startsWith('banner') ? '1000 \u00d7 500px' : '600 \u00d7 600px'} | Max 500KB
                           </p>
                         </div>
                       )}

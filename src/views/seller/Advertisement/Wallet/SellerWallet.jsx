@@ -181,11 +181,10 @@ const SellerWallet = () => {
         <div style="font-size:12px;color:#666;font-style:italic;margin-bottom:10px">(Original for Recipient)</div>
         <table style="margin-left:auto;border-collapse:collapse">
           <tr><td style="padding:3px 8px;font-size:13px;color:#666;text-align:right">Invoice Date:</td><td style="padding:3px 8px;font-size:13px;font-weight:600">${fmtDate(
-            inv.createdAt
-          )}</td></tr>
-          <tr><td style="padding:3px 8px;font-size:13px;color:#666;text-align:right">Invoice No.:</td><td style="padding:3px 8px;font-size:13px;font-weight:600">${
-            inv.invoiceNumber
-          }</td></tr>
+      inv.createdAt
+    )}</td></tr>
+          <tr><td style="padding:3px 8px;font-size:13px;color:#666;text-align:right">Invoice No.:</td><td style="padding:3px 8px;font-size:13px;font-weight:600">${inv.invoiceNumber
+      }</td></tr>
         </table>
       </div>`;
 
@@ -598,7 +597,7 @@ const SellerWallet = () => {
                 <tbody>
                   {(() => {
                     const inv = invoiceModal.invoice;
-                    const baseAmt  = inv.baseAmount  ?? inv.amount;
+                    const baseAmt = inv.baseAmount ?? inv.amount;
                     const totalAmt = inv.totalAmount ?? inv.amount;
                     const inrFmt = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(v || 0);
                     const hasGst = inv.gstType != null;
