@@ -14,6 +14,9 @@ const GET_AD_REQUESTS = gql`
       seller_id
       sellerName
       sellerEmail
+      sellerCompanyName
+      sellerBusinessEmail
+      sellerBusinessPhone
       category_id
       categoryName
       tier_id
@@ -127,7 +130,7 @@ function AdApproval() {
   );
 
   const { loading, error, data, refetch } = useQuery(GET_AD_REQUESTS, {
-    variables: { status: currentFilter },
+    variables: { status: 'all' },
     fetchPolicy: 'network-only',
   });
 
@@ -226,6 +229,9 @@ function AdApproval() {
     });
   };
 
+
+
+
   const handleFilterChange = (newFilter) => {
     setCurrentFilter(newFilter);
     setSelectedRequest(null);
@@ -247,6 +253,9 @@ function AdApproval() {
   };
 
   const requests = allRequests;
+  const displayRequests = currentFilter === 'all'
+    ? allRequests
+    : allRequests.filter(r => r.status === currentFilter);
 
   return (
     <>
@@ -282,13 +291,13 @@ function AdApproval() {
               variant={currentFilter === 'approved' ? 'success' : 'outline-success'}
               onClick={() => handleFilterChange('approved')}
             >
-              Approved
+              Approved ({requests.filter((r) => r.status === 'approved').length})
             </Button>
             <Button
               variant={currentFilter === 'rejected' ? 'danger' : 'outline-danger'}
               onClick={() => handleFilterChange('rejected')}
             >
-              Rejected
+              Rejected ({requests.filter((r) => r.status === 'rejected').length})
             </Button>
           </div>
         </Card.Body>
@@ -330,7 +339,7 @@ function AdApproval() {
                   </tr>
                 </thead>
                 <tbody>
-                  {requests.map((request) => (
+                  {displayRequests.map((request) => (
                     <tr key={request.id}>
                       <td>
                         <div className="fw-bold">{request.sellerName}</div>
@@ -435,6 +444,18 @@ function AdApproval() {
                 <small className="text-muted">Email</small>
                 <div className="fw-bold">{selectedRequest.sellerEmail}</div>
               </div>
+              <div className="mb-3">
+                <small className="text-muted">Seller Company</small>
+                <div className="fw-bold">{selectedRequest.sellerCompanyName || 'N/A'}</div>
+              </div>
+              <div className="mb-3">
+                <small className="text-muted">Seller Business Email</small>
+                <div className="fw-bold">{selectedRequest.sellerBusinessEmail || 'N/A'}</div>
+              </div>
+              <div className="mb-3">
+                <small className="text-muted">Seller Business Phone</small>
+                <div className="fw-bold">{selectedRequest.sellerBusinessPhone || 'N/A'}</div>
+              </div>
 
               <hr />
 
@@ -512,7 +533,7 @@ function AdApproval() {
                                 return (
                                   <li key={i}>
                                     <strong>{b.quarter}</strong>
-                                    {b.start && b.end && ` (${new Date(b.start).toLocaleDateString()} – ${new Date(b.end).toLocaleDateString()})`}
+                                    {b.start && b.end && ` (${moment(b.start).format('D MMMM YYYY')} – ${moment(b.end).format('D MMMM YYYY')})`}
                                     : {b.days}d × ₹{b.rate_per_day}/d = ₹{b.subtotal}
                                   </li>
                                 );

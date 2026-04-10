@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import moment from 'moment';
 import { useHistory, useLocation } from 'react-router-dom';
 import { useQuery, useLazyQuery, useMutation, gql } from '@apollo/client';
 import { Card, Button, Row, Col, Alert, Spinner, Modal, ProgressBar } from 'react-bootstrap';
@@ -1585,7 +1586,7 @@ const Advertisement = () => {
               <span><strong>Estimated Total Price:</strong></span>
               <span className='h5 mb-0 fw-bold' style={{ color: '#0d6efd' }}>₹{computeTotalForSelectedSlots()}</span>
             </div>
-            <small className='text-muted'>{getDurationLabel(selectedDuration)} | {startPreference === 'today' ? 'Starting Today' : `Starting ${selectedStartQuarter || 'Next Quarter'}`}</small>
+            <small className='text-muted'>{getDurationLabel(selectedDuration)} | {startPreference === 'today' ? 'Starting Today' : `Starting ${moment(selectedStartQuarter).format('D MMMM YYYY') || 'Next Quarter'}`}</small>
           </Alert>
         )}
       </div>

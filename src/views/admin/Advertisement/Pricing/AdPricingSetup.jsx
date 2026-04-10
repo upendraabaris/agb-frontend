@@ -117,7 +117,7 @@ function AdPricingSetup() {
     pos3: 0.65,
     pos4: 0.5
   });
-  
+
   // Tier cascade settings
   const [isBaseTier, setIsBaseTier] = useState(false);
   const [tierMultipliers, setTierMultipliers] = useState({
@@ -155,7 +155,7 @@ function AdPricingSetup() {
       const existingConfig = configsData.getAllAdPricingConfigs.find(
         c => c.tier_id === selectedTierId
       );
-      
+
       if (existingConfig) {
         setBanner1Price(existingConfig.banner1_quarterly_price || 10000);
         setStamp1Price(existingConfig.stamp1_quarterly_price || 5000);
@@ -202,7 +202,7 @@ function AdPricingSetup() {
   // Generate preview prices
   useEffect(() => {
     const prices = [];
-    
+
     // Generate banner prices
     [1, 2, 3, 4].forEach(pos => {
       const multiplier = bannerMultipliers[`pos${pos}`] || 1;
@@ -216,7 +216,7 @@ function AdPricingSetup() {
         yearly: Math.round(basePrice * (durationMultipliers.yearly || 3.2))
       });
     });
-    
+
     // Generate stamp prices
     [1, 2, 3, 4].forEach(pos => {
       const multiplier = stampMultipliers[`pos${pos}`] || 1;
@@ -230,7 +230,7 @@ function AdPricingSetup() {
         yearly: Math.round(basePrice * (durationMultipliers.yearly || 3.2))
       });
     });
-    
+
     setPreviewPrices(prices);
   }, [banner1Price, stamp1Price, durationMultipliers, bannerMultipliers, stampMultipliers]);
 
@@ -295,7 +295,6 @@ function AdPricingSetup() {
   return (
     <>
       <HtmlHead title={title} description={description} />
-      
       {/* Title */}
       <div className="page-title-container">
         <Row className="g-0">
@@ -496,7 +495,7 @@ function AdPricingSetup() {
                       <CsLineIcons icon="layers" className="me-2" />
                       Tier Auto-Cascade Settings
                     </h6>
-                    
+
                     <Form.Check
                       type="checkbox"
                       id="is-base-tier"
@@ -505,13 +504,13 @@ function AdPricingSetup() {
                       onChange={(e) => setIsBaseTier(e.target.checked)}
                       className="mb-3"
                     />
-                    
+
                     {isBaseTier && (
                       <>
                         <small className="text-muted d-block mb-3">
                           Set multipliers to auto-calculate A2 and A3 prices based on A1 base price
                         </small>
-                        
+
                         <Row>
                           <Col md={4}>
                             <Form.Group className="mb-3">
@@ -563,7 +562,7 @@ function AdPricingSetup() {
                             </Form.Group>
                           </Col>
                         </Row>
-                        
+
                         <Form.Check
                           type="checkbox"
                           id="auto-cascade"
@@ -619,7 +618,7 @@ function AdPricingSetup() {
                   <CsLineIcons icon="eye" className="me-2" />
                   Preview: Generated Prices for {getSelectedTierName()}
                 </h5>
-                
+
                 <Table striped bordered hover responsive size="sm">
                   <thead>
                     <tr>
@@ -665,7 +664,7 @@ function AdPricingSetup() {
                 <CsLineIcons icon="database" className="me-2" />
                 Saved Pricing Configurations
               </h5>
-              
+
               {configsData?.getAllAdPricingConfigs?.length > 0 ? (
                 <Table striped bordered hover responsive>
                   <thead>
@@ -679,7 +678,7 @@ function AdPricingSetup() {
                   </thead>
                   <tbody>
                     {configsData.getAllAdPricingConfigs.map(config => (
-                      <tr 
+                      <tr
                         key={config.id}
                         className={config.tier_id === selectedTierId ? 'table-active' : ''}
                         onClick={() => setSelectedTierId(config.tier_id)}
@@ -698,8 +697,8 @@ function AdPricingSetup() {
                           </Badge>
                         </td>
                         <td>
-                          {config.updatedAt 
-                            ? new Date(config.updatedAt).toLocaleDateString() 
+                          {config.updatedAt
+                            ? new Date(config.updatedAt).toLocaleDateString()
                             : '-'}
                         </td>
                       </tr>
