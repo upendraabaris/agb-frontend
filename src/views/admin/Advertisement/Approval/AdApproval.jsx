@@ -279,7 +279,7 @@ function AdApproval() {
               variant={currentFilter === 'all' ? 'primary' : 'outline-primary'}
               onClick={() => handleFilterChange('all')}
             >
-              All
+              All ({requests.filter((r) => r.status === 'pending' || r.status === 'approved' || r.status === 'rejected').length})
             </Button>
             <Button
               variant={currentFilter === 'pending' ? 'warning' : 'outline-warning'}

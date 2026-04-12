@@ -134,6 +134,13 @@ function AdPricingSetup() {
   const { data: tiersData, loading: tiersLoading } = useQuery(GET_ALL_TIERS);
   const { data: configsData, loading: configsLoading, refetch: refetchConfigs } = useQuery(GET_ALL_PRICING_CONFIGS);
 
+  const getSelectedTierName = () => {
+    const tier = tiersData?.allAdTierMasters?.find(t => t.id === selectedTierId);
+    return tier?.name || '';
+  };
+
+  const isA1Selected = getSelectedTierName().toUpperCase() === 'A1';
+
   // Mutation
   const [upsertConfig, { loading: saving }] = useMutation(UPSERT_PRICING_CONFIG, {
     onCompleted: (response) => {
@@ -193,7 +200,7 @@ function AdPricingSetup() {
         setDurationMultipliers({ quarterly: 1.0, half_yearly: 1.8, yearly: 3.2 });
         setBannerMultipliers({ pos1: 1.0, pos2: 0.8, pos3: 0.65, pos4: 0.5 });
         setStampMultipliers({ pos1: 1.0, pos2: 0.8, pos3: 0.65, pos4: 0.5 });
-        setIsBaseTier(false);
+        setIsBaseTier(getSelectedTierName().toUpperCase() === "A1");
         setTierMultipliers({ A1: 1.0, A2: 0.85, A3: 0.70 });
       }
     }
@@ -279,10 +286,6 @@ function AdPricingSetup() {
     });
   };
 
-  const getSelectedTierName = () => {
-    const tier = tiersData?.allAdTierMasters?.find(t => t.id === selectedTierId);
-    return tier?.name || '';
-  };
 
   if (tiersLoading || configsLoading) {
     return (
@@ -489,99 +492,105 @@ function AdPricingSetup() {
                     </Row>
                   </div>
 
-                  {/* Tier Cascade Settings */}
-                  <div className="mb-4 p-3 bg-light rounded">
-                    <h6 className="text-muted mb-3">
-                      <CsLineIcons icon="layers" className="me-2" />
-                      Tier Auto-Cascade Settings
-                    </h6>
-
-                    <Form.Check
-                      type="checkbox"
-                      id="is-base-tier"
-                      label="This is the base tier (A1) - cascade prices to other tiers"
-                      checked={isBaseTier}
-                      onChange={(e) => setIsBaseTier(e.target.checked)}
-                      className="mb-3"
-                    />
-
-                    {isBaseTier && (
-                      <>
-                        <small className="text-muted d-block mb-3">
-                          Set multipliers to auto-calculate A2 and A3 prices based on A1 base price
-                        </small>
-
-                        <Row>
-                          <Col md={4}>
-                            <Form.Group className="mb-3">
-                              <Form.Label>A1 (Base: 100%)</Form.Label>
-                              <Form.Control
-                                type="number"
-                                step="0.05"
-                                value={tierMultipliers.A1}
-                                disabled
-                              />
-                            </Form.Group>
-                          </Col>
-                          <Col md={4}>
-                            <Form.Group className="mb-3">
-                              <Form.Label>A2 Multiplier</Form.Label>
-                              <Form.Control
-                                type="number"
-                                step="0.05"
-                                min="0"
-                                max="1"
-                                value={tierMultipliers.A2}
-                                onChange={(e) => setTierMultipliers({
-                                  ...tierMultipliers,
-                                  A2: e.target.value
-                                })}
-                              />
-                              <small className="text-muted">
-                                A2 Price: ₹{Math.round(banner1Price * tierMultipliers.A2)}
-                              </small>
-                            </Form.Group>
-                          </Col>
-                          <Col md={4}>
-                            <Form.Group className="mb-3">
-                              <Form.Label>A3 Multiplier</Form.Label>
-                              <Form.Control
-                                type="number"
-                                step="0.05"
-                                min="0"
-                                max="1"
-                                value={tierMultipliers.A3}
-                                onChange={(e) => setTierMultipliers({
-                                  ...tierMultipliers,
-                                  A3: e.target.value
-                                })}
-                              />
-                              <small className="text-muted">
-                                A3 Price: ₹{Math.round(banner1Price * tierMultipliers.A3)}
-                              </small>
-                            </Form.Group>
-                          </Col>
-                        </Row>
+                  {isA1Selected && (
+                    <>
+                      {/* Tier Cascade Settings */}
+                      <div className="mb-4 p-3 bg-light rounded">
+                        <h6 className="text-muted mb-3">
+                          <CsLineIcons icon="layers" className="me-2" />
+                          Tier Auto-Cascade Settings
+                        </h6>
 
                         <Form.Check
                           type="checkbox"
-                          id="auto-cascade"
-                          label="Auto-update A2 and A3 configs when saving"
-                          checked={autoCascade}
-                          onChange={(e) => setAutoCascade(e.target.checked)}
-                          className="mt-2"
+                          id="is-base-tier"
+                          label="This is the base tier (A1) - cascade prices to other tiers"
+                          checked={isBaseTier}
+                          onChange={(e) => setIsBaseTier(e.target.checked)}
+                          className="mb-3"
                         />
-                        {autoCascade && (
-                          <Alert variant="info" className="mt-2 mb-0 py-2">
-                            <small>
-                              <CsLineIcons icon="info-hexagon" className="me-1" size={14} />
-                              Saving will automatically update A2 and A3 pricing configs
+
+                        {isBaseTier && (
+                          <>
+                            <small className="text-muted d-block mb-3">
+                              Set multipliers to auto-calculate A2 and A3 prices based on A1 base price
                             </small>
-                          </Alert>
+
+                            <Row>
+                              <Col md={4}>
+                                <Form.Group className="mb-3">
+                                  <Form.Label>A1 (Base: 100%)</Form.Label>
+                                  <Form.Control
+                                    type="number"
+                                    step="0.05"
+                                    value={tierMultipliers.A1}
+                                    disabled
+                                  />
+                                </Form.Group>
+                              </Col>
+                              <Col md={4}>
+                                <Form.Group className="mb-3">
+                                  <Form.Label>A2 Multiplier</Form.Label>
+                                  <Form.Control
+                                    type="number"
+                                    step="0.05"
+                                    min="0"
+                                    max="1"
+                                    value={tierMultipliers.A2}
+                                    onChange={(e) => setTierMultipliers({
+                                      ...tierMultipliers,
+                                      A2: e.target.value
+                                    })}
+                                  />
+                                  <small className="text-muted">
+                                    A2 Price: ₹{Math.round(banner1Price * tierMultipliers.A2)}
+                                  </small>
+                                </Form.Group>
+                              </Col>
+                              <Col md={4}>
+                                <Form.Group className="mb-3">
+                                  <Form.Label>A3 Multiplier</Form.Label>
+                                  <Form.Control
+                                    type="number"
+                                    step="0.05"
+                                    min="0"
+                                    max="1"
+                                    value={tierMultipliers.A3}
+                                    onChange={(e) => setTierMultipliers({
+                                      ...tierMultipliers,
+                                      A3: e.target.value
+                                    })}
+                                  />
+                                  <small className="text-muted">
+                                    A3 Price: ₹{Math.round(banner1Price * tierMultipliers.A3)}
+                                  </small>
+                                </Form.Group>
+                              </Col>
+                            </Row>
+
+                            <Form.Check
+                              type="checkbox"
+                              id="auto-cascade"
+                              label="Auto-update A2 and A3 configs when saving"
+                              checked={autoCascade}
+                              onChange={(e) => setAutoCascade(e.target.checked)}
+                              className="mt-2"
+                            />
+                            {autoCascade && (
+                              <Alert variant="info" className="mt-2 mb-0 py-2">
+                                <small>
+                                  <CsLineIcons icon="info-hexagon" className="me-1" size={14} />
+                                  Saving will automatically update A2 and A3 pricing configs
+                                </small>
+                              </Alert>
+                            )}
+                          </>
                         )}
-                      </>
-                    )}
-                  </div>
+                      </div>
+                    </>
+                  )}
+
+
 
                   {/* Save Button */}
                   <Button

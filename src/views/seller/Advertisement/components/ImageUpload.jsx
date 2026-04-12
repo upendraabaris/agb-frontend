@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Form, Row, Col, Card, InputGroup, ListGroup } from 'react-bootstrap';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
 
-const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSlotMediaChange = () => {}, sellerProducts = [], adSettings = {}, userRoles = [] }) => {
+const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSlotMediaChange = () => { }, sellerProducts = [], adSettings = {}, userRoles = [] }) => {
   const [productSearch, setProductSearch] = useState({});
   const [showDropdown, setShowDropdown] = useState({});
   // Per-slot, per-device inline validation errors
@@ -307,7 +307,7 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
                             onFocus={() => setShowDropdown((prev) => ({ ...prev, [slot]: true }))}
                           />
                         </InputGroup>
-                        {showDropdown[slot] && sellerProducts.length > 0 && (
+                        {showDropdown[slot] && (
                           <ListGroup
                             style={{
                               position: 'absolute',
@@ -320,31 +320,45 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
                               boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
                             }}
                           >
-                            {getFilteredProducts(slot).map((product) => (
-                              <ListGroup.Item
-                                key={product.id}
-                                action
-                                onClick={() => handleProductSelect(slot, product)}
-                                style={{ cursor: 'pointer' }}
-                              >
-                                <div className='d-flex align-items-center'>
-                                  {product.thumbnail && (
-                                    <img
-                                      src={product.thumbnail}
-                                      alt=''
-                                      style={{ width: '30px', height: '30px', objectFit: 'cover', marginRight: '10px' }}
-                                    />
-                                  )}
-                                  <div>
-                                    <div className='fw-bold'>{product.previewName || product.fullName}</div>
-                                    <small className='text-muted'>{product.identifier}</small>
+                            {(() => {
+                              const filtered = getFilteredProducts(slot);
+                              if (filtered.length === 0) {
+                                return (
+                                  <ListGroup.Item className='text-center py-3 text-muted'>
+                                    <div className='mb-1'>
+                                      <CsLineIcons icon='warning' size={18} />
+                                    </div>
+                                    {productSearch[slot] ? 'No matching products found' : 'No products available for selection'}
+                                  </ListGroup.Item>
+                                );
+                              }
+                              return filtered.map((product) => (
+                                <ListGroup.Item
+                                  key={product.id}
+                                  action
+                                  onClick={() => handleProductSelect(slot, product)}
+                                  style={{ cursor: 'pointer' }}
+                                >
+                                  <div className='d-flex align-items-center'>
+                                    {product.thumbnail && (
+                                      <img
+                                        src={product.thumbnail}
+                                        alt=''
+                                        style={{ width: '30px', height: '30px', objectFit: 'cover', marginRight: '10px' }}
+                                      />
+                                    )}
+                                    <div className='overflow-hidden'>
+                                      <div className='fw-bold text-truncate' style={{ fontSize: '0.85rem' }}>
+                                        {product.previewName || product.fullName || 'Unnamed Product'}
+                                      </div>
+                                      <small className='text-muted d-block text-truncate' style={{ fontSize: '0.7rem' }}>
+                                        {product.identifier || '(No Identifier)'}
+                                      </small>
+                                    </div>
                                   </div>
-                                </div>
-                              </ListGroup.Item>
-                            ))}
-                            {getFilteredProducts(slot).length === 0 && (
-                              <ListGroup.Item className='text-muted'>No products found</ListGroup.Item>
-                            )}
+                                </ListGroup.Item>
+                              ));
+                            })()}
                           </ListGroup>
                         )}
                         {media.redirectUrl && (

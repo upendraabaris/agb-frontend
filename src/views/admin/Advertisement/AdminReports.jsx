@@ -5,6 +5,7 @@ import { Spinner, Table, Form, Button, Nav, Tab } from 'react-bootstrap';
 import { ArrowDownTrayIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import HtmlHead from 'components/html-head/HtmlHead';
 import BreadcrumbList from 'components/breadcrumb-list/BreadcrumbList';
+import moment from 'moment';
 
 // ==========================================
 // GraphQL Queries
@@ -443,7 +444,7 @@ const AdminReports = () => {
             <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4 border-bottom pb-3 d-print-none">
               <div>
                 <h1 className="h3 fw-bold text-dark mb-1">Advertisement Performance Report</h1>
-                <p className="text-muted small mb-0">Generated on: {formatDate(new Date())}</p>
+                <p className="text-muted small mb-0">Generated on: {moment(new Date()).format('D MMMM YYYY')}</p>
               </div>
 
               <div className="d-flex gap-2 mt-3 mt-md-0">
@@ -770,7 +771,7 @@ const AdminReports = () => {
                                 <td>{item.sellerEmail}</td>
                                 <td>{item.categoryName}</td>
                                 <td>{item.tierName}</td>
-                                <td>{formatDate(item.requestDate)}</td>
+                                <td>{moment(item.requestDate).format('D MMMM YYYY')}</td>
                                 <td className="text-center">{item.slotsRequested}</td>
                               </tr>
                             ))}
@@ -1166,7 +1167,7 @@ const AdminReports = () => {
                                 <td>{item.sellerEmail}</td>
                                 <td>{item.productName}</td>
                                 <td>{item.tierName}</td>
-                                <td>{formatDate(item.requestDate)}</td>
+                                <td>{moment(item.requestDate).format('D MMMM YYYY')}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -1231,8 +1232,8 @@ const AdminReports = () => {
                         </Table>
                         {(!productAdExpiryQuery.data?.getAdminProductAdExpiryUpcoming ||
                           productAdExpiryQuery.data.getAdminProductAdExpiryUpcoming.length === 0) && (
-                          <div className="alert alert-info">No product ads expiring in the next {productAdExpiryDays} days</div>
-                        )}
+                            <div className="alert alert-info">No product ads expiring in the next {productAdExpiryDays} days</div>
+                          )}
                         <Button
                           variant="link"
                           size="sm"
