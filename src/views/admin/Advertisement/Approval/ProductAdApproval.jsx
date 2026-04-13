@@ -161,6 +161,11 @@ function ProductAdApproval() {
 
     // ─── Handlers ─────────────────────────────────────────────────────────────
 
+    const handleFilterChange = (newFilter) => {
+        setCurrentFilter(newFilter);
+        setSelectedRequest(null);
+    };
+
     const handleApprove = () => {
         if (!approvalDate) { toast.error('Please select a start date'); return; }
         approveProductAd({
@@ -204,7 +209,7 @@ function ProductAdApproval() {
 
             {/* Filter bar */}
             <Card className="mb-3">
-                <Card.Body>
+                {/* <Card.Body>
                     <div className="d-flex gap-2 flex-wrap">
                         {['all', 'pending', 'approved', 'rejected'].map((f) => (
                             <Button
@@ -216,6 +221,34 @@ function ProductAdApproval() {
                                 {f !== 'all' && ` (${requests.filter((r) => r.status === f).length})`}
                             </Button>
                         ))}
+                    </div>
+                </Card.Body> */}
+                <Card.Body>
+                    <div className="d-flex gap-2 flex-wrap">
+                        <Button
+                            variant={currentFilter === 'all' ? 'primary' : 'outline-primary'}
+                            onClick={() => handleFilterChange('all')}
+                        >
+                            All ({requests.filter((r) => r.status === 'pending' || r.status === 'approved' || r.status === 'rejected').length})
+                        </Button>
+                        <Button
+                            variant={currentFilter === 'pending' ? 'warning' : 'outline-warning'}
+                            onClick={() => handleFilterChange('pending')}
+                        >
+                            Pending ({requests.filter((r) => r.status === 'pending').length})
+                        </Button>
+                        <Button
+                            variant={currentFilter === 'approved' ? 'success' : 'outline-success'}
+                            onClick={() => handleFilterChange('approved')}
+                        >
+                            Approved ({requests.filter((r) => r.status === 'approved').length})
+                        </Button>
+                        <Button
+                            variant={currentFilter === 'rejected' ? 'danger' : 'outline-danger'}
+                            onClick={() => handleFilterChange('rejected')}
+                        >
+                            Rejected ({requests.filter((r) => r.status === 'rejected').length})
+                        </Button>
                     </div>
                 </Card.Body>
             </Card>

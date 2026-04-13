@@ -4,6 +4,7 @@ import { Card, Row, Col, Form, Button, Spinner, Alert } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import HtmlHead from 'components/html-head/HtmlHead';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
+import moment from 'moment';
 
 // ─── GraphQL ─────────────────────────────────────────────────────────────────
 
@@ -162,7 +163,7 @@ const AdUrlSettings = () => {
 
             {data?.getAdSettings?.updatedAt && (
               <div className="mt-3 text-muted" style={{ fontSize: '0.8rem' }}>
-                Last updated: {new Date(data.getAdSettings.updatedAt).toLocaleString('en-IN')}
+                Last updated: {moment(data.updatedAt).format('D MMMM YYYY')}
               </div>
             )}
           </Card.Body>

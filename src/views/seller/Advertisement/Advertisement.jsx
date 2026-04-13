@@ -360,108 +360,6 @@ const Advertisement = () => {
     (cat) => cat.id === selectedCategory
   );
 
-  const handleCategoryChange = (categoryId) => {
-    setSelectedCategory(categoryId);
-    setSelectedSlots([]);
-    setSlotMedia({});
-    setSelectedCategories([categoryId]);
-    setCategoryPricingMap({});
-    setUseSharedMedia(true);
-    setSharedSlotMedia({});
-    setPerCategorySlotMedia({});
-    setShowWizardModal(true);
-    setCurrentWizardStep(1);
-  };
-
-  // Toggle a category in/out of multi-selection
-  const handleToggleCategory = async (categoryId) => {
-    if (selectedCategories.includes(categoryId)) {
-      if (categoryId === selectedCategory) {
-        toast.info('Cannot remove the primary category');
-        return;
-      }
-      setSelectedCategories(prev => prev.filter(id => id !== categoryId));
-      setCategoryPricingMap(prev => { const copy = { ...prev }; delete copy[categoryId]; return copy; });
-      setPerCategorySlotMedia(prev => { const copy = { ...prev }; delete copy[categoryId]; return copy; });
-    } else {
-      setSelectedCategories(prev => {
-        if (prev.includes(categoryId)) return prev;
-        return [...prev, categoryId];
-      });
-      try {
-        const { data } = await fetchCategoryPricing({ variables: { categoryId } });
-        if (data?.getCategoryPricing) {
-          setCategoryPricingMap(prev => ({ ...prev, [categoryId]: data.getCategoryPricing }));
-        }
-      } catch (e) {
-        toast.error('Failed to fetch pricing for category');
-      }
-    }
-  };
-
-  const handleWizardNext = () => {
-    if (currentWizardStep < 4) {
-      setCurrentWizardStep(currentWizardStep + 1);
-    }
-  };
-
-  const handleWizardPrevious = () => {
-    if (currentWizardStep > 1) {
-      setCurrentWizardStep(currentWizardStep - 1);
-    }
-  };
-
-  const handleWizardClose = () => {
-    setShowWizardModal(false);
-    setCurrentWizardStep(1);
-    setSelectedCategory('');
-    setSelectedDuration(90);
-    setStartPreference('today');
-    setSelectedStartQuarter(null);
-    setSelectedSlots([]);
-    setSlotMedia({});
-    setSelectedCategories([]);
-    setCategoryPricingMap({});
-    setShowCategoryPicker(false);
-    setMultiCatSearch('');
-    setUseSharedMedia(true);
-    setSharedSlotMedia({});
-    setPerCategorySlotMedia({});
-    setCouponInput('');
-    setAppliedCoupon(null);
-    setCouponError('');
-  };
-
-  // Get media for a specific category and slot
-  const getMediaForCategorySlot = (categoryId, slot) => {
-    if (useSharedMedia) return sharedSlotMedia[slot] || {};
-    return perCategorySlotMedia[categoryId]?.[slot] || {};
-  };
-
-  // Get all categories with their data for images/review
-  const getAllCategoriesForImages = () => {
-    return selectedCategories.map(catId => {
-      const catData = allCategories.find(c => c.id === catId);
-      const media = {};
-      selectedSlots.forEach(slot => {
-        media[slot] = getMediaForCategorySlot(catId, slot);
-      });
-      return {
-        categoryId: catId,
-        categoryName: catData?.name || 'Unknown',
-        slots: [...selectedSlots],
-        slotMedia: media,
-        pricingData: catId === selectedCategory
-          ? (pricingData?.getCategoryPricing || categoryPricingMap[catId] || null)
-          : (categoryPricingMap[catId] || null),
-      };
-    });
-  };
-
-  const handleDurationChange = (duration) => {
-    setSelectedDuration(duration);
-  };
-
   // Duration helpers to avoid nested ternaries
   const QUARTER_MAP = { 360: 4, 180: 2, 90: 1 };
   const DURATION_LABEL_MAP = { 360: 'Yearly', 180: 'Half-Yearly', 90: 'Quarterly' };
@@ -518,13 +416,6 @@ const Advertisement = () => {
     let coveredQuarters = [];
     if (startPreference === 'today') {
       // "Today" means current quarter + (numQ - 0) full quarters (current partial + numQ full)
-      // Actually: today mode covers current quarter remaining + numQ full quarters
-      // So it spans current quarter + next numQ quarters
-      // For availability check, we need current + next numQ-1 quarters to be considered
-      // But the pricing logic shows today covers current quarter + numQ full quarters after
-      // So we need current quarter + numQ more = numQ+1 quarters total for overlap
-      // Simplify: current quarter is partially used, then numQ full quarters
-      // The booking overlaps current + next numQ quarters
       const selectableQ = getSelectableQuarters();
       coveredQuarters = selectableQ.slice(0, numQ + 1); // current + numQ full
     } else if (selectedStartQuarter) {
@@ -821,6 +712,147 @@ const Advertisement = () => {
     });
     return total;
   };
+
+  const handleCategoryChange = (categoryId) => {
+    setSelectedCategory(categoryId);
+    setSelectedSlots([]);
+    setSlotMedia({});
+    setSelectedCategories([categoryId]);
+    setCategoryPricingMap({});
+    setUseSharedMedia(true);
+    setSharedSlotMedia({});
+    setPerCategorySlotMedia({});
+    setShowWizardModal(true);
+    setCurrentWizardStep(1);
+  };
+
+  // Toggle a category in/out of multi-selection
+  const handleToggleCategory = async (categoryId) => {
+    if (selectedCategories.includes(categoryId)) {
+      if (categoryId === selectedCategory) {
+        toast.info('Cannot remove the primary category');
+        return;
+      }
+      setSelectedCategories(prev => prev.filter(id => id !== categoryId));
+      setCategoryPricingMap(prev => { const copy = { ...prev }; delete copy[categoryId]; return copy; });
+      setPerCategorySlotMedia(prev => { const copy = { ...prev }; delete copy[categoryId]; return copy; });
+    } else {
+      setSelectedCategories(prev => {
+        if (prev.includes(categoryId)) return prev;
+        return [...prev, categoryId];
+      });
+      try {
+        const { data } = await fetchCategoryPricing({ variables: { categoryId } });
+        if (data?.getCategoryPricing) {
+          setCategoryPricingMap(prev => ({ ...prev, [categoryId]: data.getCategoryPricing }));
+        }
+      } catch (e) {
+        toast.error('Failed to fetch pricing for category');
+      }
+    }
+  };
+
+  const handleWizardNext = () => {
+    if (currentWizardStep === 2) {
+      // Final availability check before moving to images
+      const selectableQ = getSelectableQuarters();
+      const numQ = getNumQuarters(selectedDuration);
+      let coveredLabels = [];
+      if (startPreference === 'today') {
+        coveredLabels = selectableQ.slice(0, numQ + 1).map(q => q.label);
+      } else if (selectedStartQuarter) {
+        const startIdx = selectableQ.findIndex(q => q.startDate === selectedStartQuarter);
+        coveredLabels = selectableQ.slice(startIdx >= 0 ? startIdx : 0, (startIdx >= 0 ? startIdx : 0) + numQ).map(q => q.label);
+      } else {
+        coveredLabels = selectableQ.slice(0, numQ).map(q => q.label);
+      }
+
+      const invalidCategories = selectedCategories.filter(catId => {
+        const cat = allCategories.find(c => c.id === catId);
+        if (!cat || !cat.quarterAvailability) return false;
+        
+        return selectedSlots.some(slot => {
+          return coveredLabels.some(label => {
+            const qaEntry = cat.quarterAvailability.find(q => q.quarter === label);
+            if (qaEntry) {
+              const slotEntry = qaEntry.slots?.find(s => s.slot === slot);
+              return slotEntry && !slotEntry.available;
+            }
+            return false;
+          });
+        });
+      });
+
+      if (invalidCategories.length > 0) {
+        const names = invalidCategories.map(id => allCategories.find(c => c.id === id)?.name).join(', ');
+        toast.error(`Slots for the selected period are occupied in: ${names}. Please remove these categories or change slots.`);
+        return;
+      }
+    }
+
+    if (currentWizardStep < 4) {
+      setCurrentWizardStep(currentWizardStep + 1);
+    }
+  };
+
+  const handleWizardPrevious = () => {
+    if (currentWizardStep > 1) {
+      setCurrentWizardStep(currentWizardStep - 1);
+    }
+  };
+
+  const handleWizardClose = () => {
+    setShowWizardModal(false);
+    setCurrentWizardStep(1);
+    setSelectedCategory('');
+    setSelectedDuration(90);
+    setStartPreference('today');
+    setSelectedStartQuarter(null);
+    setSelectedSlots([]);
+    setSlotMedia({});
+    setSelectedCategories([]);
+    setCategoryPricingMap({});
+    setShowCategoryPicker(false);
+    setMultiCatSearch('');
+    setUseSharedMedia(true);
+    setSharedSlotMedia({});
+    setPerCategorySlotMedia({});
+    setCouponInput('');
+    setAppliedCoupon(null);
+    setCouponError('');
+  };
+
+  // Get media for a specific category and slot
+  const getMediaForCategorySlot = (categoryId, slot) => {
+    if (useSharedMedia) return sharedSlotMedia[slot] || {};
+    return perCategorySlotMedia[categoryId]?.[slot] || {};
+  };
+
+  // Get all categories with their data for images/review
+  const getAllCategoriesForImages = () => {
+    return selectedCategories.map(catId => {
+      const catData = allCategories.find(c => c.id === catId);
+      const media = {};
+      selectedSlots.forEach(slot => {
+        media[slot] = getMediaForCategorySlot(catId, slot);
+      });
+      return {
+        categoryId: catId,
+        categoryName: catData?.name || 'Unknown',
+        slots: [...selectedSlots],
+        slotMedia: media,
+        pricingData: catId === selectedCategory
+          ? (pricingData?.getCategoryPricing || categoryPricingMap[catId] || null)
+          : (categoryPricingMap[catId] || null),
+      };
+    });
+  };
+
+  const handleDurationChange = (duration) => {
+    setSelectedDuration(duration);
+  };
+
+
 
   const handlePreview = () => {
     const allCats = getAllCategoriesForImages();
@@ -1174,15 +1206,24 @@ const Advertisement = () => {
                             className='badge'
                             title={`${q.label}\nBanners: ${q.slots.filter(s => s.slot.startsWith('banner') && s.available).length}/4 free\nStamps: ${q.slots.filter(s => s.slot.startsWith('stamp') && s.available).length}/4 free`}
                             style={{
-                              backgroundColor: (() => { if (allBooked) return '#dc3545'; return availCount <= 4 ? '#ffc107' : '#28a745'; })(),
+                              backgroundColor: (() => { 
+                                if (allBooked) return '#dc3545'; // Red (Full)
+                                if (availCount <= 2) return '#fd7e14'; // Orange (Low)
+                                if (availCount <= 5) return '#ffc107'; // Yellow (Medium)
+                                return '#28a745'; // Green (Available)
+                              })(),
                               fontSize: '0.65rem',
                               padding: '0.2rem 0.4rem',
                               borderRadius: '3px',
-                              color: (() => { if (allBooked) return '#fff'; return availCount <= 4 ? '#333' : '#fff'; })(),
+                              color: (() => { 
+                                if (allBooked) return '#fff'; 
+                                if (availCount <= 5) return '#333'; 
+                                return '#fff'; 
+                              })(),
                               cursor: 'default',
                             }}
                           >
-                            {q.quarter}: {availCount}/8
+                            {q.quarter}: {allBooked ? 'FULL' : `${availCount}/8`}
                           </span>
                         );
                       })}
@@ -1633,12 +1674,50 @@ const Advertisement = () => {
           {list.map(cat => {
             const isSelected = selectedCategories.includes(cat.id);
             const isPrimary = cat.id === selectedCategory;
+            
+            // Check if currently selected slots are available in THIS category for the selected quarters
+            const conflicts = selectedSlots.filter(slot => {
+              const qa = cat.quarterAvailability;
+              if (!qa) return false;
+              
+              // Helper to get covered quarters (logic extracted from isSlotAvailableForSelection)
+              const numQ = getNumQuarters(selectedDuration);
+              let coveredLabels = [];
+              const selectableQ = getSelectableQuarters();
+              if (startPreference === 'today') {
+                coveredLabels = selectableQ.slice(0, numQ + 1).map(q => q.label);
+              } else if (selectedStartQuarter) {
+                const startIdx = selectableQ.findIndex(q => q.startDate === selectedStartQuarter);
+                coveredLabels = selectableQ.slice(startIdx >= 0 ? startIdx : 0, (startIdx >= 0 ? startIdx : 0) + numQ).map(q => q.label);
+              } else {
+                coveredLabels = selectableQ.slice(0, numQ).map(q => q.label);
+              }
+
+              return coveredLabels.some(label => {
+                const qaEntry = qa.find(q => q.quarter === label);
+                if (qaEntry) {
+                  const slotEntry = qaEntry.slots?.find(s => s.slot === slot);
+                  return slotEntry && !slotEntry.available;
+                }
+                return false;
+              });
+            });
+
+            const hasConflict = conflicts.length > 0;
+
             return (
               <div
                 key={cat.id}
-                className={`d-flex justify-content-between align-items-center p-2 border-bottom ${isSelected ? 'bg-light' : ''}`}
-                style={{ cursor: isPrimary ? 'default' : 'pointer' }}
-                onClick={() => !isPrimary && handleToggleCategory(cat.id)}
+                className={`d-flex justify-content-between align-items-center p-2 border-bottom ${isSelected ? 'bg-light' : ''} ${hasConflict ? 'opacity-75' : ''}`}
+                style={{ cursor: (isPrimary || hasConflict) ? 'not-allowed' : 'pointer' }}
+                onClick={() => {
+                  if (isPrimary) return;
+                  if (hasConflict) {
+                    toast.warning(`Cannot select ${cat.name}: ${conflicts.map(getSlotDisplayName).join(', ')} occupied in selected period.`);
+                    return;
+                  }
+                  handleToggleCategory(cat.id);
+                }}
                 onKeyDown={e => e.key === 'Enter' && !isPrimary && handleToggleCategory(cat.id)}
                 role='button'
                 tabIndex={0}
@@ -1647,15 +1726,25 @@ const Advertisement = () => {
                   <input
                     type='checkbox'
                     checked={isSelected}
-                    onChange={() => !isPrimary && handleToggleCategory(cat.id)}
-                    disabled={isPrimary}
+                    onChange={() => {
+                      if (isPrimary || hasConflict) return;
+                      handleToggleCategory(cat.id);
+                    }}
+                    disabled={isPrimary || hasConflict}
                     style={{ width: '16px', height: '16px' }}
                   />
                   <div>
                     <strong style={{ fontSize: '0.85rem' }}>{cat.name}</strong>
                     {isPrimary && <span className='badge bg-secondary ms-1' style={{ fontSize: '0.6rem' }}>Primary</span>}
+                    {hasConflict && (
+                      <span className='badge bg-danger ms-1' style={{ fontSize: '0.6rem' }}>
+                        Slot Occupied
+                      </span>
+                    )}
                     <div className='d-flex gap-1 mt-1'>
-                      <span className='badge bg-success' style={{ fontSize: '0.65rem' }}>{cat.availableSlots || 0}/8 free</span>
+                      <span className={`badge ${cat.availableSlots === 0 ? 'bg-danger' : 'bg-success'}`} style={{ fontSize: '0.65rem' }}>
+                        {cat.availableSlots === 0 ? 'FULL' : `${cat.availableSlots || 0}/8 free`}
+                      </span>
                       <span className='badge bg-info' style={{ fontSize: '0.65rem' }}>{cat.tierId?.name || 'Tier'}</span>
                     </div>
                   </div>
