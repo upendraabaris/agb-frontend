@@ -112,6 +112,8 @@ function AdApproval() {
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [allRequests, setAllRequests] = useState([]);
+  const [approvalDateType, setApprovalDateType] = useState('today');
+  const [customStartDate, setCustomStartDate] = useState(moment().format('YYYY-MM-DD'));
 
   const [availabilityResult, setAvailabilityResult] = useState(null);
   const [checkAvailability, { loading: checkingAvailability }] = useLazyQuery(
@@ -215,6 +217,7 @@ function AdApproval() {
       variables: {
         input: {
           requestId: selectedRequest.id,
+          customStartDate: approvalDateType === 'custom' ? customStartDate : null,
         },
       },
     });
@@ -651,6 +654,43 @@ function AdApproval() {
                         </div>
                       )}
                     </div>
+                  )}
+
+                  <hr />
+                  <h6 className="mb-3">Approval Settings</h6>
+                  <Form.Group className="mb-3">
+                    <Form.Check
+                      type="radio"
+                      id="approve-today"
+                      // label="Start Today (Recalculate pro-rata)"
+                      label="Start Today"
+                      name="approvalDateType"
+                      checked={approvalDateType === 'today'}
+                      onChange={() => setApprovalDateType('today')}
+                    />
+                    <Form.Check
+                      type="radio"
+                      id="approve-custom"
+                      label="Start from Custom Date"
+                      name="approvalDateType"
+                      checked={approvalDateType === 'custom'}
+                      onChange={() => setApprovalDateType('custom')}
+                    />
+                  </Form.Group>
+
+                  {approvalDateType === 'custom' && (
+                    <Form.Group className="mb-3">
+                      <Form.Label>Select Custom Start Date</Form.Label>
+                      <Form.Control
+                        type="date"
+                        value={customStartDate}
+                        onChange={(e) => setCustomStartDate(e.target.value)}
+                        min={moment().format('YYYY-MM-DD')}
+                      />
+                      <Form.Text className="text-muted">
+                        Ad dates and pricing will be recalculated automatically starting from this date.
+                      </Form.Text>
+                    </Form.Group>
                   )}
                 </div>
               )}
