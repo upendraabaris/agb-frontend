@@ -586,8 +586,8 @@ const ProductAdvertisement = () => {
 
     if (type === 'mobile') {
       // Mobile Dimensions
-      requiredWidth = slotType === 'banner' ? 1000 : 600;
-      requiredHeight = slotType === 'banner' ? 500 : 600;
+      requiredWidth = slotType === 'banner' ? 2000 : 600;
+      requiredHeight = slotType === 'banner' ? 300 : 600;
     } else {
       // Desktop Dimensions
       requiredWidth = slotType === 'banner' ? 2000 : 1000;
@@ -644,7 +644,9 @@ const ProductAdvertisement = () => {
   const canGoToStep4 =
     selectedSlots.every((slot) => {
       const m = slotMedia[slot] || {};
-      return (m.mobileFile || m.mobilePreview || m.desktopFile || m.desktopPreview) && m.redirectUrl?.trim();
+      const hasMobile = m.mobileFile || m.mobilePreview;
+      const hasDesktop = m.desktopFile || m.desktopPreview;
+      return hasMobile && hasDesktop && m.redirectUrl?.trim();
     }) && selectedSlots.length > 0;
 
   // ── Submit ───────────────────────────────────────────────────────────
@@ -817,6 +819,52 @@ const ProductAdvertisement = () => {
                 })}
               </tbody>
             </Table>
+
+            {/* Pro-rata explanation — shown only when current quarter is selected */}
+            {(() => {
+              const today = new Date();
+              const currentQStartMonth = Math.floor(today.getMonth() / 3) * 3;
+              const currentQIsoDate = `${today.getFullYear()}-${String(currentQStartMonth + 1).padStart(2, '0')}-01`;
+              const isCurrentQuarter = !selectedStartQuarter || selectedStartQuarter === currentQIsoDate;
+
+              if (!isCurrentQuarter) return null;
+
+              const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+              const qEnd = getQuarterEnd(todayUTC);
+              const remainingDays = Math.floor((qEnd - todayUTC) / (24 * 60 * 60 * 1000)) + 1;
+              const qEndFmt = qEnd.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+              const nextQStart = getNextQuarterStart(today);
+              const nextQEnd = getQuarterEnd(nextQStart);
+              const nextQStartFmt = nextQStart.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+              const nextQEndFmt = nextQEnd.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+              return (
+                <div
+                  className="mt-3 p-3 rounded d-flex gap-2"
+                  style={{ background: '#fff8e1', border: '1px solid #ffe082', fontSize: '0.82rem' }}
+                >
+                  <span style={{ fontSize: '1rem' }}>ℹ️</span>
+                  <div>
+                    <strong>Why is this price higher?</strong>
+                    <div className="mt-1 text-muted">
+                      Starting <strong>today</strong> means your ad goes live immediately. The price shown includes:
+                    </div>
+                    <ul className="mb-1 mt-1 ps-3" style={{ lineHeight: 1.7 }}>
+                      <li>
+                        <strong>Pro-rata charge</strong> — {remainingDays} remaining day{remainingDays !== 1 ? 's' : ''} of the
+                        current quarter (today → {qEndFmt})
+                      </li>
+                      <li>
+                        <strong>Full next quarter</strong> — {nextQStartFmt} → {nextQEndFmt}
+                      </li>
+                    </ul>
+                    <div className="text-muted">
+                      To pay only the base quarterly price, select a <strong>future quarter</strong> below.
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
         {!pricingLoading && !pricingData && (
@@ -963,9 +1011,9 @@ const ProductAdvertisement = () => {
             {/* Mobile Image */}
             {/* Example for Mobile Image (Desktop ke liye bhi same hoga) */}
             <Col md={6}>
-              <Form.Label className="small fw-bold">Mobile Image</Form.Label>
+              <Form.Label className="small fw-bold">Mobile Image <span className="text-danger">*</span></Form.Label>
               <div className="text-muted" style={{ fontSize: '0.65rem', marginBottom: '4px' }}>
-                {slot.startsWith('banner') ? '1000×500px' : '600×600px'} | Max 500KB
+                {slot.startsWith('banner') ? '2000×300px' : '600×600px'} | Max 500KB
               </div>
 
               {slotMedia[slot]?.mobilePreview && (
@@ -989,7 +1037,7 @@ const ProductAdvertisement = () => {
 
             {/* Desktop Image */}
             <Col md={6}>
-              <Form.Label className="small fw-bold">Desktop Image</Form.Label>
+              <Form.Label className="small fw-bold">Desktop Image <span className="text-danger">*</span></Form.Label>
               <div className="text-muted" style={{ fontSize: '0.65rem', marginBottom: '4px' }}>
                 {slot.startsWith('banner') ? '2000×300px' : '1000×500px'} | Max 500KB
               </div>
