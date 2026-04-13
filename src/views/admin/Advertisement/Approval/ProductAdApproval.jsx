@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, gql } from '@apollo/client';
-import { Row, Col, Card, Button, Badge, Modal, Form, Spinner, Alert, Table } from 'react-bootstrap';
+import { Row, Col, Card, Button, Badge, Modal, Form, Spinner, Alert, Table, Pagination } from 'react-bootstrap';
 import moment from 'moment';
 import { toast } from 'react-toastify';
 import { NavLink } from 'react-router-dom';
@@ -107,7 +107,9 @@ function ProductAdApproval() {
     const title = 'Product Ad Approvals';
     const description = 'Review and approve seller product-level advertisements';
 
+    const ITEMS_PER_PAGE = 10;
     const [currentFilter, setCurrentFilter] = useState('pending');
+    const [currentPage, setCurrentPage] = useState(1);
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [showApprovalModal, setShowApprovalModal] = useState(false);
     const [showRejectionModal, setShowRejectionModal] = useState(false);
@@ -123,6 +125,12 @@ function ProductAdApproval() {
     const requests = data?.getProductAdRequestsForApproval || [];
 
     const displayRequests = currentFilter === 'all' ? requests : requests.filter((r) => r.status === currentFilter);
+
+    const totalPages = Math.ceil(displayRequests.length / ITEMS_PER_PAGE);
+    const paginatedRequests = displayRequests.slice(
+        (currentPage - 1) * ITEMS_PER_PAGE,
+        currentPage * ITEMS_PER_PAGE
+    );
 
 
 
@@ -215,7 +223,7 @@ function ProductAdApproval() {
                             <Button
                                 key={f}
                                 variant={getFilterVariant(f, currentFilter === f)}
-                                onClick={() => setCurrentFilter(f)}
+                                onClick={() => { setCurrentFilter(f); setCurrentPage(1); }}
                             >
                                 {f.charAt(0).toUpperCase() + f.slice(1)}
                                 {f !== 'all' && ` (${requests.filter((r) => r.status === f).length})`}
@@ -292,7 +300,7 @@ function ProductAdApproval() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {displayRequests.map((req) => {
+                                    {paginatedRequests.map((req) => {
                                         const firstMedia = req.medias?.[0];
                                         const firstDuration = req.durations?.[0];
                                         return (
@@ -385,6 +393,41 @@ function ProductAdApproval() {
                                     })}
                                 </tbody>
                             </Table>
+                        </div>
+                    )}
+
+                    {/* Pagination */}
+                    {!loading && totalPages > 1 && (
+                        <div className="d-flex justify-content-between align-items-center mt-3">
+                            <small className="text-muted">
+                                Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, displayRequests.length)} of {displayRequests.length}
+                            </small>
+                            <Pagination className="mb-0">
+                                <Pagination.First onClick={() => setCurrentPage(1)} disabled={currentPage === 1} />
+                                <Pagination.Prev onClick={() => setCurrentPage((p) => p - 1)} disabled={currentPage === 1} />
+                                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
+                                    .reduce((acc, p, idx, arr) => {
+                                        if (idx > 0 && p - arr[idx - 1] > 1) acc.push('ellipsis');
+                                        acc.push(p);
+                                        return acc;
+                                    }, [])
+                                    .map((item, idx) =>
+                                        item === 'ellipsis' ? (
+                                            <Pagination.Ellipsis key={`e-${idx}`} disabled />
+                                        ) : (
+                                            <Pagination.Item
+                                                key={item}
+                                                active={item === currentPage}
+                                                onClick={() => setCurrentPage(item)}
+                                            >
+                                                {item}
+                                            </Pagination.Item>
+                                        )
+                                    )}
+                                <Pagination.Next onClick={() => setCurrentPage((p) => p + 1)} disabled={currentPage === totalPages} />
+                                <Pagination.Last onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} />
+                            </Pagination>
                         </div>
                     )}
                 </Card.Body>

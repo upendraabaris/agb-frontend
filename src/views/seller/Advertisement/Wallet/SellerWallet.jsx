@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Table, Badge, Spinner, Modal, Form, Alert } from 'react-bootstrap';
+import { Card, Button, Table, Badge, Spinner, Modal, Form, Alert, Pagination } from 'react-bootstrap';
 import { gql, useQuery, useMutation } from '@apollo/client';
 import { toast } from 'react-toastify';
 import { useLocation, useHistory } from 'react-router-dom';
@@ -14,7 +14,14 @@ const GET_MY_WALLET = gql`
     getMyWallet {
       id
       balance
-      recentTransactions {
+    }
+  }
+`;
+
+const GET_WALLET_TRANSACTIONS = gql`
+  query GetWalletTransactions($page: Int, $limit: Int) {
+    getWalletTransactions(page: $page, limit: $limit) {
+      transactions {
         id
         type
         amount
@@ -25,6 +32,9 @@ const GET_MY_WALLET = gql`
         invoice_id
         createdAt
       }
+      totalCount
+      totalPages
+      currentPage
     }
   }
 `;
@@ -139,6 +149,8 @@ const SellerWallet = () => {
   const [amountInput, setAmountInput] = useState('');
   const [amountError, setAmountError] = useState('');
   const [invoiceModal, setInvoiceModal] = useState({ show: false, invoice: null, loading: false });
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   const [generateWalletInvoice] = useMutation(GENERATE_WALLET_INVOICE, {
     onError: (err) => {
@@ -277,6 +289,16 @@ const SellerWallet = () => {
     fetchPolicy: 'network-only',
   });
 
+  const {
+    data: txData,
+    loading: txLoading,
+    error: txError,
+    refetch: refetchTx,
+  } = useQuery(GET_WALLET_TRANSACTIONS, {
+    variables: { page: currentPage, limit: ITEMS_PER_PAGE },
+    fetchPolicy: 'network-only',
+  });
+
   const [initiateWalletPayment, { loading: initiating }] = useMutation(INITIATE_WALLET_PAYMENT, {
     onError: (err) => toast.error(err.message || 'Payment initiation failed'),
   });
@@ -286,6 +308,7 @@ const SellerWallet = () => {
     if (paymentStatus === 'success') {
       toast.success('💰 Money added to wallet successfully!');
       refetch();
+      refetchTx();
     } else if (paymentStatus === 'failed') {
       toast.error('Payment failed or was cancelled. Please try again.');
     }
@@ -349,7 +372,12 @@ const SellerWallet = () => {
   };
 
   const wallet = data?.getMyWallet;
-  const transactions = wallet?.recentTransactions || [];
+  const txPage = txData?.getWalletTransactions;
+  const transactions = txPage?.transactions || [];
+  const totalPages = txPage?.totalPages ?? 0;
+  const totalCount = txPage?.totalCount ?? 0;
+
+  const handlePageChange = (page) => setCurrentPage(page);
 
   return (
     <>
@@ -406,19 +434,25 @@ const SellerWallet = () => {
         </Card.Body>
       </Card>
 
-      {/* ── Recent Transactions ── */}
+      {/* ── Transaction History ── */}
       <Card className="shadow-sm border-0" style={{ borderRadius: 16 }}>
         <Card.Header className="fw-bold border-0 bg-transparent pt-4 px-4 pb-0" style={{ fontSize: '1rem' }}>
-          Recent Transactions
+          <div className="d-flex justify-content-between align-items-center">
+            <span>Transaction History</span>
+            {totalCount > 0 && <small className="text-muted fw-normal">{totalCount} total</small>}
+          </div>
         </Card.Header>
         <Card.Body className="px-4 pb-4">
           {(() => {
-            if (loading) {
+            if (txLoading) {
               return (
                 <div className="text-center py-5">
                   <Spinner animation="border" />
                 </div>
               );
+            }
+            if (txError) {
+              return <Alert variant="danger" className="mt-3">{txError.message}</Alert>;
             }
             if (transactions.length === 0) {
               return (
@@ -428,59 +462,96 @@ const SellerWallet = () => {
               );
             }
             return (
-              <Table responsive hover className="mt-3 align-middle">
-                <thead>
-                  <tr className="text-muted small text-uppercase" style={{ letterSpacing: '0.05em' }}>
-                    <th>Date</th>
-                    <th>Type</th>
-                    <th>Amount</th>
-                    <th>Source</th>
-                    <th>Description</th>
-                    <th>Status</th>
-                    <th>Ref / Tracking</th>
-                    <th>Invoice</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.map((txn) => (
-                    <tr key={txn.id}>
-                      <td className="small text-muted">{formatDate(txn.createdAt)}</td>
-                      <td>
-                        <Badge bg={txn.type === 'credit' ? 'success' : 'danger'} style={{ fontSize: '0.75rem', borderRadius: 6 }}>
-                          {txn.type === 'credit' ? '▲ Credit' : '▼ Debit'}
-                        </Badge>
-                      </td>
-                      <td className={`fw-semibold ${txn.type === 'credit' ? 'text-success' : 'text-danger'}`}>
-                        {txn.type === 'credit' ? '+' : '-'} {formatINR(txn.amount)}
-                      </td>
-                      <td className="small">
-                        <span className="text-capitalize">{txn.source?.replace(/_/g, ' ')}</span>
-                      </td>
-                      <td className="small text-muted">{txn.description || '—'}</td>
-                      <td>
-                        <Badge bg={statusBadgeBg(txn.status)} style={{ fontSize: '0.72rem', borderRadius: 6 }}>
-                          {txn.status}
-                        </Badge>
-                      </td>
-                      <td className="small text-muted">{txn.ccav_tracking_id || '—'}</td>
-                      <td>
-                        {txn.type === 'credit' && txn.status === 'success' && ['payu', 'ccavenue'].includes(txn.source) ? (
-                          <Button
-                            size="sm"
-                            variant="outline-primary"
-                            style={{ fontSize: '0.75rem', borderRadius: 6, whiteSpace: 'nowrap' }}
-                            onClick={() => handleViewInvoice(txn)}
-                          >
-                            📄 Invoice
-                          </Button>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
+              <>
+                <Table responsive hover className="mt-3 align-middle">
+                  <thead>
+                    <tr className="text-muted small text-uppercase" style={{ letterSpacing: '0.05em' }}>
+                      <th>Date</th>
+                      <th>Type</th>
+                      <th>Amount</th>
+                      <th>Source</th>
+                      <th>Description</th>
+                      <th>Status</th>
+                      <th>Ref / Tracking</th>
+                      <th>Invoice</th>
                     </tr>
-                  ))}
-                </tbody>
-              </Table>
+                  </thead>
+                  <tbody>
+                    {transactions.map((txn) => (
+                      <tr key={txn.id}>
+                        <td className="small text-muted">{formatDate(txn.createdAt)}</td>
+                        <td>
+                          <Badge bg={txn.type === 'credit' ? 'success' : 'danger'} style={{ fontSize: '0.75rem', borderRadius: 6 }}>
+                            {txn.type === 'credit' ? '▲ Credit' : '▼ Debit'}
+                          </Badge>
+                        </td>
+                        <td className={`fw-semibold ${txn.type === 'credit' ? 'text-success' : 'text-danger'}`}>
+                          {txn.type === 'credit' ? '+' : '-'} {formatINR(txn.amount)}
+                        </td>
+                        <td className="small">
+                          <span className="text-capitalize">{txn.source?.replace(/_/g, ' ')}</span>
+                        </td>
+                        <td className="small text-muted">{txn.description || '—'}</td>
+                        <td>
+                          <Badge bg={statusBadgeBg(txn.status)} style={{ fontSize: '0.72rem', borderRadius: 6 }}>
+                            {txn.status}
+                          </Badge>
+                        </td>
+                        <td className="small text-muted">{txn.ccav_tracking_id || '—'}</td>
+                        <td>
+                          {txn.type === 'credit' && txn.status === 'success' && ['payu', 'ccavenue'].includes(txn.source) ? (
+                            <Button
+                              size="sm"
+                              variant="outline-primary"
+                              style={{ fontSize: '0.75rem', borderRadius: 6, whiteSpace: 'nowrap' }}
+                              onClick={() => handleViewInvoice(txn)}
+                            >
+                              📄 Invoice
+                            </Button>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+                    <small className="text-muted">
+                      Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, totalCount)} of {totalCount}
+                    </small>
+                    <Pagination className="mb-0">
+                      <Pagination.First onClick={() => handlePageChange(1)} disabled={currentPage === 1} />
+                      <Pagination.Prev onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1} />
+                      {Array.from({ length: totalPages }, (_, i) => i + 1)
+                        .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
+                        .reduce((acc, p, idx, arr) => {
+                          if (idx > 0 && p - arr[idx - 1] > 1) acc.push('ellipsis');
+                          acc.push(p);
+                          return acc;
+                        }, [])
+                        .map((item, idx) =>
+                          item === 'ellipsis' ? (
+                            <Pagination.Ellipsis key={`e-${idx}`} disabled />
+                          ) : (
+                            <Pagination.Item
+                              key={item}
+                              active={item === currentPage}
+                              onClick={() => handlePageChange(item)}
+                            >
+                              {item}
+                            </Pagination.Item>
+                          )
+                        )}
+                      <Pagination.Next onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages} />
+                      <Pagination.Last onClick={() => handlePageChange(totalPages)} disabled={currentPage === totalPages} />
+                    </Pagination>
+                  </div>
+                )}
+              </>
             );
           })()}
         </Card.Body>

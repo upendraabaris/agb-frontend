@@ -2363,13 +2363,13 @@ const Advertisement = () => {
                   if (useSharedMedia) {
                     return selectedSlots.some(slot => {
                       const media = sharedSlotMedia[slot] || {};
-                      return !(media.mobileImage || media.desktopImage) || !media.redirectUrl;
+                      return !media.mobileImage || !media.desktopImage || !media.redirectUrl;
                     });
                   }
                   return selectedCategories.some(catId =>
                     selectedSlots.some(slot => {
                       const media = perCategorySlotMedia[catId]?.[slot] || {};
-                      return !(media.mobileImage || media.desktopImage) || !media.redirectUrl;
+                      return !media.mobileImage || !media.desktopImage || !media.redirectUrl;
                     })
                   );
                 })())
@@ -2540,7 +2540,7 @@ const Advertisement = () => {
               const ready = selectedSlots.length > 0 && !showWizardModal &&
                 selectedSlots.every(slot => {
                   const media = slotMedia[slot] || {};
-                  return media.mobileImage || media.desktopImage;
+                  return media.mobileImage && media.desktopImage && media.redirectUrl;
                 });
               return ready ? (
                 <Card>
