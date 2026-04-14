@@ -58,7 +58,7 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
 
     if (device === 'mobile') {
       // Mobile Dimensions
-      requiredWidth = slotType === 'banner' ? 2000 : 750;
+      requiredWidth = slotType === 'banner' ? 2000 : 1000;
       requiredHeight = slotType === 'banner' ? 300 : 500;
     } else {
       // Desktop Dimensions

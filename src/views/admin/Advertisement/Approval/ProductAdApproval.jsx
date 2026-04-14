@@ -75,6 +75,21 @@ const REJECT_PRODUCT_AD = gql`
   }
 `;
 
+const CHECK_PRODUCT_SLOT_AVAILABILITY = gql`
+  query CheckProductSlotAvailability($requestId: ID!, $start_date: String!) {
+    checkProductSlotAvailability(requestId: $requestId, start_date: $start_date) {
+      available
+      details {
+        slot
+        startDate
+        endDate
+        conflict
+        conflictId
+      }
+    }
+  }
+`;
+
 
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -111,6 +126,7 @@ function ProductAdApproval() {
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [showApprovalModal, setShowApprovalModal] = useState(false);
     const [showRejectionModal, setShowRejectionModal] = useState(false);
+    const [startDateMode, setStartDateMode] = useState('today'); // 'today' | 'custom'
     const [approvalDate, setApprovalDate] = useState('');
     const [rejectionReason, setRejectionReason] = useState('');
 
@@ -159,6 +175,19 @@ function ProductAdApproval() {
         onError: (err) => toast.error(err.message || 'Failed to reject'),
     });
 
+    // ─── Availability Query ──────────────────────────────────────────────────
+
+    const { data: availData, loading: availLoading } = useQuery(CHECK_PRODUCT_SLOT_AVAILABILITY, {
+        variables: {
+            requestId: selectedRequest?.id,
+            start_date: startDateMode === 'today' ? moment().format('YYYY-MM-DD') : approvalDate
+        },
+        skip: !selectedRequest || (startDateMode === 'custom' && !approvalDate),
+        fetchPolicy: 'network-only',
+    });
+
+    const availability = availData?.checkProductSlotAvailability;
+
     // ─── Handlers ─────────────────────────────────────────────────────────────
 
     const handleFilterChange = (newFilter) => {
@@ -179,8 +208,38 @@ function ProductAdApproval() {
         });
     };
 
-    const openApproval = (req) => { setSelectedRequest(req); setApprovalDate(''); setShowApprovalModal(true); };
+    const openApproval = (req) => {
+        setSelectedRequest(req);
+
+        // Smart Default Logic
+        const requestedStart = req.durations?.[0]?.start_date;
+        const today = moment().format('YYYY-MM-DD');
+
+        if (requestedStart && moment(requestedStart).isAfter(today, 'day')) {
+            // Future request: Default to Custom Date with their requested date
+            setStartDateMode('custom');
+            setApprovalDate(moment.utc(requestedStart).format('YYYY-MM-DD'));
+        } else {
+            // Past or Today request: Default to Start Today
+            setStartDateMode('today');
+            setApprovalDate(today);
+        }
+
+        setShowApprovalModal(true);
+    };
     const openRejection = (req) => { setSelectedRequest(req); setRejectionReason(''); setShowRejectionModal(true); };
+
+    // ─── Event Handlers ───────────────────────────────────────────────────────
+
+    const handleModeChange = (mode) => {
+        setStartDateMode(mode);
+        if (mode === 'today') {
+            setApprovalDate(moment().format('YYYY-MM-DD'));
+        } else {
+            const requestedStart = selectedRequest?.durations?.[0]?.start_date;
+            setApprovalDate(requestedStart ? moment.utc(requestedStart).format('YYYY-MM-DD') : moment().format('YYYY-MM-DD'));
+        }
+    };
 
     // ─── Render ──────────────────────────────────────────────────────────────
 
@@ -510,18 +569,100 @@ function ProductAdApproval() {
                             {selectedRequest.status === 'pending' && (
                                 <>
                                     <hr />
-                                    <Form.Group>
-                                        <Form.Label className="fw-bold">Select Ad Start Date</Form.Label>
-                                        <Form.Control
-                                            type="date"
-                                            value={approvalDate}
-                                            onChange={(e) => setApprovalDate(e.target.value)}
-                                            min={moment().format('YYYY-MM-DD')}
-                                        />
-                                        <Form.Text className="text-muted">
-                                            Ad will run from selected start date to the last day of the seller's chosen quarter.
-                                        </Form.Text>
+                                    <h6 className="mb-3">Approval Settings</h6>
+
+                                    {/* Seller Requested Date View */}
+                                    {selectedRequest.durations?.[0]?.start_date && (
+                                        <Alert variant="info" className="d-flex align-items-center mb-4">
+                                            <CsLineIcons icon="info-circle" className="me-2" />
+                                            <div>
+                                                Seller requested to start on: <strong>{moment.utc(selectedRequest.durations[0].start_date).format('DD MMMM YYYY')}</strong>
+                                            </div>
+                                        </Alert>
+                                    )}
+
+                                    <Form.Group className="mb-4">
+                                        <Form.Label className="fw-bold d-block mb-2">Campaign Start Logic</Form.Label>
+                                        <div className="d-flex gap-4">
+                                            <Form.Check
+                                                type="radio"
+                                                id="mode-today"
+                                                label="Start Today (Pro-rata)"
+                                                checked={startDateMode === 'today'}
+                                                onChange={() => handleModeChange('today')}
+                                                className="fw-medium"
+                                                hidden={selectedRequest.durations?.[0]?.start_date && moment.utc(selectedRequest.durations?.[0]?.start_date).isAfter(moment(), 'day')}
+                                            />
+                                            <Form.Check
+                                                type="radio"
+                                                id="mode-custom"
+                                                label="Custom Start Date"
+                                                checked={startDateMode === 'custom'}
+                                                onChange={() => handleModeChange('custom')}
+                                                className="fw-medium"
+                                            />
+                                        </div>
                                     </Form.Group>
+
+                                    {startDateMode === 'custom' && (
+                                        <Form.Group className="mb-4">
+                                            <Form.Label>Select Custom Start Date</Form.Label>
+                                            <Form.Control
+                                                type="date"
+                                                value={approvalDate}
+                                                onChange={(e) => setApprovalDate(e.target.value)}
+                                                min={moment().format('YYYY-MM-DD')}
+                                            />
+                                            {selectedRequest.durations?.[0]?.start_date && approvalDate !== moment.utc(selectedRequest.durations[0].start_date).format('YYYY-MM-DD') && (
+                                                <small className="text-warning fw-bold mt-1 d-block">
+                                                    ⚠️ Warning: You are overriding the seller's requested date.
+                                                </small>
+                                            )}
+                                        </Form.Group>
+                                    )}
+
+                                    {/* Availability Breakdown */}
+                                    <div className="mb-3">
+                                        <div className="d-flex justify-content-between align-items-center mb-2">
+                                            <Form.Label className="fw-bold mb-0">Slot Availability Check</Form.Label>
+                                            {availLoading && <Spinner animation="border" size="sm" />}
+                                        </div>
+
+                                        {!availLoading && availability && (
+                                            <div className="border rounded bg-light p-3">
+                                                {availability.details.map((slotAvail, idx) => (
+                                                    <div key={idx} className={`d-flex justify-content-between align-items-center ${idx > 0 ? 'mt-2 pt-2 border-top' : ''}`}>
+                                                        <div>
+                                                            <div className="fw-bold text-capitalize">{slotAvail.slot.replace('_', ' ')}</div>
+                                                            <small className="text-muted">
+                                                                {moment.utc(slotAvail.startDate).format('DD MMM')} — {moment.utc(slotAvail.endDate).format('DD MMM YY')}
+                                                            </small>
+                                                        </div>
+                                                        <div>
+                                                            {slotAvail.conflict ? (
+                                                                <Badge bg="danger">
+                                                                    <CsLineIcons icon="close" size="10" className="me-1" />
+                                                                    Occupied
+                                                                </Badge>
+                                                            ) : (
+                                                                <Badge bg="success">
+                                                                    <CsLineIcons icon="check" size="10" className="me-1" />
+                                                                    Available
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+
+                                                {!availability.available && (
+                                                    <Alert variant="danger" className="mt-3 mb-0 py-2 small">
+                                                        Some of the requested slots are already booked for this period.
+                                                        Approving now will displace existing ads or fail.
+                                                    </Alert>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                 </>
                             )}
                         </div>

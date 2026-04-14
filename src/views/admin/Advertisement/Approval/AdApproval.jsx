@@ -145,9 +145,22 @@ function AdApproval() {
 
   // whenever a new request is selected, check slot availability using stored start_date
   React.useEffect(() => {
-    const storedStartDate = selectedRequest?.durations?.[0]?.start_date;
+    const dur = selectedRequest?.durations?.[0];
+    const storedStartDate = dur?.start_date;
     if (selectedRequest && storedStartDate) {
       checkAvailability({ variables: { requestId: selectedRequest.id, start_date: storedStartDate } });
+
+      // Smart Defaults for Approval Date
+      const requestedDate = moment(storedStartDate);
+      const isFuture = requestedDate.isAfter(moment(), 'day');
+
+      if (isFuture) {
+        setApprovalDateType('custom');
+        setCustomStartDate(requestedDate.format('YYYY-MM-DD'));
+      } else {
+        setApprovalDateType('today');
+        setCustomStartDate(moment().format('YYYY-MM-DD'));
+      }
     } else {
       setAvailabilityResult(null);
     }
@@ -614,27 +627,46 @@ function AdApproval() {
 
                   <hr />
                   <h6 className="mb-3">Approval Settings</h6>
+
+                  {selectedRequest.durations?.[0]?.start_date && (
+                    <div className="mb-3 p-2 border rounded bg-light">
+                      <small className="text-muted d-block">Seller requested start date:</small>
+                      <strong>{moment(selectedRequest.durations[0].start_date).format('DD MMMM YYYY')}</strong>
+                      <span className="ms-2 badge bg-info">{selectedRequest.durations[0].start_preference === 'today' ? 'Start Today' : 'Start from Quarter'}</span>
+                    </div>
+                  )}
+
                   <Form.Group className="mb-3">
-                    <Form.Check
-                      type="radio"
-                      id="approve-today"
-                      // label="Start Today (Recalculate pro-rata)"
-                      label="Start Today"
-                      name="approvalDateType"
-                      checked={approvalDateType === 'today'}
-                      onChange={() => setApprovalDateType('today')}
-                    />
-                    <Form.Check
-                      type="radio"
-                      id="approve-custom"
-                      label="Start from Custom Date"
-                      name="approvalDateType"
-                      checked={approvalDateType === 'custom'}
-                      onChange={() => setApprovalDateType('custom')}
-                    />
+                    {(() => {
+                      const requestedDate = moment(selectedRequest.durations?.[0]?.start_date);
+                      const isToday = requestedDate.isSame(moment(), 'day');
+
+                      return (
+                        <>
+                          {isToday && (
+                            <Form.Check
+                              type="radio"
+                              id="approve-today"
+                              label="Start Today"
+                              name="approvalDateType"
+                              checked={approvalDateType === 'today'}
+                              onChange={() => setApprovalDateType('today')}
+                            />
+                          )}
+                          <Form.Check
+                            type="radio"
+                            id="approve-custom"
+                            label={isToday ? "Start from Custom Date" : `Change Date (Requested: ${requestedDate.format('DD MMM')})`}
+                            name="approvalDateType"
+                            checked={approvalDateType === 'custom'}
+                            onChange={() => setApprovalDateType('custom')}
+                          />
+                        </>
+                      );
+                    })()}
                   </Form.Group>
 
-                  {approvalDateType === 'custom' && (
+                  {approvalDateType === 'custom' ? (
                     <Form.Group className="mb-3">
                       <Form.Label>Select Custom Start Date</Form.Label>
                       <Form.Control
@@ -646,7 +678,19 @@ function AdApproval() {
                       <Form.Text className="text-muted">
                         Ad dates and pricing will be recalculated automatically starting from this date.
                       </Form.Text>
+                      {selectedRequest.durations?.[0]?.start_date &&
+                        customStartDate !== moment(selectedRequest.durations[0].start_date).format('YYYY-MM-DD') && (
+                          <div className="text-warning mt-2 small fw-bold">
+                            ⚠ Note: You are changing the seller's requested start date.
+                          </div>
+                        )}
                     </Form.Group>
+                  ) : (
+                    selectedRequest.durations?.[0]?.start_preference !== 'today' && (
+                      <div className="text-warning mb-3 small fw-bold">
+                        ⚠ Warning: You are changing the seller's future request to start "Today". Pricing will be recalculated pro-rata.
+                      </div>
+                    )
                   )}
                 </div>
               )}
