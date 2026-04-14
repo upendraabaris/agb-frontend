@@ -78,6 +78,22 @@ const GET_PRODUCT = gql`
     }
   }
 `;
+const SET_PRODUCT_TIER = gql`
+  mutation SetProductAdTier($productId: ID!, $tierId: ID!) {
+    setProductAdTier(productId: $productId, tierId: $tierId) {
+      success
+      message
+    }
+  }
+`;
+const GET_TIERS = gql`
+  query AdTierMasters {
+    adTierMasters {
+      id
+      name
+    }
+  }
+`;
 const GET_CATEGORY = gql`
   query GetAllCategories {
     getAllCategories {
@@ -263,11 +279,16 @@ const DetailViewProduct = () => {
   if (error1) {
     console.log('GET_CATEGORY', error1);
   }
+  const { data: tiersData, error: tiersError } = useQuery(GET_TIERS);
+  if (tiersError) {
+    console.log('GET_TIERS', tiersError);
+  }
   const filteredCategories = categoryData?.getAllCategories.filter((category) => productdetail?.categories.includes(category.id));
   const { data: productClassData, error: errorProductClass } = useQuery(ALL_PRODUCT_CLASS);
   if (errorProductClass) {
     console.log('GET_ALL_PRODUCT_CLASS', errorProductClass);
   }
+  const tiers = tiersData?.adTierMasters || [];
   const initialFormData = {
     listingCommType: '',
     listingComm: '',
@@ -284,6 +305,7 @@ const DetailViewProduct = () => {
   const [addcommandapproveId, setAddcommandapproveId] = useState(null);
   const [rejectModal, setRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [selectedTierId, setSelectedTierId] = useState('');
   const [Addcommandapprove] = useMutation(ADD_COMMISSION_AND_APPROVE, {
     onCompleted: () => {
       setTimeout(() => {
@@ -291,6 +313,12 @@ const DetailViewProduct = () => {
       }, 2000);
     },
   });
+  const [setProductAdTier, { loading: tierLoading }] = useMutation(SET_PRODUCT_TIER, {
+    onError: (err) => {
+      toast.error(err.message || 'Failed to assign tier');
+    },
+  });
+
   const fillCommission = (prodClassId) => {
     const selectedProdClass = productClassData?.getAllProductClass.find((classItem) => classItem.id === prodClassId);
     if (selectedProdClass) {
@@ -318,29 +346,51 @@ const DetailViewProduct = () => {
     }
   };
   const handleApproveClick = (id) => {
+    if (!selectedTierId) {
+      toast.error('Please select an ad tier before approving the product.');
+      return;
+    }
     setAddcommandapproveId(id);
     setModalView(true);
   };
-  const handleApproveConfirm = (e) => {
+  const handleApproveConfirm = async (e) => {
     e.preventDefault();
-    Addcommandapprove({
-      variables: {
-        addcommandapproveId: productdetail.id,
-        approve: true,
-        reject: false,
-        rejectReason: '',
-        fixedComm: parseFloat(formData.fixedComm),
-        fixedCommType: formData.fixedCommType,
-        shippingComm: parseFloat(formData.shippingComm),
-        productComm: parseFloat(formData.productComm),
-        productCommType: formData.productCommType,
-        listingComm: parseFloat(formData.listingComm),
-        shippingCommType: formData.shippingCommType,
-        listingCommType: formData.listingCommType,
-        productClassNameID: formData.productClassNameID,
-      },
-    });
-    setModalView(false);
+    if (!selectedTierId) {
+      toast.error('Please select an ad tier before approving the product.');
+      return;
+    }
+
+    try {
+      const tierRes = await setProductAdTier({
+        variables: { productId: productdetail.id, tierId: selectedTierId },
+      });
+
+      if (!tierRes?.data?.setProductAdTier?.success) {
+        toast.error(tierRes?.data?.setProductAdTier?.message || 'Failed to assign tier');
+        return;
+      }
+
+      await Addcommandapprove({
+        variables: {
+          addcommandapproveId: productdetail.id,
+          approve: true,
+          reject: false,
+          rejectReason: '',
+          fixedComm: parseFloat(formData.fixedComm),
+          fixedCommType: formData.fixedCommType,
+          shippingComm: parseFloat(formData.shippingComm),
+          productComm: parseFloat(formData.productComm),
+          productCommType: formData.productCommType,
+          listingComm: parseFloat(formData.listingComm),
+          shippingCommType: formData.shippingCommType,
+          listingCommType: formData.listingCommType,
+          productClassNameID: formData.productClassNameID,
+        },
+      });
+      setModalView(false);
+    } catch (err) {
+      toast.error(err.message || 'Something went wrong!');
+    }
   };
   const rejectProduct = (prodId) => {
     setRejectModal(true);
@@ -745,11 +795,47 @@ const DetailViewProduct = () => {
               </Col>
             </Row>
           </Form>
-          <Row>
+          <Row className="mb-2">
             <Col xl="8" className="order-2 order-xl-1">
-              <Card className="mb-3">
+              <Card className="mb-2">
                 <Card.Body>
                   <VarientPicker productVariant={productdetail.variant} setProductDetail={setProductDetail} />
+                  <div className="border-top pt-3 mt-3">
+                    {!productdetail?.approve && (
+                      <Form.Group className="mb-3" controlId="adTierSelect">
+                        <Form.Label className="fw-bold text-dark">Ad Tier</Form.Label>
+                        <Form.Select value={selectedTierId} onChange={(e) => setSelectedTierId(e.target.value)}>
+                          <option value="">Select ad tier</option>
+                          {tiers.map((tier) => (
+                            <option key={tier.id} value={tier.id}>
+                              {tier.name}
+                            </option>
+                          ))}
+                        </Form.Select>
+                        <Form.Text className="text-muted">
+                          Select the tier here before approving the product.
+                        </Form.Text>
+                      </Form.Group>
+                    )}
+                    <div className="d-flex justify-content-around">
+                      {!productdetail?.approve && (
+                        <Button variant="success" onClick={() => handleApproveClick(productdetail.id)} disabled={!selectedTierId || tierLoading}>
+                          Approve
+                        </Button>
+                      )}
+
+                      {!productdetail?.reject && (
+                        <Button
+                          variant="danger"
+                          onClick={() => {
+                            rejectProduct(productdetail.id);
+                          }}
+                        >
+                          Reject
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 </Card.Body>
               </Card>
             </Col>
@@ -764,32 +850,6 @@ const DetailViewProduct = () => {
                       </div>
                     );
                   })}
-                </Card.Body>
-              </Card>
-            </Col>
-          </Row>
-          <Row>
-            <Col xl="8" className="order-2 order-xl-1">
-              <Card className="mb-3">
-                <Card.Body>
-                  <div className="d-flex justify-content-around">
-                    {!productdetail?.approve && (
-                      <Button variant="success" onClick={() => handleApproveClick(productdetail.id)}>
-                        Approve
-                      </Button>
-                    )}
-
-                    {!productdetail?.reject && (
-                      <Button
-                        variant="danger"
-                        onClick={() => {
-                          rejectProduct(productdetail.id);
-                        }}
-                      >
-                        Reject
-                      </Button>
-                    )}
-                  </div>
                 </Card.Body>
               </Card>
             </Col>

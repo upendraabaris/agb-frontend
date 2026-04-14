@@ -67,17 +67,19 @@ const DetailAttributeItem = ({ onPincodeChange, pincodeValues, allpincode }) => 
           />
         </Col>
       </Row>
-      <div style={{ height: '220px', overflowY: 'auto' }}>
-        <Row className="gx-2 flex-wrap">
-          {pincode?.map((pincode1, index) => (
-            <Col xs="auto" key={index} onClick={() => onPincodeDelete(index)}>
-              <div className="mb-1">
-                <Form.Control name="pincode" type="text" value={pincode1} readOnly style={{ cursor: 'pointer', width: '80px'}} />
-              </div>
-            </Col>
-          ))}
-        </Row>
-      </div>
+      {pincode?.length > 0 && (
+        <div style={{ maxHeight: '220px', overflowY: 'auto' }} className="mt-2">
+          <Row className="gx-2 flex-wrap">
+            {pincode.map((pincode1, index) => (
+              <Col xs="auto" key={index} onClick={() => onPincodeDelete(index)}>
+                <div className="mb-1">
+                  <Form.Control name="pincode" type="text" value={pincode1} readOnly style={{ cursor: 'pointer', width: '80px' }} />
+                </div>
+              </Col>
+            ))}
+          </Row>
+        </div>
+      )}
 
       <Row className="gx-2">
         {tags?.map((tag, index) => (
