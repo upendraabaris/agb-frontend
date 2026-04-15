@@ -460,7 +460,14 @@ const ProductAdvertisement = () => {
 
   const goToWalletRecharge = () => {
     saveWizardState();
-    history.push(`${basePath}/wallet?returnTo=${basePath}/advertisement/ads-product`);
+
+    // const basePath = resolveAdBasePath({
+    //   pathname: location.pathname,
+    //   roles: user.roles
+    // });
+
+
+    history.push(`${basePath}/wallet?returnTo=${location.pathname}`);
   };
 
   // ── Open wizard for a product ────────────────────────────────────────
@@ -493,30 +500,78 @@ const ProductAdvertisement = () => {
     return selectedProduct.quarterAvailability.find((q) => q.quarter === quarterLabel) || null;
   };
 
-  // ── Effective duration (accounts for current-quarter partial-elapsed logic) ──
-  // When the current quarter is selected, the actual booking runs from today to
-  // end of next quarter (same logic the backend uses). Price is scaled proportionally.
-  const effectiveDuration = (() => {
-    const today = new Date();
-    const currentQStartMonth = Math.floor(today.getMonth() / 3) * 3;
-    const currentQIsoDate = `${today.getFullYear()}-${String(currentQStartMonth + 1).padStart(2, '0')}-01`;
-    if (!selectedStartQuarter || selectedStartQuarter === currentQIsoDate) {
-      const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
-      const nextQStart = getNextQuarterStart(today);
-      const endDate = getQuarterEnd(nextQStart);
-      return Math.floor((endDate - todayUTC) / (24 * 60 * 60 * 1000)) + 1;
-    }
-    return selectedDuration;
-  })();
-
   // ── Pricing helpers ──────────────────────────────────────────────────
+
+  /**
+   * Calculates the actual price for a slot based on available quarters (clipping).
+   * Mirrors backend clipping logic to ensure UI matches final charge.
+   */
   const computeSlotPrice = (slotName) => {
+    if (!pricingData || !selectedProduct) return 0;
+
+    const today = new Date();
+    const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+    const numPaidQuarters = { 365: 4, 180: 2, 90: 1 }[selectedDuration] || 1;
+    const currentQIsoDate = `${today.getFullYear()}-${String(Math.floor(today.getMonth() / 3) * 3 + 1).padStart(2, '0')}-01`;
+    const isTodayMode = !selectedStartQuarter || selectedStartQuarter === currentQIsoDate;
+
+    let proRataCharge = 0;
+    let availablePaidQuarters = 0;
+
+    const quarters = getQuarters(5);
+    const qAvailability = selectedProduct.quarterAvailability || [];
+
+    if (isTodayMode) {
+      // 1. Check current quarter (pro-rata)
+      const currentQ = quarters[0];
+      const qLabelClean = currentQ.label.replace(' (Today)', '');
+      const qAvail = qAvailability.find(q => q.quarter === qLabelClean);
+      const isSlotAvailNow = qAvail ? qAvail.slots?.find(s => s.slot === slotName)?.available : true;
+
+      if (isSlotAvailNow) {
+        const qEnd = getQuarterEnd(todayUTC);
+        const qStartMonth = Math.floor(todayUTC.getUTCMonth() / 3) * 3;
+        const qStart = new Date(Date.UTC(todayUTC.getUTCFullYear(), qStartMonth, 1));
+        const fullDays = Math.floor((qEnd - qStart) / (24 * 60 * 60 * 1000)) + 1;
+        const remDays = Math.floor((qEnd - todayUTC) / (24 * 60 * 60 * 1000)) + 1;
+
+        const quarterlyPrice = getSlotPrice(pricingData, slotName, 90);
+        proRataCharge = Math.round((remDays / fullDays) * quarterlyPrice);
+
+        // 2. Check subsequent full quarters (up to numPaidQuarters)
+        for (let i = 1; i <= numPaidQuarters; i += 1) {
+          const nextQ = quarters[i];
+          const nextQLabelClean = nextQ?.label?.replace(' (Today)', '');
+          const nextQAvail = qAvailability.find(q => q.quarter === nextQLabelClean);
+          if (nextQAvail?.slots?.find(s => s.slot === slotName)?.available) {
+            availablePaidQuarters += 1;
+          } else {
+            break; // Clipped
+          }
+        }
+      }
+    } else {
+      // Quarter mode
+      const startIdx = quarters.findIndex(q => q.isoDate === selectedStartQuarter);
+      if (startIdx !== -1) {
+        for (let i = 0; i < numPaidQuarters; i += 1) {
+          const targetQ = quarters[startIdx + i];
+          const targetQLabelClean = targetQ?.label?.replace(' (Today)', '');
+          const targetQAvail = qAvailability.find(q => q.quarter === targetQLabelClean);
+          if (targetQAvail?.slots?.find(s => s.slot === slotName)?.available) {
+            availablePaidQuarters += 1;
+          } else {
+            break; // Clipped
+          }
+        }
+      }
+    }
+
     const basePrice = getSlotPrice(pricingData, slotName, selectedDuration);
-    const scaledBase = effectiveDuration !== selectedDuration
-      ? Math.round((basePrice / selectedDuration) * effectiveDuration)
-      : basePrice;
+    const adjustedSlotPrice = numPaidQuarters > 0 ? Math.round((availablePaidQuarters / numPaidQuarters) * basePrice) : 0;
     const surcharge = getEffectiveUrlType(slotName) === 'external' ? getExternalSurcharge(slotName) : 0;
-    return scaledBase + surcharge;
+
+    return adjustedSlotPrice + proRataCharge + surcharge;
   };
 
   const grandTotal = selectedSlots.reduce((sum, s) => sum + computeSlotPrice(s), 0);
@@ -740,6 +795,9 @@ const ProductAdvertisement = () => {
 
   const renderStep1 = () => {
     const quarters = getQuarters(5);
+    const today = new Date();
+    const currentQIsoDate = `${today.getFullYear()}-${String(Math.floor(today.getMonth() / 3) * 3 + 1).padStart(2, '0')}-01`;
+    const isTodayMode = !selectedStartQuarter || selectedStartQuarter === currentQIsoDate;
 
     return (
       <div>
@@ -781,9 +839,17 @@ const ProductAdvertisement = () => {
               </Button>
             ))}
           </div>
-          <div className="text-muted" style={{ fontSize: '0.78rem', marginTop: 4 }}>
-            Your ad starts from the selected quarter with full quarter pricing.
-          </div>
+          {isTodayMode && (
+            <Alert variant="info" className="mt-2 py-2 px-3 small border-0" style={{ background: '#e7f3ff', color: '#0056b3' }}>
+              <CsLineIcons icon="info-circle" size="14" className="me-2" />
+              <strong>Note:</strong> Starting mid-quarter includes the current quarter's remaining days (pro-rata) plus the subsequent full quarter(s), subject to availability.
+            </Alert>
+          )}
+          {!isTodayMode && (
+            <div className="text-muted" style={{ fontSize: '0.78rem', marginTop: 4 }}>
+              Your ad starts from the selected quarter with full quarter pricing.
+            </div>
+          )}
         </div>
 
         {/* Pricing table */}
@@ -808,12 +874,12 @@ const ProductAdvertisement = () => {
               </thead>
               <tbody>
                 {ALL_SLOTS.map((slot) => {
-                  const price = computeSlotPrice(slot);
+                  const price = getSlotPrice(pricingData, slot, selectedDuration);
                   return (
                     <tr key={slot}>
                       <td>{slotLabel(slot)}</td>
                       <td>{DURATION_OPTIONS.find((d) => d.value === selectedDuration)?.label}</td>
-                      <td className="fw-bold">₹{price}</td>
+                      <td className="fw-bold">₹{price.toLocaleString('en-IN')}</td>
                     </tr>
                   );
                 })}
@@ -1133,41 +1199,67 @@ const ProductAdvertisement = () => {
         </div>
       </div>
 
-      {/* Quarter breakdown */}
-      {(() => {
+      {/* Quarter breakdown summary (based on first selected slot) */}
+      {selectedSlots.length > 0 && selectedProduct && (() => {
         const today = new Date();
         const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
-        const currentQStartMonth = Math.floor(today.getMonth() / 3) * 3;
-        const currentQIsoDate = `${today.getFullYear()}-${String(currentQStartMonth + 1).padStart(2, '0')}-01`;
-        const isCurrentQuarter = !selectedStartQuarter || selectedStartQuarter === currentQIsoDate;
+        const slotName = selectedSlots[0];
 
-        let startDate;
-        let endDate;
-        if (isCurrentQuarter) {
-          startDate = todayUTC;
-          endDate = getQuarterEnd(getNextQuarterStart(today));
+        // Use a dummy pricing check to get duration info if needed, or just show segments
+        const isTodayMode = !selectedStartQuarter || selectedStartQuarter === `${today.getFullYear()}-${String(Math.floor(today.getMonth() / 3) * 3 + 1).padStart(2, '0')}-01`;
+
+        // Find how many quarters are actually available for this slot
+        let numPaidQuarters = 1;
+        if (selectedDuration === 365) numPaidQuarters = 4;
+        else if (selectedDuration === 180) numPaidQuarters = 2;
+
+        const quartersArr = getQuarters(5);
+        const qAvailability = selectedProduct.quarterAvailability || [];
+        const segments = [];
+
+        if (isTodayMode) {
+          const qLabelClean = quartersArr[0].label.replace(' (Today)', '');
+          const currentAvailable = qAvailability.find(q => q.quarter === qLabelClean)?.slots?.find(s => s.slot === slotName)?.available ?? true;
+          if (currentAvailable) {
+            const qEnd = getQuarterEnd(todayUTC);
+            segments.push({ quarter: qLabelClean, days: Math.floor((qEnd - todayUTC) / (24 * 60 * 60 * 1000)) + 1 });
+
+            for (let i = 1; i <= numPaidQuarters; i += 1) {
+              const qL = quartersArr[i]?.label.replace(' (Today)', '');
+              if (qAvailability.find(q => q.quarter === qL)?.slots?.find(s => s.slot === slotName)?.available) {
+                segments.push({ quarter: qL, days: 90 }); // Approx 90 for summary
+              } else break;
+            }
+          }
         } else {
-          startDate = new Date(selectedStartQuarter);
-          endDate = addDays(startDate, effectiveDuration - 1);
+          const startIdx = quartersArr.findIndex(q => q.isoDate === selectedStartQuarter);
+          for (let i = 0; i < numPaidQuarters; i += 1) {
+            const qL = quartersArr[startIdx + i]?.label.replace(' (Today)', '');
+            if (qAvailability.find(q => q.quarter === qL)?.slots?.find(s => s.slot === slotName)?.available) {
+              segments.push({ quarter: qL, days: 90 });
+            } else break;
+          }
         }
 
-        const segments = splitIntervalByQuarter(startDate, effectiveDuration);
+        if (segments.length === 0) return null;
 
         return (
           <div className="mb-3 p-3 rounded" style={{ background: '#f8f9fa', border: '1px solid #e9ecef' }}>
-            <div className="fw-semibold mb-2">Advertisement Period</div>
-            <div className="text-muted small mb-2">
-              {startDate.toLocaleDateString()} - {endDate.toLocaleDateString()}
-            </div>
+            <div className="fw-semibold mb-2">Advertisement Period Summary</div>
             <div className="text-muted small">
               <strong>Quarter Breakdown:</strong>
               <ul className="mb-0 mt-1">
                 {segments.map((seg, idx) => (
                   <li key={idx}>
-                    {seg.quarter}: {seg.days} days
+                    {seg.quarter}: {seg.days === 90 ? 'Full Quarter' : `${seg.days} days (Pro-rata)`}
                   </li>
                 ))}
               </ul>
+              {segments.length < (isTodayMode ? numPaidQuarters + 1 : numPaidQuarters) && (
+                <div className="mt-2 text-warning fw-bold">
+                  ⚠️ Note: Duration clipped due to existing future bookings.
+                </div>
+              )}
             </div>
           </div>
         );
@@ -1186,13 +1278,11 @@ const ProductAdvertisement = () => {
           {selectedSlots.map((slot) => {
             const m = slotMedia[slot] || {};
             const hasImg = m.mobilePreview || m.desktopPreview;
-            const basePrice = getSlotPrice(pricingData, slot, selectedDuration);
-            const scaledBase = effectiveDuration !== selectedDuration
-              ? Math.round((basePrice / selectedDuration) * effectiveDuration)
-              : basePrice;
+            const slotTotal = computeSlotPrice(slot);
             const isExternal = getEffectiveUrlType(slot) === 'external';
             const surcharge = isExternal ? getExternalSurcharge(slot) : 0;
-            const slotTotal = scaledBase + surcharge;
+            const basePortion = slotTotal - surcharge;
+
             return (
               <tr key={slot}>
                 <td>{slotLabel(slot)}</td>
@@ -1209,7 +1299,7 @@ const ProductAdvertisement = () => {
                 <td className="text-end fw-bold">
                   {surcharge > 0 ? (
                     <div>
-                      <small className="text-muted d-block">Base: ₹{scaledBase}</small>
+                      <small className="text-muted d-block">Base: ₹{basePortion}</small>
                       <small className="text-warning d-block">Ext. URL: +₹{surcharge}</small>
                       <span className="text-dark">₹{slotTotal}</span>
                     </div>
@@ -1375,7 +1465,7 @@ const ProductAdvertisement = () => {
             <h1 className="mb-0 pb-0 display-4">{title}</h1>
             <div className="text-muted fs-base">{description}</div>
           </Col>
-          <Col xs="auto" className="d-flex align-items-center gap-3">
+          {/* <Col xs="auto" className="d-flex align-items-center gap-3">
             <div className="text-end">
               <div className="text-muted small">Wallet Balance</div>
               <div className={`fw-bold fs-5 ${walletBalance === 0 ? 'text-danger' : 'text-success'}`}>₹{walletBalance.toFixed(2)}</div>
@@ -1384,7 +1474,7 @@ const ProductAdvertisement = () => {
               <CsLineIcons icon="plus" size="13" className="me-1" />
               Recharge
             </Button>
-          </Col>
+          </Col> */}
         </Row>
       </div>
 

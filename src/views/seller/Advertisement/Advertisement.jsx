@@ -7,6 +7,7 @@ import { toast } from 'react-toastify';
 import { useDispatch, useSelector } from 'react-redux';
 import HtmlHead from 'components/html-head/HtmlHead';
 import { menuChangeUseSidebar } from 'layout/nav/main-menu/menuSlice';
+import CsLineIcons from 'cs-line-icons/CsLineIcons';
 import ImageUpload from './components/ImageUpload';
 import PreviewSection from './components/PreviewSection';
 import SuccessModal from './components/SuccessModal';
@@ -744,24 +745,23 @@ const Advertisement = () => {
   const handleWizardNext = () => {
     if (currentWizardStep === 2) {
       const invalidCategories = selectedCategories.filter(catId => {
-        // Find if ANY selected slot in THIS category is completely unavailable or too short
+        // Find if EACH selected slot in THIS category is completely unavailable
         const pricingDataToUse = catId === selectedCategory ? pricingData?.getCategoryPricing : categoryPricingMap[catId];
-        if (!pricingDataToUse) return false;
+        const catData = allCategories.find(c => c.id === catId);
+        if (!pricingDataToUse || !catData) return false;
 
-        return selectedSlots.some(slot => {
-          const urlType = getSlotUrlType(catId, slot);
-          // Simulate computePricingPreview but for the specific category's data
-          // We can't call computePricingPreview directly for other categories easily because it relies on active pricingData state
-          // However, we can trust that if they selected it, it must have passed the toggle check.
-          // For sanity, let's just use the isSlotAvailableForSelection logic if we exposed it, 
-          // but since handled in toggle, we mainly check if it's in the pricingMap.
-          return false; // Toggle logic already handles this, but we can add verification here if needed.
-        });
+        // A category is ONLY invalid if ALL selected slots are occupied
+        const availableSlotsCount = selectedSlots.filter(slot => {
+          const p = computePricingPreview(slot, 'internal', pricingDataToUse, catData.quarterAvailability);
+          return p && p.totalDays > 0;
+        }).length;
+
+        return availableSlotsCount === 0;
       });
 
       if (invalidCategories.length > 0) {
         const names = invalidCategories.map(id => allCategories.find(c => c.id === id)?.name).join(', ');
-        toast.error(`Slots for the selected period are occupied in: ${names}. Please remove these categories or change slots.`);
+        toast.error(`The selected categories are fully occupied for the chosen duration: ${names}. Please remove them or choose different slots.`);
         return;
       }
     }
@@ -809,17 +809,27 @@ const Advertisement = () => {
     return selectedCategories.map(catId => {
       const catData = allCategories.find(c => c.id === catId);
       const media = {};
-      selectedSlots.forEach(slot => {
+      const pricingDataToUse = catId === selectedCategory
+        ? (pricingData?.getCategoryPricing || categoryPricingMap[catId] || null)
+        : (categoryPricingMap[catId] || null);
+
+      // Filter slots to only include those that are actually available in this category
+      const validSlots = selectedSlots.filter(slot => {
+        const p = computePricingPreview(slot, 'internal', pricingDataToUse, catData?.quarterAvailability);
+        return p && p.totalDays > 0;
+      });
+
+      validSlots.forEach(slot => {
         media[slot] = getMediaForCategorySlot(catId, slot);
       });
+
       return {
         categoryId: catId,
         categoryName: catData?.name || 'Unknown',
-        slots: [...selectedSlots],
+        slots: validSlots,
         slotMedia: media,
-        pricingData: catId === selectedCategory
-          ? (pricingData?.getCategoryPricing || categoryPricingMap[catId] || null)
-          : (categoryPricingMap[catId] || null),
+        pricingData: pricingDataToUse,
+        quarterAvailability: catData?.quarterAvailability,
       };
     });
   };
@@ -1361,7 +1371,14 @@ const Advertisement = () => {
             </div>
             <small className='text-muted mt-1 d-block'>
               {startPreference === 'today'
-                ? 'Your ad starts today with pro-rata pricing for the remaining current quarter.'
+                ? (
+                  <>
+                    <Alert variant="info" className="mt-2 py-2 px-3 small border-0" style={{ background: '#e7f3ff', color: '#0056b3' }}>
+                      <CsLineIcons icon="info-circle" size="14" className="me-2" />
+                      <strong>Note:</strong> Starting mid-quarter includes the current quarter's remaining days (pro-rata) plus the subsequent full quarter(s), subject to availability.
+                    </Alert>
+                  </>
+                )
                 : 'Your ad starts from the selected quarter with full quarter pricing.'}
             </small>
           </div>
@@ -1643,6 +1660,9 @@ const Advertisement = () => {
       list = list.filter(cat => cat.name?.toLowerCase().includes(multiCatSearch.toLowerCase()));
     }
 
+    // Exclude the primary category from the list
+    list = list.filter(cat => cat.id !== selectedCategory);
+
     return (
       <div className='border rounded p-3 mb-3' style={{ backgroundColor: '#f8f9fa' }}>
         <div className='d-flex justify-content-between align-items-center mb-2'>
@@ -1667,15 +1687,12 @@ const Advertisement = () => {
           {list.length === 0 && <small className='text-muted'>No categories found</small>}
           {list.map(cat => {
             const isSelected = selectedCategories.includes(cat.id);
-            const isPrimary = cat.id === selectedCategory;
 
-            // Check if currently selected slots are available (even if clipped) in THIS category
+            // Check how many of the selected slots are available in THIS category
             const conflicts = selectedSlots.filter(slot => {
               const qa = cat.quarterAvailability;
               if (!qa) return false;
 
-              const numQ = getNumQuarters(selectedDuration);
-              const selectableQ = getSelectableQuarters();
               const today = new Date();
               const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
 
@@ -1699,57 +1716,77 @@ const Advertisement = () => {
               const availableInFirstQ = Math.floor((currentQEnd - cursor) / (24 * 60 * 60 * 1000)) + 1;
               if (availableInFirstQ < 15) return true; // Gap too small
 
-              return false; // Available (possibly clipped, but allowed)
+              return false; // Available
             });
 
-            const hasConflict = conflicts.length > 0;
+            // If ALL selected slots are conflicted, mark as occupied
+            const allOccupied = selectedSlots.length > 0 && conflicts.length === selectedSlots.length;
+            const hasPartialConflict = conflicts.length > 0 && conflicts.length < selectedSlots.length;
+            const availableFromSelection = selectedSlots.filter(s => !conflicts.includes(s));
 
             return (
               <div
                 key={cat.id}
-                className={`d-flex justify-content-between align-items-center p-2 border-bottom ${isSelected ? 'bg-light' : ''} ${hasConflict ? 'opacity-75' : ''}`}
-                style={{ cursor: (isPrimary || hasConflict) ? 'not-allowed' : 'pointer' }}
+                className={`d-flex justify-content-between align-items-center p-2 border-bottom ${isSelected ? 'bg-light' : ''} ${allOccupied ? 'opacity-75' : ''}`}
+                style={{ cursor: allOccupied ? 'not-allowed' : 'pointer' }}
                 onClick={() => {
-                  if (isPrimary) return;
-                  if (hasConflict) {
-                    toast.warning(`Cannot select ${cat.name}: ${conflicts.map(getSlotDisplayName).join(', ')} occupied in selected period.`);
+                  if (allOccupied) {
+                    toast.warning(`Cannot select ${cat.name}: All your selected slots are occupied in this category.`);
                     return;
                   }
                   handleToggleCategory(cat.id);
                 }}
-                onKeyDown={e => e.key === 'Enter' && !isPrimary && handleToggleCategory(cat.id)}
+                onKeyDown={e => e.key === 'Enter' && !allOccupied && handleToggleCategory(cat.id)}
                 role='button'
                 tabIndex={0}
               >
-                <div className='d-flex align-items-center gap-2'>
+                <div className='d-flex align-items-center gap-2' style={{ flex: 1 }}>
                   <input
                     type='checkbox'
                     checked={isSelected}
                     onChange={() => {
-                      if (isPrimary || hasConflict) return;
+                      if (allOccupied) return;
                       handleToggleCategory(cat.id);
                     }}
-                    disabled={isPrimary || hasConflict}
+                    disabled={allOccupied}
                     style={{ width: '16px', height: '16px' }}
                   />
-                  <div>
-                    <strong style={{ fontSize: '0.85rem' }}>{cat.name}</strong>
-                    {isPrimary && <span className='badge bg-secondary ms-1' style={{ fontSize: '0.6rem' }}>Primary</span>}
-                    {hasConflict && (
-                      <span className='badge bg-danger ms-1' style={{ fontSize: '0.6rem' }}>
-                        Slot Occupied
-                      </span>
+                  <div style={{ flex: 1 }}>
+                    <div className='d-flex justify-content-between align-items-start'>
+                      <strong style={{ fontSize: '0.85rem' }}>{cat.name}</strong>
+                      <div className='d-flex gap-1'>
+                        {allOccupied && (
+                          <span className='badge bg-danger' style={{ fontSize: '0.6rem' }}>
+                            Occupied
+                          </span>
+                        )}
+                        {!allOccupied && hasPartialConflict && (
+                          <span className='badge bg-warning text-dark' style={{ fontSize: '0.6rem' }}>
+                            Some Slots Busy
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {hasPartialConflict && (
+                      <div className='mt-1'>
+                        <small className='text-danger d-block' style={{ fontSize: '0.7rem' }}>
+                          Unavailable: {conflicts.map(getSlotDisplayName).join(', ')}
+                        </small>
+                        <small className='text-success d-block' style={{ fontSize: '0.7rem' }}>
+                          Available: {availableFromSelection.map(getSlotDisplayName).join(', ')}
+                        </small>
+                      </div>
                     )}
                     <div className='d-flex gap-1 mt-1'>
                       <span className={`badge ${cat.availableSlots === 0 ? 'bg-danger' : 'bg-success'}`} style={{ fontSize: '0.65rem' }}>
-                        {cat.availableSlots === 0 ? 'FULL' : `${cat.availableSlots || 0}/8 free`}
+                        {cat.availableSlots === 0 ? 'FULL' : `${cat.availableSlots || 0}/8 total free`}
                       </span>
                       <span className='badge bg-info' style={{ fontSize: '0.65rem' }}>{cat.tierId?.name || 'Tier'}</span>
                     </div>
                   </div>
                 </div>
-                {isSelected && !isPrimary && (
-                  <span className='badge bg-primary' style={{ fontSize: '0.7rem' }}>✓ Selected</span>
+                {isSelected && (
+                  <span className='badge bg-primary ms-2' style={{ fontSize: '0.7rem' }}>✓</span>
                 )}
               </div>
             );

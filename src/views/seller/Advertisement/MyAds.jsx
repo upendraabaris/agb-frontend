@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useDispatch,useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { useQuery, gql } from '@apollo/client';
 import { Row, Col, Card, Table, Badge, Spinner, Alert, Nav } from 'react-bootstrap';
 import { toast } from 'react-toastify';
@@ -26,8 +26,6 @@ const GET_MY_ADS = gql`
         id
         slot
         media_type
-        mobile_image_url
-        desktop_image_url
         redirect_url
       }
       durations {
@@ -58,8 +56,6 @@ const GET_MY_PRODUCT_ADS = gql`
         id
         slot
         media_type
-        mobile_image_url
-        desktop_image_url
         redirect_url
       }
       durations {
@@ -133,8 +129,8 @@ const CategoryAdsTab = ({ basePath }) => {
                   <th>Status</th>
                   <th>Duration</th>
                   <th>Submitted</th>
-                  <th>Mobile Image</th>
-                  <th>Desktop Image</th>
+                  {/* <th>Mobile Image</th>
+                  <th>Desktop Image</th> */}
                 </tr>
               </thead>
               <tbody>
@@ -182,7 +178,7 @@ const CategoryAdsTab = ({ basePath }) => {
                           })}
                         </small>
                       </td>
-                      <td>
+                      {/* <td>
                         {firstMedia?.mobile_image_url ? (
                           <a href={firstMedia.mobile_image_url} target="_blank" rel="noopener noreferrer">
                             <img
@@ -194,8 +190,8 @@ const CategoryAdsTab = ({ basePath }) => {
                         ) : (
                           <span className="text-muted">—</span>
                         )}
-                      </td>
-                      <td>
+                      </td> */}
+                      {/* <td>
                         {firstMedia?.desktop_image_url ? (
                           <a href={firstMedia.desktop_image_url} target="_blank" rel="noopener noreferrer">
                             <img
@@ -207,7 +203,7 @@ const CategoryAdsTab = ({ basePath }) => {
                         ) : (
                           <span className="text-muted">—</span>
                         )}
-                      </td>
+                      </td> */}
                     </tr>
                   );
                 })}
@@ -262,7 +258,7 @@ const ProductAdsTab = ({ basePath }) => {
                   <th>Slots</th>
                   <th>Duration</th>
                   <th>Submitted</th>
-                  <th>Images</th>
+                  {/* <th>Images</th> */}
                 </tr>
               </thead>
               <tbody>
@@ -320,7 +316,7 @@ const ProductAdsTab = ({ basePath }) => {
                       <td>
                         <small className="text-muted">{moment(ad.createdAt).format('DD MMM YYYY')}</small>
                       </td>
-                      <td>
+                      {/* <td>
                         <div className="d-flex gap-1">
                           {firstMedia?.mobile_image_url && (
                             <a href={firstMedia.mobile_image_url} target="_blank" rel="noopener noreferrer">
@@ -344,7 +340,7 @@ const ProductAdsTab = ({ basePath }) => {
                             <span className="text-muted">—</span>
                           )}
                         </div>
-                      </td>
+                      </td> */}
                     </tr>
                   );
                 })}

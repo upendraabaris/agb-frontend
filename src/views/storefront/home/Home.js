@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useWindowSize } from 'hooks/useWindowSize';
-import { Row, Col, Button, Card, Modal } from 'react-bootstrap';
+import { Row, Col, Button, Card, Modal, Carousel } from 'react-bootstrap';
 import { NavLink, useHistory } from 'react-router-dom';
 import HtmlHead from 'components/html-head/HtmlHead';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
@@ -242,13 +242,13 @@ const Home = () => {
         if (isOpenCategoriesModal) setIsOpenCategoriesModal(false);
       } else if (isXlScreen) setIsXlScreen(false);
     }
-    return () => {};
+    return () => { };
     // eslint-disable-next-line
   }, [width]);
 
   // form on load of the page
   useEffect(() => {
-    // Simulating successful page load after 2 seconds
+    // Simulating successful page load after 5 seconds
     const timer = setTimeout(() => {
       setIsLoaded(true);
     }, 5000);
@@ -328,121 +328,63 @@ const Home = () => {
           {/* Home page unchanged - banner ads removed */}
           <Row className="g-2 mb-2">
             <Col sm="6" md="6">
-              <div id="carouselExampleAutoplaying" className="carousel slide sh-48 " data-bs-ride="carousel">
-                <div onClick={() => sendTo(dataSlider.getHomePageSlider.url)} className="carousel-inner rounded">
-                  {dataSlider?.getHomePageSlider?.images?.length > 0 && (
-                    <div className="carousel-item active">
-                      <img src={dataSlider?.getHomePageSlider?.images[0]} className="responsive card-image h-100 scale" alt="..." />
-                    </div>
-                  )}
-                  {dataSlider &&
-                    dataSlider?.getHomePageSlider?.images?.length > 0 &&
-                    dataSlider.getHomePageSlider.images.map(
-                      (item, index) =>
-                        !(index === 0) && (
-                          <div key={index} className="carousel-item">
-                            <img src={item} className="responsive card-image h-100 scale" alt="..." />
-                          </div>
-                        )
-                    )}
-                </div>
-                <button className="carousel-control-prev" type="button" data-bs-target="#carouselExampleAutoplaying" data-bs-slide="prev">
-                  <span className="carousel-control-prev-icon" aria-hidden="true" />
-                  <span className="visually-hidden">Previous</span>
-                </button>
-                <button className="carousel-control-next" type="button" data-bs-target="#carouselExampleAutoplaying" data-bs-slide="next">
-                  <span className="carousel-control-next-icon" aria-hidden="true" />
-                  <span className="visually-hidden">Next</span>
-                </button>
-              </div>
+              <Carousel id="homeSliderMain1" interval={5000} pause="hover" className="sh-48" indicators={dataSlider?.getHomePageSlider?.images?.length > 1} controls={dataSlider?.getHomePageSlider?.images?.length > 1}>
+                {dataSlider?.getHomePageSlider?.images?.map((item, index) => (
+                  <Carousel.Item key={index}>
+                    <img
+                      onClick={() => sendTo(dataSlider.getHomePageSlider.url)}
+                      src={item}
+                      className="responsive card-image h-100 scale cursor-pointer"
+                      alt="..."
+                    />
+                  </Carousel.Item>
+                ))}
+              </Carousel>
             </Col>
             <Col sm="6" md="6">
-              <div id="carouselExampleAutoplaying1" className="carousel slide  sh-48 " data-bs-ride="carousel">
-                <div onClick={() => sendTo(dataSlider2.getHomePageSlider.url)} className="carousel-inner rounded">
-                  {dataSlider2?.getHomePageSlider?.images?.length > 0 && (
-                    <div className="carousel-item active">
-                      <img src={dataSlider2.getHomePageSlider.images[0]} className="responsive card-image h-100 scale" alt="..." />
-                    </div>
-                  )}
-                  {dataSlider2?.getHomePageSlider?.images?.length > 0 &&
-                    dataSlider2.getHomePageSlider.images.map(
-                      (item, index) =>
-                        !(index === 0) && (
-                          <div key={index} className="carousel-item">
-                            <img src={item} className="responsive card-image h-100 scale" alt="..." />
-                          </div>
-                        )
-                    )}
-                </div>
-                <button className="carousel-control-prev" type="button" data-bs-target="#carouselExampleAutoplaying1" data-bs-slide="prev">
-                  <span className="carousel-control-prev-icon" aria-hidden="true" />
-                  <span className="visually-hidden">Previous</span>
-                </button>
-                <button className="carousel-control-next" type="button" data-bs-target="#carouselExampleAutoplaying1" data-bs-slide="next">
-                  <span className="carousel-control-next-icon" aria-hidden="true" />
-                  <span className="visually-hidden">Next</span>
-                </button>
-              </div>
+              <Carousel id="homeSliderMain2" interval={5000} pause="hover" className="sh-48" indicators={dataSlider2?.getHomePageSlider?.images?.length > 1} controls={dataSlider2?.getHomePageSlider?.images?.length > 1}>
+                {dataSlider2?.getHomePageSlider?.images?.map((item, index) => (
+                  <Carousel.Item key={index}>
+                    <img
+                      onClick={() => sendTo(dataSlider2.getHomePageSlider.url)}
+                      src={item}
+                      className="responsive card-image h-100 scale cursor-pointer"
+                      alt="..."
+                    />
+                  </Carousel.Item>
+                ))}
+              </Carousel>
             </Col>
           </Row>
           {dataSlider3?.getHomePageSlider?.images[0] && (
             <Row className="g-2">
               <Col sm="6">
-                <div id="carouselExampleAutoplaying2" className="carousel slide sh-48" data-bs-ride="carousel">
-                  <div onClick={() => sendTo(dataSlider3.getHomePageSlider.url)} className="carousel-inner rounded">
-                    {dataSlider3 && dataSlider3.getHomePageSlider?.images?.length > 0 && (
-                      <div className="carousel-item active">
-                        <img src={dataSlider3.getHomePageSlider.images[0]} className="responsive card-image scale" alt="..." />
-                      </div>
-                    )}
-                    {dataSlider3 &&
-                      dataSlider3.getHomePageSlider?.images?.length > 0 &&
-                      dataSlider3.getHomePageSlider.images.map(
-                        (item, index) =>
-                          !(index === 0) && (
-                            <div key={index} className="carousel-item">
-                              <img src={item} className="responsive card-image scale" alt="..." />
-                            </div>
-                          )
-                      )}
-                  </div>
-                  <button className="carousel-control-prev" type="button" data-bs-target="#carouselExampleAutoplaying2" data-bs-slide="prev">
-                    <span className="carousel-control-prev-icon" aria-hidden="true" />
-                    <span className="visually-hidden">Previous</span>
-                  </button>
-                  <button className="carousel-control-next" type="button" data-bs-target="#carouselExampleAutoplaying2" data-bs-slide="next">
-                    <span className="carousel-control-next-icon" aria-hidden="true" />
-                    <span className="visually-hidden">Next</span>
-                  </button>
-                </div>
+                <Carousel id="homeSliderMain3" interval={5000} pause="hover" className="sh-48" indicators={dataSlider3?.getHomePageSlider?.images?.length > 1} controls={dataSlider3?.getHomePageSlider?.images?.length > 1}>
+                  {dataSlider3?.getHomePageSlider?.images?.map((item, index) => (
+                    <Carousel.Item key={index}>
+                      <img
+                        onClick={() => sendTo(dataSlider3.getHomePageSlider.url)}
+                        src={item}
+                        className="responsive card-image scale cursor-pointer"
+                        alt="..."
+                      />
+                    </Carousel.Item>
+                  ))}
+                </Carousel>
               </Col>
               <Col sm="6">
-                <div id="carouselExampleAutoplaying3" className="carousel slide sh-48" data-bs-ride="carousel">
-                  <div onClick={() => sendTo(dataSlider4.getHomePageSlider.url)} className="carousel-inner rounded">
-                    {dataSlider4?.getHomePageSlider?.images?.length > 0 && (
-                      <div className="carousel-item active">
-                        <img src={dataSlider4.getHomePageSlider.images[0]} className="responsive card-image h-100 scale" alt="..." />
-                      </div>
-                    )}
-                    {dataSlider4?.getHomePageSlider?.images?.length > 0 &&
-                      dataSlider4.getHomePageSlider.images.map(
-                        (item, index) =>
-                          !(index === 0) && (
-                            <div key={index} className="carousel-item">
-                              <img src={item} className="responsive card-image h-100 scale" alt="..." />
-                            </div>
-                          )
-                      )}
-                  </div>
-                  <button className="carousel-control-prev" type="button" data-bs-target="#carouselExampleAutoplaying3" data-bs-slide="prev">
-                    <span className="carousel-control-prev-icon" aria-hidden="true" />
-                    <span className="visually-hidden">Previous</span>
-                  </button>
-                  <button className="carousel-control-next" type="button" data-bs-target="#carouselExampleAutoplaying3" data-bs-slide="next">
-                    <span className="carousel-control-next-icon" aria-hidden="true" />
-                    <span className="visually-hidden">Next</span>
-                  </button>
-                </div>
+                <Carousel id="homeSliderMain4" interval={5000} pause="hover" className="sh-48" indicators={dataSlider4?.getHomePageSlider?.images?.length > 1} controls={dataSlider4?.getHomePageSlider?.images?.length > 1}>
+                  {dataSlider4?.getHomePageSlider?.images?.map((item, index) => (
+                    <Carousel.Item key={index}>
+                      <img
+                        onClick={() => sendTo(dataSlider4.getHomePageSlider.url)}
+                        src={item}
+                        className="responsive card-image h-100 scale cursor-pointer"
+                        alt="..."
+                      />
+                    </Carousel.Item>
+                  ))}
+                </Carousel>
               </Col>
             </Row>
           )}
@@ -479,7 +421,7 @@ const Home = () => {
       {dataAd1PC?.getAds?.active && (
         <aside className="d-none d-md-block">
           <Card className="hover-border-primary card">
-            <div id="carouselExampleAutoplaying" data-bs-ride="carousel">
+            <div id="homeAdSlot1PC" key={dataAd1PC?.getAds?.images} data-bs-ride="carousel" data-bs-interval="5000">
               <div onClick={() => sendTo(dataAd1PC.getAds.url)} className="m-1">
                 <img src={dataAd1PC.getAds.images} className="d-block w-100 rounded" alt="PC Ad" />
               </div>
@@ -490,7 +432,7 @@ const Home = () => {
       {dataAd1Mobile?.getAds?.active && (
         <aside className="d-block d-md-none">
           <Card className="hover-border-primary card">
-            <div id="carouselExampleAutoplaying" data-bs-ride="carousel">
+            <div id="homeAdSlot1Mobile" key={dataAd1Mobile?.getAds?.images} data-bs-ride="carousel" data-bs-interval="5000">
               <div onClick={() => sendTo(dataAd1Mobile.getAds.url)} className="m-1">
                 <img src={dataAd1Mobile.getAds.images} className="d-block w-100 rounded" alt="Mobile Ad" />
               </div>
@@ -594,10 +536,8 @@ const Home = () => {
       {dataAd2PC?.getAds?.active && (
         <aside className="d-none d-md-block">
           <Card className="hover-border-primary card">
-            <div id="carouselExampleAutoplaying" data-bs-ride="carousel">
-              <div onClick={() => sendTo(dataAd2PC.getAds.url)} className="m-1">
-                <img src={dataAd2PC.getAds.images} className="d-block w-100 rounded" alt="PC Ad" />
-              </div>
+            <div id="homeAdSlot2PC" className="m-1">
+              <img onClick={() => sendTo(dataAd2PC.getAds.url)} src={dataAd2PC.getAds.images} className="d-block w-100 rounded cursor-pointer" alt="PC Ad" />
             </div>
           </Card>
         </aside>
@@ -605,10 +545,8 @@ const Home = () => {
       {dataAd2Mobile?.getAds?.active && (
         <aside className="d-block d-md-none">
           <Card className="hover-border-primary card">
-            <div id="carouselExampleAutoplaying" data-bs-ride="carousel">
-              <div onClick={() => sendTo(dataAd2Mobile.getAds.url)} className="m-1">
-                <img src={dataAd2Mobile.getAds.images} className="d-block w-100 rounded" alt="Mobile Ad" />
-              </div>
+            <div id="homeAdSlot2Mobile" className="m-1">
+              <img onClick={() => sendTo(dataAd2Mobile.getAds.url)} src={dataAd2Mobile.getAds.images} className="d-block w-100 rounded cursor-pointer" alt="Mobile Ad" />
             </div>
           </Card>
         </aside>
@@ -644,10 +582,8 @@ const Home = () => {
       {dataAd3PC?.getAds?.active && (
         <aside className="d-none d-md-block">
           <Card className="hover-border-primary card">
-            <div id="carouselExampleAutoplaying" data-bs-ride="carousel">
-              <div onClick={() => sendTo(dataAd3PC.getAds.url)} className="m-1">
-                <img src={dataAd3PC.getAds.images} className="d-block w-100 rounded" alt="PC Ad" />
-              </div>
+            <div id="homeAdSlot3PC" className="m-1">
+              <img onClick={() => sendTo(dataAd3PC.getAds.url)} src={dataAd3PC.getAds.images} className="d-block w-100 rounded cursor-pointer" alt="PC Ad" />
             </div>
           </Card>
         </aside>
@@ -655,10 +591,8 @@ const Home = () => {
       {dataAd3Mobile?.getAds?.active && (
         <aside className="d-block d-md-none">
           <Card className="hover-border-primary card">
-            <div id="carouselExampleAutoplaying" data-bs-ride="carousel">
-              <div onClick={() => sendTo(dataAd3Mobile.getAds.url)} className="m-1">
-                <img src={dataAd3Mobile.getAds.images} className="d-block w-100 rounded" alt="Mobile Ad" />
-              </div>
+            <div id="homeAdSlot3Mobile" className="m-1">
+              <img onClick={() => sendTo(dataAd3Mobile.getAds.url)} src={dataAd3Mobile.getAds.images} className="d-block w-100 rounded cursor-pointer" alt="Mobile Ad" />
             </div>
           </Card>
         </aside>

@@ -21,20 +21,33 @@ export const isSuperSellerRole = (roles = []) => {
   return roles.includes('superSeller');
 };
 
+// export const resolveAdBasePath = ({ pathname = '', roles = [] } = {}) => {
+//   // Check pathname first
+//   if (typeof pathname === 'string') {
+//     if (pathname.startsWith('/adsassociate') || pathname.startsWith('/adManager')) {
+//       return '/adsassociate';
+//     }
+//     if (pathname.startsWith('/superSeller')) {
+//       return '/superSeller';
+//     }
+//   }
+
+//   // Then check roles
+//   if (isSuperSellerRole(roles)) return '/superSeller';
+//   if (isAdsAssociateRole(roles)) return '/adsassociate';
+
+//   return '/seller';
+// };
+
 export const resolveAdBasePath = ({ pathname = '', roles = [] } = {}) => {
-  // Check pathname first
-  if (typeof pathname === 'string') {
-    if (pathname.startsWith('/adsassociate') || pathname.startsWith('/adManager')) {
-      return '/adsassociate';
-    }
-    if (pathname.startsWith('/superSeller')) {
-      return '/superSeller';
-    }
-  }
-  
-  // Then check roles
+  // 🔥 STRONG CHECK (most important)
+  if (pathname.startsWith('/seller')) return '/seller';
+  if (pathname.startsWith('/adsassociate') || pathname.startsWith('/adManager')) return '/adsassociate';
+  if (pathname.startsWith('/superSeller')) return '/superSeller';
+
+  // fallback (rare case)
   if (isSuperSellerRole(roles)) return '/superSeller';
   if (isAdsAssociateRole(roles)) return '/adsassociate';
-  
+
   return '/seller';
 };
