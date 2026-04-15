@@ -4,7 +4,7 @@ import { NavLink, useParams, useHistory } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { useWindowSize } from 'hooks/useWindowSize';
 import { toast } from 'react-toastify';
-import { Row, Col, Button, Dropdown, Card, Modal, Tooltip, OverlayTrigger } from 'react-bootstrap';
+import { Row, Col, Button, Dropdown, Card, Modal, Tooltip, OverlayTrigger, Carousel } from 'react-bootstrap';
 import 'bootstrap/js/dist/carousel';
 import HtmlHead from 'components/html-head/HtmlHead';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
@@ -279,14 +279,14 @@ const SubcategoryL2 = () => {
       }
     }
   }, []);
-  
+
   // Get Category List
   const [GetCategoryByName, { data }] = useLazyQuery(
     GET_SUBCATEGORIESBYNAME,
     { variables: { name: params.categoryname.replace(/_/g, ' ') } },
     {
       onCompleted: (result) => {
-        setTitle(result.getCategoryByName.name); 
+        setTitle(result.getCategoryByName.name);
       },
       onError(error) {
         toast.error(error.message || 'Something went wrong!');
@@ -434,40 +434,6 @@ const SubcategoryL2 = () => {
       }));
   }, [categoryAds]);
 
-    // Ensure Bootstrap carousel instances are initialized after ads render
-    useEffect(() => {
-      if (typeof window === 'undefined') return undefined;
-      if (!adsLoaded) return undefined; // Wait for ads to load before initializing carousel
-      const bs = window.bootstrap;
-      if (!bs) return undefined;
-
-      const initCarousel = (id) => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        // make sure first item is active
-        const items = el.querySelectorAll('.carousel-item');
-        items.forEach((it, idx) => it.classList.toggle('active', idx === 0));
-        try {
-          // Dispose existing instance and re-create to avoid stale state
-          const existing = bs.Carousel.getInstance(el);
-          if (existing) existing.dispose();
-          // eslint-disable-next-line no-new
-          new bs.Carousel(el, { interval: 5000, ride: 'carousel' });
-        } catch (e) {
-          // ignore initialization errors
-        }
-      };
-
-      if (bannerAds && bannerAds.length > 0) {
-        // Small timeout to let React render the DOM before carousel init
-        const timer = setTimeout(() => {
-          initCarousel('approvedAdsCarousel');
-          initCarousel('categoryTopAdsCarousel');
-        }, 100);
-        return () => clearTimeout(timer);
-      }
-      return undefined;
-    }, [categoryAds, bannerAds, adsLoaded]);
 
   // When category data is available, fetch approved ads by categoryId
   useEffect(() => {
@@ -487,6 +453,7 @@ const SubcategoryL2 = () => {
   const { themeValues } = useSelector((state) => state.settings);
   const lgBreakpoint = parseInt(themeValues.lg.replace('px', ''), 10);
   const { width } = useWindowSize();
+  const isMobile = width < 768; // Add this line
   const [isLgScreen, setIsLgScreen] = useState(false);
   const [isOpenCategoryModal, setIsOpenCategoryModal] = useState(false);
   const [isOpenFiltersModal, setIsOpenFiltersModal] = useState(false);
@@ -499,7 +466,7 @@ const SubcategoryL2 = () => {
         if (isOpenFiltersModal) setIsOpenFiltersModal(false);
       } else if (isLgScreen) setIsLgScreen(false);
     }
-    return () => {};
+    return () => { };
     // eslint-disable-next-line
   }, [width]);
 
@@ -582,61 +549,36 @@ const SubcategoryL2 = () => {
       <aside>
         {/* APPROVED ADS CAROUSEL - TOP OF CATEGORY PAGE */}
         {!loadingAds && adsLoaded && bannerAds && bannerAds.length > 0 && (
-          <div id="categoryTopAdsCarousel" className="carousel slide mb-3 rounded border" data-bs-ride="carousel">
-            <div className="carousel-inner rounded">
-              {bannerAds.map((item, index) => {
-                const adImage = width < 768 ? item.mobile_image_url : item.desktop_image_url;
-                const adUrl = item.redirect_url;
-                return (
-                  <div 
-                    key={`${item.ad?.id}-${item.slot}-${index}`} 
-                    className={`carousel-item ${index === 0 ? 'active' : ''}`}
+          <Carousel
+            id="categoryTopAdsCarousel"
+            interval={5000}
+            pause="hover"
+            className="carousel slide rounded border shadow-sm mb-4"
+            indicators={bannerAds.length > 1}
+            controls={bannerAds.length > 1}
+          >
+            {bannerAds.map((item, index) => {
+              const adImage = width < 768 ? item.mobile_image_url : item.desktop_image_url;
+              const adUrl = item.redirect_url;
+              return (
+                <Carousel.Item key={`${item.ad?.id}-${item.slot}-${index}`}>
+                  <a
+                    href={adUrl || '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ textDecoration: 'none', display: 'block' }}
                   >
-                    <a 
-                      href={adUrl || '#'} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      style={{ textDecoration: 'none', display: 'block' }}
-                    >
-                      <img
-                        src={adImage}
-                        alt={`Ad from ${item.ad?.sellerName}`}
-                        className="d-block w-100 rounded"
-                        style={{ objectFit: 'cover', height: '280px' }}
-                      />
-                      {item.source !== 'default' && (
-                        <div className="carousel-caption d-none d-md-block">
-                          <h4 className="text-white fw-bold">{item.ad?.sellerName}</h4>
-                        </div>
-                      )}
-                    </a>
-                  </div>
-                );
-              })}
-            </div>
-            {bannerAds.length > 1 && (
-              <>
-                <button 
-                  className="carousel-control-prev" 
-                  type="button" 
-                  data-bs-target="#categoryTopAdsCarousel" 
-                  data-bs-slide="prev"
-                >
-                  <span className="carousel-control-prev-icon" aria-hidden="true" />
-                  <span className="visually-hidden">Previous</span>
-                </button>
-                <button 
-                  className="carousel-control-next" 
-                  type="button" 
-                  data-bs-target="#categoryTopAdsCarousel" 
-                  data-bs-slide="next"
-                >
-                  <span className="carousel-control-next-icon" aria-hidden="true" />
-                  <span className="visually-hidden">Next</span>
-                </button>
-              </>
-            )}
-          </div>
+                    <img
+                      src={adImage || '/img/advertisement/banner_c.jpeg'}
+                      className="d-block w-100 rounded"
+                      alt="Banner Ad"
+                      style={{ height: isMobile ? '120px' : '285px', objectFit: 'cover' }}
+                    />
+                  </a>
+                </Carousel.Item>
+              );
+            })}
+          </Carousel>
         )}
 
         {/* CATEGORY SLIDER IMAGE - FALLBACK WHEN NO BANNER ADS */}
@@ -1023,7 +965,7 @@ const SubcategoryL2 = () => {
                 <Col sm="6" lg="3" key={`${item.ad?.id}-${item.slot}-${index}`}>
                   <Card className="w-100 hover-img-scale-up">
                     <a href={url || '#'} target="_blank" rel="noopener noreferrer">
-                      <img src={img || '/img/advertisement/c1.jpeg'} className="img-fluid img_1 scale" alt="stamp ad"/>
+                      <img src={img || '/img/advertisement/c1.jpeg'} className="img-fluid img_1 scale" alt="stamp ad" />
                     </a>
                   </Card>
                 </Col>
@@ -1099,16 +1041,16 @@ const SubcategoryL2 = () => {
         </Modal>
       )}
       {/* Filters Modal End */}
- 
+
 
       <div className="p-3 mt-4 shadow-lg bg-white rounded">
         <h2 className="fw-bold text-dark border-bottom pb-2 mb-3 fs-6">{params.categoryname.replaceAll('_', ' ').toUpperCase()}</h2>
         <ul className="list-unstyled text-dark m-0">
-          <li className="mb-2">            
+          <li className="mb-2">
             {data?.getCategoryByName?.description || 'No description available'}
           </li>
         </ul>
-      </div> 
+      </div>
     </>
   );
 };

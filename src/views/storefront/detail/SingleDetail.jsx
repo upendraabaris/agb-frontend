@@ -13,7 +13,7 @@ import './style.css';
 import { Navigation } from 'swiper';
 import styled, { ThemeProvider } from 'styled-components';
 import { toast } from 'react-toastify';
-import { Row, Col, Button, Card, Form, OverlayTrigger, Tooltip, Modal } from 'react-bootstrap';
+import { Row, Col, Button, Card, Form, OverlayTrigger, Tooltip, Modal, Carousel } from 'react-bootstrap';
 import HtmlHead from 'components/html-head/HtmlHead';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
 import 'react-image-lightbox/style.css';
@@ -283,26 +283,6 @@ const SingleDetail = ({ product }) => {
   const bannerMedias = productAds.filter((m) => m.slot.startsWith('banner_'));
   const stampMedias = productAds.filter((m) => m.slot.startsWith('stamp_'));
 
-  // Init Bootstrap carousel for product banner ads
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!bannerMedias || bannerMedias.length < 2) return;
-    const bs = window.bootstrap;
-    if (!bs) return;
-    const timer = setTimeout(() => {
-      const el = document.getElementById('productAdBannerCarousel');
-      if (!el) return;
-      const items = el.querySelectorAll('.carousel-item');
-      items.forEach((it, idx) => it.classList.toggle('active', idx === 0));
-      try {
-        const existing = bs.Carousel.getInstance(el);
-        if (existing) existing.dispose();
-        // eslint-disable-next-line no-new
-        new bs.Carousel(el, { interval: 5000, ride: 'carousel' });
-      } catch (e) { /* ignore */ }
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [bannerMedias.length]);
 
   useEffect(() => {
     window.scrollTo({
@@ -723,70 +703,49 @@ const SingleDetail = ({ product }) => {
                   {productDetailsPageSlider && productDetailsPageSlider.getAds && (
                     <img src={productDetailsPageSlider.getAds.images} className="d-block w-100 rounded" alt={productDetailsPageSlider.getAds.key} />
                   )}
-                  {/* ── Approved Product Banner Ads — Bootstrap Carousel ── */}
+                  {/* ── Approved Product Banner Ads — React-Bootstrap Carousel ── */}
                   {bannerMedias.length > 0 && (
-                    <div
+                    <Carousel
                       id="productAdBannerCarousel"
-                      className="carousel slide mb-2 rounded border"
-                      data-bs-ride="carousel"
+                      interval={5000}
+                      pause="hover"
+                      className="mb-2 rounded border"
+                      indicators={bannerMedias.length > 1}
+                      controls={bannerMedias.length > 1}
                     >
-                      <div className="carousel-inner rounded">
-                        {bannerMedias.map((media, i) => {
-                          const BASE = (process.env.REACT_APP_API_URL || 'http://localhost:4000') + '/';
-                          const toAbs = (url) => url && !url.startsWith('http') ? BASE + url : url;
-                          const imgUrl = isMobile
-                            ? toAbs(media.mobile_image_url) || toAbs(media.desktop_image_url)
-                            : toAbs(media.desktop_image_url) || toAbs(media.mobile_image_url);
-                          const redirectUrl = isMobile
-                            ? media.mobile_redirect_url || media.desktop_redirect_url
-                            : media.desktop_redirect_url || media.mobile_redirect_url;
-                          if (!imgUrl) return null;
-                          return (
-                            <div key={i} className={`carousel-item ${i === 0 ? 'active' : ''}`}>
-                              {redirectUrl ? (
-                                <a href={redirectUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'block' }}>
-                                  <img
-                                    src={imgUrl}
-                                    className="d-block w-100 rounded"
-                                    alt={`Ad Banner ${i + 1}`}
-                                    style={{ objectFit: 'cover', height: '280px', width: '100%' }}
-                                  />
-                                </a>
-                              ) : (
+                      {bannerMedias.map((media, i) => {
+                        const BASE = (process.env.REACT_APP_API_URL || 'http://localhost:4000') + '/';
+                        const toAbs = (url) => (url && !url.startsWith('http') ? BASE + url : url);
+                        const imgUrl = isMobile
+                          ? toAbs(media.mobile_image_url) || toAbs(media.desktop_image_url)
+                          : toAbs(media.desktop_image_url) || toAbs(media.mobile_image_url);
+                        const redirectUrl = isMobile
+                          ? media.mobile_redirect_url || media.desktop_redirect_url
+                          : media.desktop_redirect_url || media.mobile_redirect_url;
+                        if (!imgUrl) return null;
+                        return (
+                          <Carousel.Item key={i}>
+                            {redirectUrl ? (
+                              <a href={redirectUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'block' }}>
                                 <img
                                   src={imgUrl}
                                   className="d-block w-100 rounded"
                                   alt={`Ad Banner ${i + 1}`}
                                   style={{ objectFit: 'cover', height: '280px', width: '100%' }}
                                 />
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {bannerMedias.length > 1 && (
-                        <>
-                          <button
-                            className="carousel-control-prev"
-                            type="button"
-                            data-bs-target="#productAdBannerCarousel"
-                            data-bs-slide="prev"
-                          >
-                            <span className="carousel-control-prev-icon" aria-hidden="true" />
-                            <span className="visually-hidden">Previous</span>
-                          </button>
-                          <button
-                            className="carousel-control-next"
-                            type="button"
-                            data-bs-target="#productAdBannerCarousel"
-                            data-bs-slide="next"
-                          >
-                            <span className="carousel-control-next-icon" aria-hidden="true" />
-                            <span className="visually-hidden">Next</span>
-                          </button>
-                        </>
-                      )}
-                    </div>
+                              </a>
+                            ) : (
+                              <img
+                                src={imgUrl}
+                                className="d-block w-100 rounded"
+                                alt={`Ad Banner ${i + 1}`}
+                                style={{ objectFit: 'cover', height: '280px', width: '100%' }}
+                              />
+                            )}
+                          </Carousel.Item>
+                        );
+                      })}
+                    </Carousel>
                   )}
                 </>
               )}

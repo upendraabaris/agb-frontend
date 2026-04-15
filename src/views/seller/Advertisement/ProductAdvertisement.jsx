@@ -460,7 +460,14 @@ const ProductAdvertisement = () => {
 
   const goToWalletRecharge = () => {
     saveWizardState();
-    history.push(`${basePath}/wallet?returnTo=${basePath}/advertisement/ads-product`);
+
+    // const basePath = resolveAdBasePath({
+    //   pathname: location.pathname,
+    //   roles: user.roles
+    // });
+
+
+    history.push(`${basePath}/wallet?returnTo=${location.pathname}`);
   };
 
   // ── Open wizard for a product ────────────────────────────────────────
@@ -786,6 +793,9 @@ const ProductAdvertisement = () => {
 
   const renderStep1 = () => {
     const quarters = getQuarters(5);
+    const today = new Date();
+    const currentQIsoDate = `${today.getFullYear()}-${String(Math.floor(today.getMonth() / 3) * 3 + 1).padStart(2, '0')}-01`;
+    const isTodayMode = !selectedStartQuarter || selectedStartQuarter === currentQIsoDate;
 
     return (
       <div>
@@ -827,9 +837,17 @@ const ProductAdvertisement = () => {
               </Button>
             ))}
           </div>
-          <div className="text-muted" style={{ fontSize: '0.78rem', marginTop: 4 }}>
-            Your ad starts from the selected quarter with full quarter pricing.
-          </div>
+          {isTodayMode && (
+            <Alert variant="info" className="mt-2 py-2 px-3 small border-0" style={{ background: '#e7f3ff', color: '#0056b3' }}>
+              <CsLineIcons icon="info-circle" size="14" className="me-2" />
+              <strong>Note:</strong> Starting mid-quarter includes the current quarter's remaining days (pro-rata) plus the subsequent full quarter(s), subject to availability.
+            </Alert>
+          )}
+          {!isTodayMode && (
+            <div className="text-muted" style={{ fontSize: '0.78rem', marginTop: 4 }}>
+              Your ad starts from the selected quarter with full quarter pricing.
+            </div>
+          )}
         </div>
 
         {/* Pricing table */}
@@ -854,12 +872,12 @@ const ProductAdvertisement = () => {
               </thead>
               <tbody>
                 {ALL_SLOTS.map((slot) => {
-                  const price = computeSlotPrice(slot);
+                  const price = getSlotPrice(pricingData, slot, selectedDuration);
                   return (
                     <tr key={slot}>
                       <td>{slotLabel(slot)}</td>
                       <td>{DURATION_OPTIONS.find((d) => d.value === selectedDuration)?.label}</td>
-                      <td className="fw-bold">₹{price}</td>
+                      <td className="fw-bold">₹{price.toLocaleString('en-IN')}</td>
                     </tr>
                   );
                 })}
@@ -1134,7 +1152,7 @@ const ProductAdvertisement = () => {
       </div>
 
       {/* Quarter breakdown summary (based on first selected slot) */}
-      {selectedSlots.length > 0 && (() => {
+      {selectedSlots.length > 0 && selectedProduct && (() => {
         const today = new Date();
         const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
         const slotName = selectedSlots[0];
@@ -1399,7 +1417,7 @@ const ProductAdvertisement = () => {
             <h1 className="mb-0 pb-0 display-4">{title}</h1>
             <div className="text-muted fs-base">{description}</div>
           </Col>
-          <Col xs="auto" className="d-flex align-items-center gap-3">
+          {/* <Col xs="auto" className="d-flex align-items-center gap-3">
             <div className="text-end">
               <div className="text-muted small">Wallet Balance</div>
               <div className={`fw-bold fs-5 ${walletBalance === 0 ? 'text-danger' : 'text-success'}`}>₹{walletBalance.toFixed(2)}</div>
@@ -1408,7 +1426,7 @@ const ProductAdvertisement = () => {
               <CsLineIcons icon="plus" size="13" className="me-1" />
               Recharge
             </Button>
-          </Col>
+          </Col> */}
         </Row>
       </div>
 

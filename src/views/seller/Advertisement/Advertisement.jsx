@@ -7,6 +7,7 @@ import { toast } from 'react-toastify';
 import { useDispatch, useSelector } from 'react-redux';
 import HtmlHead from 'components/html-head/HtmlHead';
 import { menuChangeUseSidebar } from 'layout/nav/main-menu/menuSlice';
+import CsLineIcons from 'cs-line-icons/CsLineIcons';
 import ImageUpload from './components/ImageUpload';
 import PreviewSection from './components/PreviewSection';
 import SuccessModal from './components/SuccessModal';
@@ -1370,7 +1371,14 @@ const Advertisement = () => {
             </div>
             <small className='text-muted mt-1 d-block'>
               {startPreference === 'today'
-                ? 'Your ad starts today with pro-rata pricing for the remaining current quarter.'
+                ? (
+                  <>
+                    <Alert variant="info" className="mt-2 py-2 px-3 small border-0" style={{ background: '#e7f3ff', color: '#0056b3' }}>
+                      <CsLineIcons icon="info-circle" size="14" className="me-2" />
+                      <strong>Note:</strong> Starting mid-quarter includes the current quarter's remaining days (pro-rata) plus the subsequent full quarter(s), subject to availability.
+                    </Alert>
+                  </>
+                )
                 : 'Your ad starts from the selected quarter with full quarter pricing.'}
             </small>
           </div>
