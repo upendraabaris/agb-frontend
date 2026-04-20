@@ -269,13 +269,13 @@ const ProductAdsTab = ({ basePath }) => {
                     <tr key={ad.id}>
                       <td>
                         <div className="d-flex align-items-center gap-2">
-                          {ad.productThumbnail && (
+                          {/* {ad.productThumbnail && (
                             <img
                               src={ad.productThumbnail}
                               alt={ad.productName}
                               style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6 }}
                             />
-                          )}
+                          )} */}
                           <div>
                             <div className="fw-semibold" style={{ maxWidth: 180 }}>
                               {ad.productName}
