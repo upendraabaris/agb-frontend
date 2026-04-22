@@ -58,12 +58,12 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
 
     if (device === 'mobile') {
       // Mobile Dimensions
-      requiredWidth = slotType === 'banner' ? 2000 : 1000;
-      requiredHeight = slotType === 'banner' ? 300 : 500;
+      requiredWidth = slotType === 'banner' ? 1200 : 1000;
+      requiredHeight = slotType === 'banner' ? 400 : 500;
     } else {
       // Desktop Dimensions
       requiredWidth = slotType === 'banner' ? 2000 : 1000;
-      requiredHeight = slotType === 'banner' ? 300 : 500;
+      requiredHeight = slotType === 'banner' ? 300 : 700;
     }
 
     const reader = new FileReader();
@@ -134,7 +134,7 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
               <Card.Title className='mb-0'>
                 {formatSlotName(slot)}
                 <small className='text-muted ms-2' style={{ fontSize: '0.75rem', fontWeight: 'normal' }}>
-                  (Desktop: {slot.startsWith('banner') ? '2000\u00d7300px' : '1000\u00d7500px'} | Mobile: {slot.startsWith('banner') ? '2000\u00d7300px' : '600\u00d7600px'})
+                  (Desktop: {slot.startsWith('banner') ? '2000\u00d7300px' : '1000\u00d7700px'} | Mobile: {slot.startsWith('banner') ? '1200\u00d7400px' : '1000\u00d7500px'})
                 </small>
               </Card.Title>
             </Card.Header>
@@ -159,7 +159,7 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
                           <CsLineIcons icon='image' className='mb-2 display-4' />
                           <p className='text-muted mb-1'>Drag or click to upload</p>
                           <p className='text-muted mb-0' style={{ fontSize: '0.7rem' }}>
-                            {slot.startsWith('banner') ? '1000 \u00d7 500px' : '750 \u00d7 500px'} | Max 500KB
+                            {slot.startsWith('banner') ? '1200 \u00d7 400px' : '1000 \u00d7 500px'} | Max 500KB
                           </p>
                         </div>
                       )}
@@ -204,7 +204,7 @@ const ImageUpload = ({ categoryId = '', selectedSlots = [], slotMedia = {}, onSl
                           <CsLineIcons icon='image' className='mb-2 display-4' />
                           <p className='text-muted mb-1'>Drag or click to upload</p>
                           <p className='text-muted mb-0' style={{ fontSize: '0.7rem' }}>
-                            {slot.startsWith('banner') ? '2000 \u00d7 300px' : '1000 \u00d7 500px'} | Max 500KB
+                            {slot.startsWith('banner') ? '2000 \u00d7 300px' : '1000 \u00d7 700px'} | Max 500KB
                           </p>
                         </div>
                       )}

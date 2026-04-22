@@ -120,6 +120,7 @@ const GET_MY_WALLET = gql`
     getMyWallet {
       id
       balance
+      hold_balance
     }
   }
 `;
@@ -262,7 +263,7 @@ const Advertisement = () => {
 
   // Wallet balance
   const { data: walletData, loading: walletLoading, refetch: refetchWallet } = useQuery(GET_MY_WALLET, { fetchPolicy: 'network-only' });
-  const walletBalance = walletData?.getMyWallet?.balance ?? 0;
+  const walletBalance = (walletData?.getMyWallet?.balance ?? 0) - (walletData?.getMyWallet?.hold_balance ?? 0);
 
   // Sync primary category pricing into the multi-category pricing map
   React.useEffect(() => {
@@ -925,7 +926,13 @@ const Advertisement = () => {
       }
 
       // Build medias for all entries (upload files in parallel per entry)
-      const uploadAndSubmit = validEntries.map(async (entry, entryIndex) => {
+      // Submit each ad request sequentially to avoid MongoDB Write Conflict on the wallet document
+      // We process validEntries one by one instead of mapping them to promises upfront
+      const results = [];
+      // eslint-disable-next-line no-restricted-syntax
+      for (const entry of validEntries) {
+        const entryIndex = validEntries.indexOf(entry);
+        // eslint-disable-next-line no-await-in-loop
         const mediasWithUrls = await Promise.all(
           entry.slots.map(async (slot) => {
             // Use cached URLs in shared mode
@@ -954,7 +961,8 @@ const Advertisement = () => {
           })
         );
 
-        return createCategoryRequest({
+        // eslint-disable-next-line no-await-in-loop
+        const res = await createCategoryRequest({
           variables: {
             input: {
               category_id: entry.categoryId,
@@ -966,10 +974,8 @@ const Advertisement = () => {
             },
           },
         });
-      });
-      setUploading(false);
-
-      const results = await Promise.all(uploadAndSubmit);
+        results.push(res);
+      }
 
       if (results.length > 0) {
         const catNames = allCats.filter(c => c.slots.length > 0).map(c => c.categoryName).join(', ');
@@ -1554,11 +1560,11 @@ const Advertisement = () => {
                     ) : (
                       <div className='d-flex flex-column align-items-center'>
                         {priceLabel && <small>{priceLabel}</small>}
-                        {isClipped && (
+                        {/* {isClipped && (
                           <span className='badge bg-warning text-dark' style={{ fontSize: '0.55rem', marginTop: '2px' }}>
                             Partial
                           </span>
-                        )}
+                        )} */}
                       </div>
                     )}
                   </Button>
@@ -1612,11 +1618,11 @@ const Advertisement = () => {
                     ) : (
                       <div className='d-flex flex-column align-items-center'>
                         {priceLabel && <small>{priceLabel}</small>}
-                        {isClipped && (
+                        {/* {isClipped && (
                           <span className='badge bg-warning text-dark' style={{ fontSize: '0.55rem', marginTop: '2px' }}>
                             Partial
                           </span>
-                        )}
+                        )} */}
                       </div>
                     )}
                   </Button>
@@ -2063,7 +2069,8 @@ const Advertisement = () => {
                                     return (
                                       <div className='d-flex flex-column gap-1'>
                                         <div className='d-flex align-items-center gap-2'>
-                                          <span className='text-dark fw-semibold'>{new Date(p.startDate).toLocaleDateString()} &mdash; {new Date(p.endDate).toLocaleDateString()}</span>
+                                          {/* <span className='text-dark fw-semibold'>{new Date(p.startDate).toLocaleDateString()} &mdash; {new Date(p.endDate).toLocaleDateString()}</span> */}
+                                          <span className='text-dark fw-semibold'>{moment(p.startDate).format('D MMMM YYYY')} &mdash; {moment(p.endDate).format('D MMMM YYYY')}</span>
                                           <span className='badge bg-light text-dark border'>{p.totalDays} days</span>
                                           {p.isClipped && (
                                             <span className='badge bg-warning text-dark' style={{ fontSize: '0.6rem' }}>

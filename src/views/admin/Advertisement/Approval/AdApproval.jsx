@@ -101,7 +101,7 @@ const REJECT_AD = gql`
 `;
 
 function AdApproval() {
-  const title = 'Ad Approvals';
+  const title = 'Category Ad Approvals';
   const description = 'Manage and approve seller advertisements';
 
   const ITEMS_PER_PAGE = 10;
@@ -367,7 +367,8 @@ function AdApproval() {
                   {paginatedRequests.map((request) => (
                     <tr key={request.id}>
                       <td>
-                        <div className="fw-bold">{request.sellerName}</div>
+                        <div className="fw-bold">{request.sellerCompanyName}</div>
+                        <div className="text-muted text-small">{request.sellerName}</div>
                         <div className="text-muted text-small">{request.sellerEmail}</div>
                       </td>
                       <td>{request.categoryName}</td>

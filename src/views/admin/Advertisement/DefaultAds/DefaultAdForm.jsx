@@ -57,6 +57,7 @@ function DefaultAdForm({ show, onHide, onSuccess, editingAd, selectedSlot }) {
   const [mobileFile, setMobileFile] = useState(null);
   const [desktopFile, setDesktopFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [imageErrors, setImageErrors] = useState({ mobile: '', desktop: '' });
 
   // Mutations
   const [createDefaultAd, { loading: creating }] = useMutation(CREATE_DEFAULT_AD);
@@ -88,22 +89,86 @@ function DefaultAdForm({ show, onHide, onSuccess, editingAd, selectedSlot }) {
     }
   }, [show, editingAd]);
 
+  // Validate image dimensions and size
+  const validateImage = (file, type) => {
+    return new Promise((resolve, reject) => {
+      // 1. Check File Size (Max 500KB)
+      if (file.size > 500 * 1024) {
+        reject(new Error('File size exceeds 500 KB limit'));
+        return;
+      }
+
+      // 2. Check Dimensions
+      const isBanner = selectedSlot?.ad_type === 'banner';
+      let expectedWidth = 0;
+      let expectedHeight = 0;
+
+      if (isBanner && type === 'mobile') {
+        // 1. Mobile Banner
+        expectedWidth = 1200;
+        expectedHeight = 400;
+      } else if (isBanner && type === 'desktop') {
+        // 2. Desktop Banner
+        expectedWidth = 2000;
+        expectedHeight = 300;
+      } else if (!isBanner && type === 'mobile') {
+        // 3. Mobile Stamp
+        expectedWidth = 1000;
+        expectedHeight = 500;
+      } else {
+        // 4. Desktop Stamp
+        expectedWidth = 1000;
+        expectedHeight = 700;
+      }
+
+      const img = new window.Image();
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        img.src = e.target.result;
+        img.onload = () => {
+          if (img.width !== expectedWidth || img.height !== expectedHeight) {
+            reject(new Error(`Dimensions must be exactly ${expectedWidth}x${expectedHeight} px (Got ${img.width}x${img.height})`));
+          } else {
+            resolve(true);
+          }
+        };
+        img.onerror = () => reject(new Error('Invalid image file.'));
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   // Handle file selection
-  const handleMobileFileChange = (e) => {
+  const handleMobileFileChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      setMobileFile(file);
-      // Create preview URL
-      setMobileImageUrl(URL.createObjectURL(file));
+      try {
+        setImageErrors(prev => ({ ...prev, mobile: '' }));
+        await validateImage(file, 'mobile');
+        setMobileFile(file);
+        setMobileImageUrl(URL.createObjectURL(file));
+      } catch (err) {
+        setImageErrors(prev => ({ ...prev, mobile: err.message }));
+        toast.error(`Mobile image error: ${err.message}`);
+        e.target.value = ''; // Reset input
+      }
     }
   };
 
-  const handleDesktopFileChange = (e) => {
+  const handleDesktopFileChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      setDesktopFile(file);
-      // Create preview URL
-      setDesktopImageUrl(URL.createObjectURL(file));
+      try {
+        setImageErrors(prev => ({ ...prev, desktop: '' }));
+        await validateImage(file, 'desktop');
+        setDesktopFile(file);
+        setDesktopImageUrl(URL.createObjectURL(file));
+      } catch (err) {
+        setImageErrors(prev => ({ ...prev, desktop: err.message }));
+        toast.error(`Desktop image error: ${err.message}`);
+        e.target.value = ''; // Reset input
+      }
     }
   };
 
@@ -131,6 +196,11 @@ function DefaultAdForm({ show, onHide, onSuccess, editingAd, selectedSlot }) {
     e.preventDefault();
 
     // Validate
+    if (imageErrors.mobile || imageErrors.desktop) {
+      toast.error('Please fix image errors before saving');
+      return;
+    }
+
     if (!editingAd && !mobileFile) {
       toast.error('Please select a mobile image');
       return;
@@ -244,7 +314,13 @@ function DefaultAdForm({ show, onHide, onSuccess, editingAd, selectedSlot }) {
                   type="file"
                   accept="image/*"
                   onChange={handleMobileFileChange}
+                  isInvalid={!!imageErrors.mobile}
                 />
+                {imageErrors.mobile && (
+                  <Form.Control.Feedback type="invalid">
+                    {imageErrors.mobile}
+                  </Form.Control.Feedback>
+                )}
                 {getDisplayUrl(mobileImageUrl) && (
                   <div className="mt-2 position-relative">
                     <Image
@@ -254,7 +330,7 @@ function DefaultAdForm({ show, onHide, onSuccess, editingAd, selectedSlot }) {
                       style={{ maxHeight: '150px', objectFit: 'cover' }}
                     />
                     <small className="text-muted d-block mt-1">
-                      Recommended: 375x200 px
+                      Required: {selectedSlot?.ad_type === 'banner' ? '1200x400' : '1000x500'} px | Max 500KB
                     </small>
                   </div>
                 )}
@@ -272,7 +348,13 @@ function DefaultAdForm({ show, onHide, onSuccess, editingAd, selectedSlot }) {
                   type="file"
                   accept="image/*"
                   onChange={handleDesktopFileChange}
+                  isInvalid={!!imageErrors.desktop}
                 />
+                {imageErrors.desktop && (
+                  <Form.Control.Feedback type="invalid">
+                    {imageErrors.desktop}
+                  </Form.Control.Feedback>
+                )}
                 {getDisplayUrl(desktopImageUrl) && (
                   <div className="mt-2 position-relative">
                     <Image
@@ -282,7 +364,7 @@ function DefaultAdForm({ show, onHide, onSuccess, editingAd, selectedSlot }) {
                       style={{ maxHeight: '150px', objectFit: 'cover' }}
                     />
                     <small className="text-muted d-block mt-1">
-                      Recommended: 1200x300 px (Banner) / 300x400 px (Stamp)
+                      Required: {selectedSlot?.ad_type === 'banner' ? '2000x300' : '1000x700'} px | Max 500KB
                     </small>
                   </div>
                 )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Table, Badge, Spinner, Modal, Form, Alert, Pagination } from 'react-bootstrap';
+import { Card, Button, Table, Badge, Spinner, Modal, Form, Alert, Pagination, Row, Col } from 'react-bootstrap';
 import { gql, useQuery, useMutation } from '@apollo/client';
 import { toast } from 'react-toastify';
 import { useLocation, useHistory } from 'react-router-dom';
@@ -14,6 +14,7 @@ const GET_MY_WALLET = gql`
     getMyWallet {
       id
       balance
+      hold_balance
     }
   }
 `;
@@ -50,6 +51,7 @@ const GENERATE_WALLET_INVOICE = gql`
       paymentGateway
       description
       buyerName
+      buyerCompany
       buyerEmail
       buyerPhone
       buyerAddress
@@ -203,7 +205,8 @@ const SellerWallet = () => {
     const billToBlock = `
       <div style="margin-top:18px;padding:12px 16px;border:1px solid #e0e0e0;border-radius:6px;background:#fafafa">
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;color:#888;letter-spacing:0.5px;margin-bottom:6px">Bill To</div>
-        <div style="font-size:14px;font-weight:700;color:#1a1a2e">${inv.buyerName || '—'}</div>
+        <div style="font-size:14px;font-weight:700;color:#1a1a2e">${inv.buyerCompany || '—'}</div>
+        ${inv.buyerName ? `<div style="font-size:13px;color:#555;margin-top:2px">${inv.buyerName}</div>` : ''}  
         ${inv.buyerAddress ? `<div style="font-size:13px;color:#555;margin-top:2px">${inv.buyerAddress}</div>` : ''}
         ${inv.buyerPhone ? `<div style="font-size:13px;color:#555;margin-top:2px"><b>Mobile No.:</b> ${inv.buyerPhone}</div>` : ''}
         ${inv.buyerEmail ? `<div style="font-size:13px;color:#555;margin-top:2px"><b>Email:</b> ${inv.buyerEmail}</div>` : ''}
@@ -397,42 +400,104 @@ const SellerWallet = () => {
         </Alert>
       )}
 
-      {/* ── Balance Card ── */}
-      <Card className="mb-4 shadow-sm border-0" style={{ borderRadius: 16 }}>
-        <Card.Body className="p-4">
-          <div className="d-flex align-items-center justify-content-between flex-wrap gap-3">
-            <div>
-              <p className="text-muted mb-1 small fw-semibold text-uppercase ls-1">Wallet Balance</p>
-              {loading ? (
-                <Spinner animation="border" size="sm" />
-              ) : (
-                <h2 className="fw-bold mb-0" style={{ fontSize: '2.2rem', color: '#1a1a2e' }}>
-                  {formatINR(wallet?.balance ?? 0)}
-                </h2>
-              )}
-              {error && <p className="text-danger small mt-1">{error.message}</p>}
-            </div>
-            <Button
-              className="px-4 py-2 fw-semibold"
-              style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                border: 'none',
-                borderRadius: 10,
-                color: '#fff',
-                fontSize: '0.95rem',
-              }}
-              onClick={() => {
-                setAmountInput('');
-                setAmountError('');
-                setShowAddModal(true);
-              }}
-              disabled={initiating}
-            >
-              + Add Money
-            </Button>
-          </div>
-        </Card.Body>
-      </Card>
+      {/* ── Balance Cards ── */}
+      <Row className="mb-4 g-3">
+        <Col md={8}>
+          <Card className="h-100 shadow-sm border-0" style={{ borderRadius: 16, background: '#fff' }}>
+            <Card.Body className="p-4">
+              <div className="d-flex align-items-center justify-content-between mb-4">
+                <div className="d-flex align-items-center gap-2">
+                  <div className="p-2 rounded-circle" style={{ background: '#f0f4ff', color: '#1a237e' }}>
+                    <i data-acorn-icon="wallet" size="20" />
+                  </div>
+                  <h6 className="mb-0 fw-bold">Wallet Summary</h6>
+                </div>
+                <Button
+                  className="px-4 py-2 fw-semibold"
+                  style={{
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    border: 'none',
+                    borderRadius: 10,
+                    color: '#fff',
+                    fontSize: '0.85rem',
+                  }}
+                  onClick={() => {
+                    setAmountInput('');
+                    setAmountError('');
+                    setShowAddModal(true);
+                  }}
+                  disabled={initiating}
+                >
+                  + Add Money
+                </Button>
+              </div>
+
+              <Row className="align-items-center">
+                <Col sm={6} className="border-end-sm">
+                  <p className="text-muted mb-1 small fw-semibold text-uppercase ls-1">Effective Balance</p>
+                  {loading ? (
+                    <Spinner animation="border" size="sm" />
+                  ) : (
+                    <div className="d-flex align-items-baseline gap-2">
+                      <h2 className="fw-bold mb-0 text-primary" style={{ fontSize: '2rem' }}>
+                        {formatINR(Math.max(0, (wallet?.balance || 0) - (wallet?.hold_balance || 0)))}
+                      </h2>
+                      {(wallet?.balance || 0) < (wallet?.hold_balance || 0) && (
+                        <Badge bg="danger" className="ms-1" style={{ fontSize: '0.7rem' }}>
+                          Over-committed
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                  <small className="text-muted">
+                    {(wallet?.balance || 0) < (wallet?.hold_balance || 0) 
+                      ? `Your reservations (₹${wallet?.hold_balance}) exceed your total balance.` 
+                      : 'Available for new bookings'}
+                  </small>
+                </Col>
+                <Col sm={6} className="mt-3 mt-sm-0 ps-sm-4">
+                  <div className="mb-3">
+                    <div className="d-flex justify-content-between align-items-center mb-1">
+                      <small className="text-muted fw-semibold">Total Balance:</small>
+                      <span className="fw-bold text-dark">{formatINR(wallet?.balance ?? 0)}</span>
+                    </div>
+                    <div className="progress" style={{ height: 6, borderRadius: 3 }}>
+                      <div
+                        className="progress-bar bg-primary"
+                        role="progressbar"
+                        style={{
+                          width: wallet?.balance > 0 ? `${Math.max(5, (1 - (wallet?.hold_balance / wallet?.balance)) * 100)}%` : '0%'
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="d-flex justify-content-between align-items-center">
+                    <div className="d-flex align-items-center gap-2">
+                      <small className="text-muted fw-semibold">Reserved (Hold):</small>
+                      <Badge bg="warning" text="dark" style={{ fontSize: '0.65rem', borderRadius: 4 }}>Pending Approval</Badge>
+                    </div>
+                    <span className="fw-bold text-warning">{formatINR(wallet?.hold_balance ?? 0)}</span>
+                  </div>
+                </Col>
+              </Row>
+            </Card.Body>
+          </Card>
+        </Col>
+
+        <Col md={4}>
+          <Card className="h-100 shadow-sm border-0 bg-primary text-white" style={{ borderRadius: 16 }}>
+            <Card.Body className="p-4 d-flex flex-column justify-content-center">
+              <div className="mb-3">
+                <h6 className="fw-bold text-white-50 mb-2">Why a Reserved Balance?</h6>
+                <p className="small mb-0 opacity-75" style={{ lineHeight: '1.5' }}>
+                  When you request an ad, the amount is reserved (held) to ensure the booking.
+                  If rejected, funds are released immediately. Deductions only happen on approval.
+                </p>
+              </div>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
 
       {/* ── Transaction History ── */}
       <Card className="shadow-sm border-0" style={{ borderRadius: 16 }}>
@@ -632,7 +697,8 @@ const SellerWallet = () => {
               {/* ── Bill To ── */}
               <div style={{ border: '1px solid #e0e0e0', borderRadius: 6, padding: '10px 14px', background: '#fafafa', marginBottom: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#888', letterSpacing: '0.5px', marginBottom: 4 }}>Bill To</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e' }}>{invoiceModal.invoice.buyerName || '—'}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e' }}>{invoiceModal.invoice.buyerCompany || '—'}</div>
+                {invoiceModal.invoice.buyerName && <div style={{ fontSize: 12, color: '#555', marginTop: 2 }}>{invoiceModal.invoice.buyerName}</div>}
                 {invoiceModal.invoice.buyerAddress && <div style={{ fontSize: 12, color: '#555', marginTop: 2 }}>{invoiceModal.invoice.buyerAddress}</div>}
                 {invoiceModal.invoice.buyerPhone && (
                   <div style={{ fontSize: 12, color: '#555', marginTop: 2 }}>

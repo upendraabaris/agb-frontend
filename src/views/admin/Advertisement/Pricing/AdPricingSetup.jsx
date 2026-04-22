@@ -4,6 +4,7 @@ import { Row, Col, Card, Button, Form, Spinner, Alert, Table, Badge } from 'reac
 import { toast } from 'react-toastify';
 import HtmlHead from 'components/html-head/HtmlHead';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
+import moment from 'moment';
 
 // GraphQL Queries
 const GET_ALL_TIERS = gql`
@@ -706,8 +707,8 @@ function AdPricingSetup() {
                           </Badge>
                         </td>
                         <td>
-                          {config.updatedAt
-                            ? new Date(config.updatedAt).toLocaleDateString()
+                          {moment(config.updatedAt).format('D MMMM YYYY')
+                            ? moment(new Date(config.updatedAt)).format('D MMMM YYYY')
                             : '-'}
                         </td>
                       </tr>

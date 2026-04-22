@@ -34,14 +34,31 @@ const GET_PRODUCT_AD_REQUESTS = gql`
         redirect_url
         mobile_redirect_url
         desktop_redirect_url
+        url_type
       }
-      durations {
+            durations {
         id
         slot
         duration_days
         start_date
         end_date
         status
+        start_preference
+        quarters_covered
+        pricing_breakdown {
+          quarter
+          start
+          end
+          days
+          rate_per_day
+          subtotal
+        }
+        total_price
+        coupon_code
+        coupon_discount_type
+        coupon_discount_value
+        coupon_discount_amount
+        final_price
       }
       createdAt
       updatedAt
@@ -180,8 +197,34 @@ function ProductAdApproval() {
                 toast.error(res.rejectProductAdRequest.message);
             }
         },
+
         onError: (err) => toast.error(err.message || 'Failed to reject'),
     });
+
+    // compute projected total price across ALL durations/slots
+    const computeProjectedTotal = () => {
+        if (!selectedRequest?.durations || selectedRequest.durations.length === 0) return 0;
+        return selectedRequest.durations.reduce((total, dur) => total + (dur.total_price || 0), 0);
+    };
+
+    // Compute total after coupon discount
+    const computeDiscountedTotal = () => {
+        if (!selectedRequest?.durations || selectedRequest.durations.length === 0) return 0;
+        return selectedRequest.durations.reduce((total, dur) => {
+            return total + (dur.final_price != null && dur.final_price > 0 ? dur.final_price : dur.total_price || 0);
+        }, 0);
+    };
+
+    // Check if any duration has a coupon applied
+    const hasCouponApplied = () => {
+        return selectedRequest?.durations?.some((d) => d.coupon_code) || false;
+    };
+
+    // human-readable slot label
+    const slotLabel = (slot) => {
+        if (!slot) return 'Unknown Slot';
+        return slot.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    };
 
     // ─── Availability Query ──────────────────────────────────────────────────
 
@@ -380,8 +423,9 @@ function ProductAdApproval() {
                                                     </div>
                                                 </td>
                                                 <td>
-                                                    <div className="fw-bold">{req.sellerName}</div>
-                                                    <small className="text-muted">{req.sellerEmail}</small>
+                                                    <div className="fw-bold">{req.sellerCompanyName}</div>
+                                                    <div className="text-muted text-small">{req.sellerName}</div>
+                                                    <small className="text-muted text-small">{req.sellerEmail}</small>
                                                 </td>
                                                 <td>
                                                     <div className="d-flex flex-wrap gap-1">
@@ -561,6 +605,112 @@ function ProductAdApproval() {
                                     </div>
                                 ))}
                             </div>
+                            <hr />
+
+                            {/* Media */}
+                            <h6 className="text-muted mb-2">Ad Creatives</h6>
+                            <hr />
+                            <h6 className="mb-3">Duration & Pricing</h6>
+                            {selectedRequest.durations && selectedRequest.durations.length > 0 && (
+                                <>
+                                    {/* Per-slot breakdown */}
+                                    {selectedRequest.durations.map((dur) => {
+                                        const media = selectedRequest.medias?.find(m => m.slot === dur.slot);
+                                        const isExternal = media?.url_type === 'external';
+
+                                        return (
+                                            <Card key={dur.id} className="mb-3 border">
+                                                <Card.Body className="p-3">
+                                                    <div className="d-flex justify-content-between align-items-center mb-2">
+                                                        <div>
+                                                            <strong>{slotLabel(dur.slot)}</strong>
+                                                            {isExternal && (
+                                                                <Badge bg="warning" text="dark" className="ms-2">
+                                                                    External URL
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                        <Badge bg="outline-primary" className="text-primary border">{dur.duration_days} days</Badge>
+                                                    </div>
+
+                                                    {dur.quarters_covered && dur.quarters_covered.length > 0 && (
+                                                        <div className="mb-2">
+                                                            <small className="text-muted">Quarters:</small>{' '}
+                                                            <span className="fw-bold">{dur.quarters_covered.join(', ')}</span>
+                                                        </div>
+                                                    )}
+
+                                                    {dur.pricing_breakdown && dur.pricing_breakdown.length > 0 && (
+                                                        <div className="mb-2">
+                                                            <small className="text-muted d-block mb-1">Pricing Breakdown</small>
+                                                            <ul className="mb-0 ps-3">
+                                                                {dur.pricing_breakdown.map((b, i) => {
+                                                                    if (b.days === 0 && b.subtotal > 0) {
+                                                                        const label = b.quarter.includes('External') || isExternal ? 'External URL Surcharge' : b.quarter;
+                                                                        return (
+                                                                            <li key={i} style={{ color: '#d97706', fontWeight: 600, listStyle: 'none', marginLeft: '-1rem' }}>
+                                                                                ⚠ {label}: +₹{b.subtotal}
+                                                                            </li>
+                                                                        );
+                                                                    }
+                                                                    return (
+                                                                        <li key={i}>
+                                                                            <strong>{b.quarter}</strong>
+                                                                            {b.start && b.end && ` (${moment(b.start).format('D MMMM YYYY')} – ${moment(b.end).format('D MMMM YYYY')})`}
+                                                                            : {b.days}d × ₹{b.rate_per_day}/d = ₹{b.subtotal}
+                                                                        </li>
+                                                                    );
+                                                                })}
+                                                            </ul>
+                                                        </div>
+                                                    )}
+
+                                                    <div className="text-end">
+                                                        <small className="text-muted">Slot Total: </small>
+                                                        <strong>₹{dur.total_price || 0}</strong>
+                                                    </div>
+
+                                                    {dur.coupon_code && (
+                                                        <div className="mt-2 p-2 rounded" style={{ backgroundColor: '#f0fff4', border: '1px solid #c6f6d5' }}>
+                                                            <div className="d-flex justify-content-between align-items-center">
+                                                                <div>
+                                                                    <span className="badge bg-success me-2">🏷️ {dur.coupon_code}</span>
+                                                                    <small className="text-muted">
+                                                                        {dur.coupon_discount_type === 'flat' ? `₹${dur.coupon_discount_value} flat` : `${dur.coupon_discount_value}% off`}
+                                                                    </small>
+                                                                </div>
+                                                                <div>
+                                                                    <small className="text-danger me-2">-₹{dur.coupon_discount_amount}</small>
+                                                                    <strong className="text-success">₹{dur.final_price}</strong>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </Card.Body>
+                                            </Card>
+                                        );
+                                    })}
+
+                                    {/* Grand total */}
+                                    <div className="mb-3 p-3 bg-light rounded d-flex justify-content-between align-items-center">
+                                        <h6 className="mb-0">Grand Total ({selectedRequest.durations.length} slot{selectedRequest.durations.length > 1 ? 's' : ''})</h6>
+                                        <div className="text-end">
+                                            {hasCouponApplied() ? (
+                                                <>
+                                                    <span style={{ textDecoration: 'line-through', color: '#999', fontSize: '0.9rem', marginRight: '8px' }}>₹{computeProjectedTotal()}</span>
+                                                    <span className="h5 mb-0 text-success fw-bold">₹{computeDiscountedTotal()}</span>
+                                                    <div>
+                                                        <small className="text-success">Coupon discount: -₹{computeProjectedTotal() - computeDiscountedTotal()}</small>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <h5 className="mb-0 text-primary">₹{computeProjectedTotal()}</h5>
+                                            )}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
                             <hr />
 
                             {/* Media */}

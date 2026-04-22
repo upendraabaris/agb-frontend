@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useHistory, NavLink, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useQuery, useLazyQuery, useMutation, gql } from '@apollo/client';
-import { Card, Button, Row, Col, Alert, Spinner, Modal, Badge, Form, Table } from 'react-bootstrap';
+import { Card, Button, Row, Col, Alert, Spinner, Modal, Badge, Form, Table, InputGroup } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import HtmlHead from 'components/html-head/HtmlHead';
 import CsLineIcons from 'cs-line-icons/CsLineIcons';
@@ -67,6 +67,7 @@ const GET_MY_WALLET = gql`
     getMyWallet {
       id
       balance
+      hold_balance
     }
   }
 `;
@@ -116,6 +117,30 @@ const CREATE_PRODUCT_AD_REQUEST = gql`
       tier_id
       status
       createdAt
+    }
+  }
+`;
+
+const GET_SELLER_PRODUCTS_SEARCH = gql`
+  query GetSellerProductsSearch($search: String) {
+    getProductByForSeller(search: $search, limit: 10) {
+      id
+      previewName
+      fullName
+      identifier
+      thumbnail
+    }
+  }
+`;
+
+const GET_ALL_PRODUCTS_FOR_ASSOCIATE = gql`
+  query GetAllProductsForAssociate($search: String) {
+    getAllProduct(search: $search, limit: 10) {
+      id
+      previewName
+      fullName
+      identifier
+      thumbnail
     }
   }
 `;
@@ -366,12 +391,15 @@ const ProductAdvertisement = () => {
   const [submittedProductName, setSubmittedProductName] = useState('');
 
   const [uploading, setUploading] = useState(false);
+  const [internalProductSearch, setInternalProductSearch] = useState({}); // { slotName: searchString }
+  const [showInternalDropdown, setShowInternalDropdown] = useState({}); // { slotName: boolean }
+  const [internalProducts, setInternalProducts] = useState({}); // { slotName: [products] }
 
   // ── Queries ─────────────────────────────────────────────────────────
   const { data: productsData, loading: productsLoading, error: productsError } = useQuery(GET_PRODUCTS_WITH_SLOTS, { fetchPolicy: 'network-only' });
 
   const { data: walletData, refetch: refetchWallet } = useQuery(GET_MY_WALLET, { fetchPolicy: 'network-only' });
-  const walletBalance = walletData?.getMyWallet?.balance ?? 0;
+  const walletBalance = (walletData?.getMyWallet?.balance ?? 0) - (walletData?.getMyWallet?.hold_balance ?? 0);
 
   // ── Ad Settings & role-based URL logic ──────────────────────────────
   const { currentUser } = useSelector((state) => state.auth);
@@ -408,6 +436,44 @@ const ProductAdvertisement = () => {
   const [uploadFile] = useMutation(UPLOAD_FILE);
   const [createProductAdRequest, { loading: submitLoading }] = useMutation(CREATE_PRODUCT_AD_REQUEST);
   const [validateAdCoupon, { loading: couponLoading }] = useLazyQuery(VALIDATE_AD_COUPON, { fetchPolicy: 'network-only' });
+
+  const handleMediaChange = (slot, field, value) => {
+    if (field === 'urlType') {
+      setAppliedCoupon(null);
+      setCouponError('');
+    }
+    setSlotMedia((m) => ({ ...m, [slot]: { ...(m[slot] || {}), [field]: value } }));
+  };
+
+  // ── Internal Product Search ─────────────────────────────────────────
+  const [fetchSellerProducts] = useLazyQuery(GET_SELLER_PRODUCTS_SEARCH, {
+    fetchPolicy: 'network-only',
+    onCompleted: (data) => {
+      // Find which slot was searching (this is a bit tricky with lazy query, better handling below)
+    },
+  });
+
+  const [fetchAllProducts] = useLazyQuery(GET_ALL_PRODUCTS_FOR_ASSOCIATE, {
+    fetchPolicy: 'network-only',
+  });
+
+  const handleInternalSearch = async (slot, search) => {
+    setInternalProductSearch((prev) => ({ ...prev, [slot]: search }));
+    setShowInternalDropdown((prev) => ({ ...prev, [slot]: true }));
+
+    const query = isSeller ? fetchSellerProducts : fetchAllProducts;
+    const { data } = await query({ variables: { search } });
+    const results = data?.getProductByForSeller || data?.getAllProduct || [];
+    setInternalProducts((prev) => ({ ...prev, [slot]: results }));
+  };
+
+  const handleInternalProductSelect = (slot, product) => {
+    const productUrl = `/product/${product.identifier?.replace(/\s/g, '_').toLowerCase()}`;
+    handleMediaChange(slot, 'redirectUrl', productUrl);
+    handleMediaChange(slot, 'selectedProductName', product.previewName || product.fullName);
+    setInternalProductSearch((prev) => ({ ...prev, [slot]: '' }));
+    setShowInternalDropdown((prev) => ({ ...prev, [slot]: false }));
+  };
 
   // ── Session Storage restore ──────────────────────────────────────────
   React.useEffect(() => {
@@ -608,13 +674,7 @@ const ProductAdvertisement = () => {
     });
   };
 
-  const handleMediaChange = (slot, field, value) => {
-    if (field === 'urlType') {
-      setAppliedCoupon(null);
-      setCouponError('');
-    }
-    setSlotMedia((m) => ({ ...m, [slot]: { ...(m[slot] || {}), [field]: value } }));
-  };
+
 
   // const handleFileChange = (slot, type, file) => {
   //   if (!file) return;
@@ -641,12 +701,12 @@ const ProductAdvertisement = () => {
 
     if (type === 'mobile') {
       // Mobile Dimensions
-      requiredWidth = slotType === 'banner' ? 2000 : 600;
-      requiredHeight = slotType === 'banner' ? 300 : 600;
+      requiredWidth = slotType === 'banner' ? 1200 : 1000;
+      requiredHeight = slotType === 'banner' ? 400 : 500;
     } else {
       // Desktop Dimensions
       requiredWidth = slotType === 'banner' ? 2000 : 1000;
-      requiredHeight = slotType === 'banner' ? 300 : 500;
+      requiredHeight = slotType === 'banner' ? 300 : 700;
     }
 
     // 1. Size Validation (Max 500KB)
@@ -888,9 +948,6 @@ const ProductAdvertisement = () => {
 
             {/* Pro-rata explanation — shown only when current quarter is selected */}
             {(() => {
-              const today = new Date();
-              const currentQStartMonth = Math.floor(today.getMonth() / 3) * 3;
-              const currentQIsoDate = `${today.getFullYear()}-${String(currentQStartMonth + 1).padStart(2, '0')}-01`;
               const isCurrentQuarter = !selectedStartQuarter || selectedStartQuarter === currentQIsoDate;
 
               if (!isCurrentQuarter) return null;
@@ -1079,7 +1136,7 @@ const ProductAdvertisement = () => {
             <Col md={6}>
               <Form.Label className="small fw-bold">Mobile Image <span className="text-danger">*</span></Form.Label>
               <div className="text-muted" style={{ fontSize: '0.65rem', marginBottom: '4px' }}>
-                {slot.startsWith('banner') ? '2000×300px' : '600×600px'} | Max 500KB
+                {slot.startsWith('banner') ? '1200×400px' : '1000×500px'} | Max 500KB
               </div>
 
               {slotMedia[slot]?.mobilePreview && (
@@ -1105,7 +1162,7 @@ const ProductAdvertisement = () => {
             <Col md={6}>
               <Form.Label className="small fw-bold">Desktop Image <span className="text-danger">*</span></Form.Label>
               <div className="text-muted" style={{ fontSize: '0.65rem', marginBottom: '4px' }}>
-                {slot.startsWith('banner') ? '2000×300px' : '1000×500px'} | Max 500KB
+                {slot.startsWith('banner') ? '2000×300px' : '1000×700px'} | Max 500KB
               </div>
 
               {slotMedia[slot]?.desktopPreview && (
@@ -1127,18 +1184,88 @@ const ProductAdvertisement = () => {
               )}
             </Col>
 
-            {/* Redirect URL */}
+            {/* Redirect URL / Product Selection */}
             <Col md={12}>
               <Form.Label className="small fw-bold">Redirect URL <span className="text-danger">*</span></Form.Label>
-              <Form.Control
-                type="url"
-                size="sm"
-                placeholder="https://example.com"
-                value={slotMedia[slot]?.redirectUrl || ''}
-                onChange={(e) => handleMediaChange(slot, 'redirectUrl', e.target.value)}
-                isInvalid={!slotMedia[slot]?.redirectUrl?.trim()}
-              />
-              <Form.Control.Feedback type="invalid">Redirect URL is required.</Form.Control.Feedback>
+              {getEffectiveUrlType(slot) === 'external' ? (
+                <>
+                  <Form.Control
+                    type="url"
+                    size="sm"
+                    placeholder="https://example.com"
+                    value={slotMedia[slot]?.redirectUrl || ''}
+                    onChange={(e) => handleMediaChange(slot, 'redirectUrl', e.target.value)}
+                    isInvalid={!slotMedia[slot]?.redirectUrl?.trim()}
+                  />
+                  <Form.Control.Feedback type="invalid">Redirect URL is required.</Form.Control.Feedback>
+                </>
+              ) : (
+                <div className="position-relative">
+                  <InputGroup size="sm">
+                    <InputGroup.Text className="bg-white border-end-0">
+                      <CsLineIcons icon="search" size="14" />
+                    </InputGroup.Text>
+                    <Form.Control
+                      type="text"
+                      placeholder={isSeller ? "Search your products..." : "Search all products..."}
+                      className="border-start-0 ps-0"
+                      value={internalProductSearch[slot] || ''}
+                      onChange={(e) => handleInternalSearch(slot, e.target.value)}
+                      onFocus={() => setShowInternalDropdown((prev) => ({ ...prev, [slot]: true }))}
+                      isInvalid={!slotMedia[slot]?.redirectUrl}
+                    />
+                  </InputGroup>
+                  
+                  {showInternalDropdown[slot] && (
+                    <div className="position-absolute w-100 shadow-sm border rounded bg-white mt-1" style={{ zIndex: 10, maxHeight: '200px', overflowY: 'auto' }}>
+                      {(internalProducts[slot] || []).length > 0 ? (
+                        internalProducts[slot].map((product) => (
+                          <div
+                            key={product.id}
+                            className="p-2 border-bottom cursor-pointer hover-bg-light d-flex align-items-center gap-2"
+                            onClick={() => handleInternalProductSelect(slot, product)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                handleInternalProductSelect(slot, product);
+                              }
+                            }}
+                            role="button"
+                            tabIndex="0"
+                          >
+                            {product.thumbnail && (
+                              <img src={product.thumbnail} alt="" style={{ width: '30px', height: '30px', objectFit: 'cover', borderRadius: '4px' }} />
+                            )}
+                            <div className="overflow-hidden">
+                              <div className="fw-bold text-truncate" style={{ fontSize: '0.85rem' }}>{product.previewName || product.fullName}</div>
+                              <div className="text-muted text-truncate" style={{ fontSize: '0.7rem' }}>{product.identifier}</div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-3 text-center text-muted small">
+                          {internalProductSearch[slot] ? 'No products found' : 'Start typing to search...'}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {slotMedia[slot]?.selectedProductName && (
+                    <div className="mt-2 p-2 bg-light rounded d-flex align-items-center justify-content-between">
+                      <div>
+                        <small className="text-muted d-block" style={{ fontSize: '0.7rem' }}>Selected Product:</small>
+                        <span className="fw-bold text-primary" style={{ fontSize: '0.85rem' }}>{slotMedia[slot].selectedProductName}</span>
+                      </div>
+                      <Button variant="link" size="sm" className="p-0 text-danger" onClick={() => {
+                        handleMediaChange(slot, 'redirectUrl', '');
+                        handleMediaChange(slot, 'selectedProductName', '');
+                      }}>Reset</Button>
+                    </div>
+                  )}
+                  {!slotMedia[slot]?.redirectUrl && (
+                    <div className="text-danger small mt-1">Please selection a product for redirect URL</div>
+                  )}
+                </div>
+              )}
             </Col>
 
             {/* URL Type */}
